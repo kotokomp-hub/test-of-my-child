@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NajiSDK Testing Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://raw.githubusercontent.com/najicreator/NMASDK/refs/heads/main/nmasdk.js"></script>
+    <style>
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        .glow {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen p-4">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 slide-in">
+            <div class="flex items-center justify-between mb-4">
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    NajiSDK Testing Suite
+                </h1>
+                <div id="status" class="px-4 py-2 rounded-full bg-gray-200 text-gray-700 text-sm font-semibold">
+                    Загрузка...
+                </div>
+            </div>
+            
+            <!-- User Info -->
+            <div id="userInfo" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div class="bg-gradient-to-br from-blue-100 to-blue-50 p-4 rounded-xl">
+                    <div class="text-sm text-blue-600 font-semibold mb-1">Пользователь</div>
+                    <div id="username" class="text-lg font-bold text-blue-900">—</div>
+                </div>
+                <div class="bg-gradient-to-br from-purple-100 to-purple-50 p-4 rounded-xl">
+                    <div class="text-sm text-purple-600 font-semibold mb-1">Цветовая схема</div>
+                    <div id="theme" class="text-lg font-bold text-purple-900">—</div>
+                </div>
+                <div class="bg-gradient-to-br from-green-100 to-green-50 p-4 rounded-xl">
+                    <div class="text-sm text-green-600 font-semibold mb-1">Статус SDK</div>
+                    <div id="initStatus" class="text-lg font-bold text-green-900">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Testing Sections -->
+        <div class="space-y-6">
+            
+            <!-- User & UI Tests -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                    Пользователь и UI
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button onclick="testOpenLink()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Открыть ссылку
+                    </button>
+                    <button onclick="testShowAlert()" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Показать уведомление
+                    </button>
+                    <button onclick="testIsReady()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Отправить App Ready
+                    </button>
+                    <button onclick="testGetInfo()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Получить информацию
+                    </button>
+                </div>
+            </div>
+
+            <!-- Back Button Tests -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                    Кнопка "Назад"
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button onclick="testBackButtonShow()" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Показать кнопку
+                    </button>
+                    <button onclick="testBackButtonHide()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Скрыть кнопку
+                    </button>
+                </div>
+                <div id="backButtonLog" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
+                    <div class="text-sm text-gray-500">События кнопки "Назад" будут отображаться здесь...</div>
+                </div>
+            </div>
+
+            <!-- Storage Tests -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
+                    Хранилище
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex gap-3">
+                        <input id="storageKey" type="text" placeholder="Ключ" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
+                        <input id="storageValue" type="text" placeholder="Значение" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <button onclick="testSetItem()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                            Сохранить значение
+                        </button>
+                        <button onclick="testGetItem()" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                            Получить значение
+                        </button>
+                    </div>
+                </div>
+                <div id="storageResult" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
+                    <div class="text-sm text-gray-500">Результаты операций с хранилищем...</div>
+                </div>
+            </div>
+
+            <!-- Invoice Tests -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-pink-500 rounded-full mr-2"></span>
+                    Счета (Sparks)
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex gap-3">
+                        <input id="invoiceTitle" type="text" placeholder="Название" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
+                        <input id="invoiceAmount" type="number" placeholder="Сумма" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
+                    </div>
+                    <button onclick="testCreateInvoice()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Создать счет
+                    </button>
+                </div>
+                <div id="invoiceResult" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
+                    <div class="text-sm text-gray-500">Результаты создания счетов...</div>
+                </div>
+            </div>
+
+            <!-- Solana Tests -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-cyan-500 rounded-full mr-2"></span>
+                    Solana Blockchain
+                </h2>
+                <div class="space-y-3">
+                    <button onclick="testGetSolanaAddress()" class="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                        Получить Solana адрес
+                    </button>
+                    
+                    <div class="border-t-2 border-gray-100 pt-4">
+                        <div class="text-sm font-semibold text-gray-600 mb-2">Отправить платеж</div>
+                        <div class="space-y-2">
+                            <input id="recipientAddr" type="text" placeholder="Адрес получателя" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
+                            <div class="flex gap-2">
+                                <input id="paymentAmount" type="number" placeholder="Сумма" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
+                                <input id="tokenMint" type="text" placeholder="Токен (SOL)" value="SOL" class="w-32 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
+                            </div>
+                            <button onclick="testRequestPayment()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                                Запросить платеж
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border-t-2 border-gray-100 pt-4">
+                        <div class="text-sm font-semibold text-gray-600 mb-2">Создать NFT</div>
+                        <div class="space-y-2">
+                            <input id="nftName" type="text" placeholder="Название NFT" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
+                            <input id="nftSymbol" type="text" placeholder="Символ" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
+                            <input id="nftUri" type="text" placeholder="URI метаданных" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
+                            <button onclick="testMintNFT()" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
+                                Создать NFT
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="solanaResult" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
+                    <div class="text-sm text-gray-500">Результаты операций с Solana...</div>
+                </div>
+            </div>
+
+            <!-- Event Log -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                    Журнал событий
+                </h2>
+                <div id="eventLog" class="space-y-2 max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
+                    <div class="text-sm text-gray-500">События будут отображаться здесь...</div>
+                </div>
+                <button onclick="clearLog()" class="mt-3 w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all">
+                    Очистить журнал
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sdk = window.NajiApp;
+        
+        // Logging function
+        function logEvent(message, type = 'info') {
+            const log = document.getElementById('eventLog');
+            const colors = {
+                info: 'bg-blue-100 text-blue-800',
+                success: 'bg-green-100 text-green-800',
+                error: 'bg-red-100 text-red-800',
+                warning: 'bg-yellow-100 text-yellow-800'
+            };
+            
+            const timestamp = new Date().toLocaleTimeString('ru-RU');
+            const entry = document.createElement('div');
+            entry.className = `p-3 rounded-lg ${colors[type]} slide-in text-sm`;
+            entry.innerHTML = `<span class="font-semibold">[${timestamp}]</span> ${message}`;
+            
+            if (log.firstChild && log.firstChild.textContent.includes('События будут')) {
+                log.innerHTML = '';
+            }
+            
+            log.insertBefore(entry, log.firstChild);
+        }
+
+        function updateStatus(text, color) {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.className = `px-4 py-2 rounded-full text-sm font-semibold ${color}`;
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '<div class="text-sm text-gray-500">События будут отображаться здесь...</div>';
+        }
+
+        // Initialize SDK
+        sdk.onInit(() => {
+            updateStatus('Инициализировано', 'bg-green-200 text-green-800');
+            document.getElementById('username').textContent = sdk.getNickname() || 'Не определен';
+            document.getElementById('theme').textContent = sdk.getColorScheme() || 'light';
+            document.getElementById('initStatus').textContent = sdk.initialized ? 'Готов' : 'Не готов';
+            logEvent('SDK успешно инициализирован!', 'success');
+        });
+
+        // Back button listener
+        sdk.backButton.onClick((payload) => {
+            const backLog = document.getElementById('backButtonLog');
+            backLog.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Кнопка "Назад" нажата! Время: ${new Date().toLocaleTimeString('ru-RU')}</div>`;
+            logEvent('Кнопка "Назад" нажата', 'success');
+        });
+
+        // User & UI Tests
+        function testOpenLink() {
+            sdk.openLink('https://github.com/najicreator/NMASDK');
+            logEvent('Отправлен запрос на открытие ссылки: https://github.com/najicreator/NMASDK', 'info');
+        }
+
+        function testShowAlert() {
+            sdk.showAlert('Это тестовое уведомление от NajiSDK!');
+            logEvent('Отправлен запрос на показ уведомления', 'info');
+        }
+
+        function testIsReady() {
+            sdk.isReady();
+            logEvent('Отправлено сообщение APP_READY', 'success');
+        }
+
+        function testGetInfo() {
+            const nickname = sdk.getNickname();
+            const theme = sdk.getColorScheme();
+            logEvent(`Никнейм: ${nickname || 'не определен'}, Тема: ${theme}`, 'info');
+        }
+
+        // Back Button Tests
+        function testBackButtonShow() {
+            sdk.backButton.show();
+            logEvent('Кнопка "Назад" показана', 'success');
+        }
+
+        function testBackButtonHide() {
+            sdk.backButton.hide();
+            logEvent('Кнопка "Назад" скрыта', 'warning');
+        }
+
+        // Storage Tests
+        async function testSetItem() {
+            const key = document.getElementById('storageKey').value;
+            const value = document.getElementById('storageValue').value;
+            
+            if (!key || !value) {
+                logEvent('Ошибка: введите ключ и значение', 'error');
+                return;
+            }
+
+            try {
+                const result = await sdk.setItem(key, value);
+                const resultDiv = document.getElementById('storageResult');
+                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Сохранено: ${key} = ${value}</div>`;
+                logEvent(`Сохранено в хранилище: ${key} = ${value}`, 'success');
+            } catch (error) {
+                logEvent(`Ошибка сохранения: ${error}`, 'error');
+            }
+        }
+
+        async function testGetItem() {
+            const key = document.getElementById('storageKey').value;
+            
+            if (!key) {
+                logEvent('Ошибка: введите ключ', 'error');
+                return;
+            }
+
+            try {
+                const result = await sdk.getItem(key);
+                const resultDiv = document.getElementById('storageResult');
+                resultDiv.innerHTML = `<div class="text-sm"><span class="font-semibold text-blue-700">Ключ:</span> ${key}<br><span class="font-semibold text-blue-700">Значение:</span> ${JSON.stringify(result)}</div>`;
+                logEvent(`Получено из хранилища: ${key} = ${JSON.stringify(result)}`, 'info');
+            } catch (error) {
+                logEvent(`Ошибка получения: ${error}`, 'error');
+            }
+        }
+
+        // Invoice Tests
+        async function testCreateInvoice() {
+            const title = document.getElementById('invoiceTitle').value;
+            const amount = document.getElementById('invoiceAmount').value;
+            
+            if (!title || !amount) {
+                logEvent('Ошибка: введите название и сумму', 'error');
+                return;
+            }
+
+            try {
+                const result = await sdk.createInvoice(title, parseFloat(amount));
+                const resultDiv = document.getElementById('invoiceResult');
+                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Счет создан!<br>Результат: ${JSON.stringify(result, null, 2)}</div>`;
+                logEvent(`Счет создан: ${title}, сумма: ${amount}`, 'success');
+            } catch (error) {
+                logEvent(`Ошибка создания счета: ${error}`, 'error');
+            }
+        }
+
+        // Solana Tests
+        async function testGetSolanaAddress() {
+            try {
+                const address = await sdk.getSolanaAddress();
+                const resultDiv = document.getElementById('solanaResult');
+                resultDiv.innerHTML = `<div class="text-sm"><span class="font-semibold text-cyan-700">Solana адрес:</span><br><code class="bg-gray-200 px-2 py-1 rounded break-all">${JSON.stringify(address)}</code></div>`;
+                logEvent(`Получен Solana адрес: ${JSON.stringify(address)}`, 'success');
+            } catch (error) {
+                logEvent(`Ошибка получения адреса: ${error}`, 'error');
+            }
+        }
+
+        async function testRequestPayment() {
+            const recipient = document.getElementById('recipientAddr').value;
+            const amount = document.getElementById('paymentAmount').value;
+            const tokenMint = document.getElementById('tokenMint').value || 'SOL';
+            
+            if (!recipient || !amount) {
+                logEvent('Ошибка: введите адрес получателя и сумму', 'error');
+                return;
+            }
+
+            try {
+                const result = await sdk.requestPayment(recipient, parseFloat(amount), tokenMint);
+                const resultDiv = document.getElementById('solanaResult');
+                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Платеж запрошен!<br>Результат: ${JSON.stringify(result, null, 2)}</div>`;
+                logEvent(`Запрошен платеж: ${amount} ${tokenMint} на адрес ${recipient}`, 'success');
+            } catch (error) {
+                logEvent(`Ошибка запроса платежа: ${error}`, 'error');
+            }
+        }
+
+        async function testMintNFT() {
+            const name = document.getElementById('nftName').value;
+            const symbol = document.getElementById('nftSymbol').value;
+            const uri = document.getElementById('nftUri').value;
+            
+            if (!name || !symbol || !uri) {
+                logEvent('Ошибка: заполните все поля NFT', 'error');
+                return;
+            }
+
+            try {
+                const result = await sdk.mintNFT(name, symbol, uri);
+                const resultDiv = document.getElementById('solanaResult');
+                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ NFT создан!<br>Результат: ${JSON.stringify(result, null, 2)}</div>`;
+                logEvent(`NFT создан: ${name} (${symbol})`, 'success');
+            } catch (error) {
+                logEvent(`Ошибка создания NFT: ${error}`, 'error');
+            }
+        }
+
+        // Initial log
+        logEvent('Приложение загружено, ожидание инициализации SDK...', 'info');
+    </script>
+</body>
+</html>
