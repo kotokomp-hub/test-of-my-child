@@ -3,401 +3,538 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NajiSDK Testing Suite</title>
+    <title>Naji Demo App</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://raw.githubusercontent.com/najicreator/NMASDK/refs/heads/main/nmasdk.js"></script>
     <style>
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
-        .slide-in {
-            animation: slideIn 0.3s ease-out;
+
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
-        .glow {
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .badge {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen p-4">
-    <div class="max-w-4xl mx-auto">
+<body class="p-4">
+    <div id="app" class="max-w-md mx-auto space-y-4 animate-fade-in">
         <!-- Header -->
-        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6 slide-in">
-            <div class="flex items-center justify-between mb-4">
-                <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    NajiSDK Testing Suite
-                </h1>
-                <div id="status" class="px-4 py-2 rounded-full bg-gray-200 text-gray-700 text-sm font-semibold">
-                    Загрузка...
-                </div>
-            </div>
-            
-            <!-- User Info -->
-            <div id="userInfo" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <div class="bg-gradient-to-br from-blue-100 to-blue-50 p-4 rounded-xl">
-                    <div class="text-sm text-blue-600 font-semibold mb-1">Пользователь</div>
-                    <div id="username" class="text-lg font-bold text-blue-900">—</div>
-                </div>
-                <div class="bg-gradient-to-br from-purple-100 to-purple-50 p-4 rounded-xl">
-                    <div class="text-sm text-purple-600 font-semibold mb-1">Цветовая схема</div>
-                    <div id="theme" class="text-lg font-bold text-purple-900">—</div>
-                </div>
-                <div class="bg-gradient-to-br from-green-100 to-green-50 p-4 rounded-xl">
-                    <div class="text-sm text-green-600 font-semibold mb-1">Статус SDK</div>
-                    <div id="initStatus" class="text-lg font-bold text-green-900">—</div>
+        <div class="glass rounded-2xl p-6 text-white">
+            <h1 class="text-3xl font-bold mb-2">🎨 Naji Demo</h1>
+            <p class="text-sm opacity-80">Полная демонстрация SDK v2.0</p>
+            <div id="user-info" class="mt-4 text-sm opacity-90"></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 overflow-x-auto pb-2">
+            <button onclick="switchTab('basics')" id="tab-basics" class="tab-btn glass text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">Основное</button>
+            <button onclick="switchTab('wallet')" id="tab-wallet" class="tab-btn glass text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">Кошелёк</button>
+            <button onclick="switchTab('contracts')" id="tab-contracts" class="tab-btn glass text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">Контракты</button>
+            <button onclick="switchTab('storage')" id="tab-storage" class="tab-btn glass text-white px-4 py-2 rounded-xl font-semibold whitespace-nowrap">Хранилище</button>
+        </div>
+
+        <!-- Content -->
+        <div id="content-basics" class="tab-content">
+            <div class="card p-6 space-y-4">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">🎯 Основные функции</h2>
+                
+                <button onclick="testAlert()" class="w-full btn-primary text-white py-3 rounded-xl font-semibold">
+                    Показать Alert
+                </button>
+
+                <button onclick="testInvoice()" class="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-3 rounded-xl font-semibold">
+                    💰 Создать Invoice (100 Sparks)
+                </button>
+
+                <button onclick="testFullscreen()" class="w-full bg-gradient-to-r from-green-400 to-cyan-500 text-white py-3 rounded-xl font-semibold">
+                    📱 Полный экран
+                </button>
+
+                <button onclick="testBackButton()" class="w-full bg-gradient-to-r from-pink-400 to-rose-500 text-white py-3 rounded-xl font-semibold">
+                    ← Показать кнопку Назад
+                </button>
+
+                <button onclick="testOpenLink()" class="w-full bg-gradient-to-r from-indigo-400 to-purple-500 text-white py-3 rounded-xl font-semibold">
+                    🔗 Открыть ссылку
+                </button>
+
+                <div class="mt-4 p-4 bg-gray-50 rounded-xl">
+                    <h3 class="font-bold text-gray-700 mb-2">Debug Info:</h3>
+                    <pre id="debug-info" class="text-xs text-gray-600 overflow-x-auto"></pre>
                 </div>
             </div>
         </div>
 
-        <!-- Testing Sections -->
-        <div class="space-y-6">
-            
-            <!-- User & UI Tests -->
-            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
-                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                    Пользователь и UI
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <button onclick="testOpenLink()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Открыть ссылку
-                    </button>
-                    <button onclick="testShowAlert()" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Показать уведомление
-                    </button>
-                    <button onclick="testIsReady()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Отправить App Ready
-                    </button>
-                    <button onclick="testGetInfo()" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Получить информацию
-                    </button>
+        <div id="content-wallet" class="tab-content hidden">
+            <div class="card p-6 space-y-4">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">💎 Solana Кошелёк</h2>
+                
+                <div id="wallet-info" class="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
+                    <p class="text-sm text-gray-600">Загрузка...</p>
                 </div>
-            </div>
 
-            <!-- Back Button Tests -->
-            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
-                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    Кнопка "Назад"
-                </h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <button onclick="testBackButtonShow()" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Показать кнопку
-                    </button>
-                    <button onclick="testBackButtonHide()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Скрыть кнопку
-                    </button>
-                </div>
-                <div id="backButtonLog" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
-                    <div class="text-sm text-gray-500">События кнопки "Назад" будут отображаться здесь...</div>
-                </div>
-            </div>
+                <button onclick="testGetAddress()" class="w-full btn-primary text-white py-3 rounded-xl font-semibold">
+                    Получить адрес
+                </button>
 
-            <!-- Storage Tests -->
-            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
-                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>
-                    Хранилище
-                </h2>
-                <div class="space-y-3">
-                    <div class="flex gap-3">
-                        <input id="storageKey" type="text" placeholder="Ключ" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
-                        <input id="storageValue" type="text" placeholder="Значение" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <button onclick="testSetItem()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                            Сохранить значение
-                        </button>
-                        <button onclick="testGetItem()" class="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                            Получить значение
-                        </button>
-                    </div>
-                </div>
-                <div id="storageResult" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
-                    <div class="text-sm text-gray-500">Результаты операций с хранилищем...</div>
-                </div>
-            </div>
+                <button onclick="testGetBalance()" class="w-full bg-gradient-to-r from-blue-400 to-cyan-500 text-white py-3 rounded-xl font-semibold">
+                    Проверить баланс
+                </button>
 
-            <!-- Invoice Tests -->
-            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
-                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-pink-500 rounded-full mr-2"></span>
-                    Счета (Sparks)
-                </h2>
-                <div class="space-y-3">
-                    <div class="flex gap-3">
-                        <input id="invoiceTitle" type="text" placeholder="Название" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
-                        <input id="invoiceAmount" type="number" placeholder="Сумма" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none transition-colors">
-                    </div>
-                    <button onclick="testCreateInvoice()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Создать счет
-                    </button>
-                </div>
-                <div id="invoiceResult" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
-                    <div class="text-sm text-gray-500">Результаты создания счетов...</div>
-                </div>
-            </div>
-
-            <!-- Solana Tests -->
-            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
-                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-cyan-500 rounded-full mr-2"></span>
-                    Solana Blockchain
-                </h2>
-                <div class="space-y-3">
-                    <button onclick="testGetSolanaAddress()" class="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                        Получить Solana адрес
-                    </button>
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-gray-700">Адрес получателя:</label>
+                    <input type="text" id="recipient-addr" 
+                           placeholder="Solana address..." 
+                           class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
                     
-                    <div class="border-t-2 border-gray-100 pt-4">
-                        <div class="text-sm font-semibold text-gray-600 mb-2">Отправить платеж</div>
-                        <div class="space-y-2">
-                            <input id="recipientAddr" type="text" placeholder="Адрес получателя" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
-                            <div class="flex gap-2">
-                                <input id="paymentAmount" type="number" placeholder="Сумма" class="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
-                                <input id="tokenMint" type="text" placeholder="Токен (SOL)" value="SOL" class="w-32 px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
-                            </div>
-                            <button onclick="testRequestPayment()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                                Запросить платеж
-                            </button>
-                        </div>
-                    </div>
+                    <label class="block text-sm font-semibold text-gray-700 mt-3">Сумма SOL:</label>
+                    <input type="number" id="amount" 
+                           placeholder="0.1" 
+                           step="0.001"
+                           class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+                    
+                    <button onclick="testPayment()" class="w-full bg-gradient-to-r from-green-400 to-emerald-500 text-white py-3 rounded-xl font-semibold mt-3">
+                        💸 Отправить платёж
+                    </button>
+                </div>
 
-                    <div class="border-t-2 border-gray-100 pt-4">
-                        <div class="text-sm font-semibold text-gray-600 mb-2">Создать NFT</div>
-                        <div class="space-y-2">
-                            <input id="nftName" type="text" placeholder="Название NFT" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
-                            <input id="nftSymbol" type="text" placeholder="Символ" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
-                            <input id="nftUri" type="text" placeholder="URI метаданных" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-cyan-500 focus:outline-none transition-colors">
-                            <button onclick="testMintNFT()" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg transition-all transform hover:scale-105">
-                                Создать NFT
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div id="solanaResult" class="mt-4 p-4 bg-gray-50 rounded-lg min-h-[60px]">
-                    <div class="text-sm text-gray-500">Результаты операций с Solana...</div>
-                </div>
-            </div>
-
-            <!-- Event Log -->
-            <div class="bg-white rounded-2xl shadow-xl p-6 slide-in">
-                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
-                    Журнал событий
-                </h2>
-                <div id="eventLog" class="space-y-2 max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
-                    <div class="text-sm text-gray-500">События будут отображаться здесь...</div>
-                </div>
-                <button onclick="clearLog()" class="mt-3 w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all">
-                    Очистить журнал
+                <button onclick="testSignMessage()" class="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white py-3 rounded-xl font-semibold">
+                    ✍️ Подписать сообщение
                 </button>
             </div>
         </div>
+
+        <div id="content-contracts" class="tab-content hidden">
+            <div class="card p-6 space-y-4">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">⚡ Смарт-контракты</h2>
+                
+                <div class="p-4 bg-yellow-50 rounded-xl border-2 border-yellow-200">
+                    <p class="text-sm text-yellow-800">
+                        <strong>Внимание:</strong> Функции требуют реальной интеграции с Solana
+                    </p>
+                </div>
+
+                <button onclick="testMintNFT()" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold">
+                    🎨 Создать NFT
+                </button>
+
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-gray-700">Program ID:</label>
+                    <input type="text" id="program-id" 
+                           placeholder="TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" 
+                           class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-xs font-mono">
+                    
+                    <label class="block text-sm font-semibold text-gray-700 mt-3">Описание:</label>
+                    <input type="text" id="contract-description" 
+                           placeholder="Что делает этот контракт?" 
+                           class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+                    
+                    <button onclick="testCustomContract()" class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-3 rounded-xl font-semibold mt-3">
+                        🔧 Вызвать контракт
+                    </button>
+                </div>
+
+                <div class="mt-4">
+                    <h3 class="font-bold text-gray-700 mb-2">Примеры контрактов:</h3>
+                    <div class="space-y-2">
+                        <button onclick="exampleTokenTransfer()" class="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm transition-colors">
+                            <div class="font-semibold text-gray-800">Token Transfer</div>
+                            <div class="text-xs text-gray-500">Перевод SPL токенов</div>
+                        </button>
+                        <button onclick="exampleStaking()" class="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm transition-colors">
+                            <div class="font-semibold text-gray-800">Staking</div>
+                            <div class="text-xs text-gray-500">Стейкинг SOL</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-storage" class="tab-content hidden">
+            <div class="card p-6 space-y-4">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">💾 Локальное хранилище</h2>
+                
+                <div class="space-y-2">
+                    <label class="block text-sm font-semibold text-gray-700">Ключ:</label>
+                    <input type="text" id="storage-key" 
+                           placeholder="username" 
+                           class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+                    
+                    <label class="block text-sm font-semibold text-gray-700 mt-3">Значение:</label>
+                    <input type="text" id="storage-value" 
+                           placeholder="John Doe" 
+                           class="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+                    
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="testSetItem()" class="flex-1 bg-gradient-to-r from-green-400 to-emerald-500 text-white py-3 rounded-xl font-semibold">
+                            Сохранить
+                        </button>
+                        <button onclick="testGetItem()" class="flex-1 bg-gradient-to-r from-blue-400 to-cyan-500 text-white py-3 rounded-xl font-semibold">
+                            Загрузить
+                        </button>
+                    </div>
+                </div>
+
+                <div id="storage-result" class="p-4 bg-gray-50 rounded-xl">
+                    <p class="text-sm text-gray-600">Результат появится здесь...</p>
+                </div>
+
+                <button onclick="testCounter()" class="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white py-3 rounded-xl font-semibold">
+                    🔢 Счётчик (пример)
+                </button>
+
+                <div id="counter-display" class="text-center">
+                    <p class="text-4xl font-bold text-gray-800">0</p>
+                    <p class="text-sm text-gray-500">Кликов</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="glass rounded-2xl p-4 text-white text-center text-sm">
+            Powered by Naji SDK v2.0
+        </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
     <script>
-        const sdk = window.NajiApp;
+        // ============================================
+        // INITIALIZATION
+        // ============================================
         
-        // Logging function
-        function logEvent(message, type = 'info') {
-            const log = document.getElementById('eventLog');
-            const colors = {
-                info: 'bg-blue-100 text-blue-800',
-                success: 'bg-green-100 text-green-800',
-                error: 'bg-red-100 text-red-800',
-                warning: 'bg-yellow-100 text-yellow-800'
-            };
+        let fullscreenActive = false;
+        let counterValue = 0;
+
+        window.NajiApp.onInit(() => {
+            console.log('✅ App initialized!');
+            updateUserInfo();
+            updateDebugInfo();
+            loadCounter();
             
-            const timestamp = new Date().toLocaleTimeString('ru-RU');
-            const entry = document.createElement('div');
-            entry.className = `p-3 rounded-lg ${colors[type]} slide-in text-sm`;
-            entry.innerHTML = `<span class="font-semibold">[${timestamp}]</span> ${message}`;
+            // Уведомляем хост о готовности
+            window.NajiApp.ready();
             
-            if (log.firstChild && log.firstChild.textContent.includes('События будут')) {
-                log.innerHTML = '';
+            // Устанавливаем красивый цвет заголовка
+            window.NajiApp.setHeaderColor('from-violet-500 to-fuchsia-500');
+        });
+
+        // Back button handler
+        window.NajiApp.backButton.onClick(() => {
+            window.NajiApp.showAlert('Кнопка "Назад" нажата!', 'Событие', 'info');
+            window.NajiApp.backButton.hide();
+        });
+
+        // ============================================
+        // UI FUNCTIONS
+        // ============================================
+
+        function updateUserInfo() {
+            const user = window.NajiApp.getUser();
+            const userInfoEl = document.getElementById('user-info');
+            
+            if (user) {
+                userInfoEl.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-semibold">@${user.username}</p>
+                            <p class="text-xs opacity-75">${window.NajiApp.getPlatform().toUpperCase()}</p>
+                        </div>
+                        <div class="badge">
+                            ⚡ ${window.NajiApp.getSparks()}
+                        </div>
+                    </div>
+                `;
             }
+        }
+
+        function updateDebugInfo() {
+            const debugEl = document.getElementById('debug-info');
+            debugEl.textContent = JSON.stringify(window.NajiApp.debug(), null, 2);
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('ring-2', 'ring-white');
+            });
             
-            log.insertBefore(entry, log.firstChild);
+            // Show selected tab
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabName}`).classList.add('ring-2', 'ring-white');
         }
 
-        function updateStatus(text, color) {
-            const status = document.getElementById('status');
-            status.textContent = text;
-            status.className = `px-4 py-2 rounded-full text-sm font-semibold ${color}`;
+        // ============================================
+        // BASIC FUNCTIONS
+        // ============================================
+
+        function testAlert() {
+            window.NajiApp.showAlert(
+                'Это демонстрация алерта с поддержкой разных типов!',
+                'Привет! 👋',
+                'success'
+            );
         }
 
-        function clearLog() {
-            document.getElementById('eventLog').innerHTML = '<div class="text-sm text-gray-500">События будут отображаться здесь...</div>';
+        async function testInvoice() {
+            try {
+                const result = await window.NajiApp.createInvoice(
+                    'Тестовая покупка',
+                    100,
+                    'Демонстрация оплаты через Sparks'
+                );
+                
+                if (result) {
+                    window.NajiApp.showAlert('Оплата прошла успешно!', 'Успех', 'success');
+                } else {
+                    window.NajiApp.showAlert('Оплата отменена', 'Информация', 'info');
+                }
+            } catch (error) {
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
+            }
         }
 
-        // Initialize SDK
-        sdk.onInit(() => {
-            updateStatus('Инициализировано', 'bg-green-200 text-green-800');
-            document.getElementById('username').textContent = sdk.getNickname() || 'Не определен';
-            document.getElementById('theme').textContent = sdk.getColorScheme() || 'light';
-            document.getElementById('initStatus').textContent = sdk.initialized ? 'Готов' : 'Не готов';
-            logEvent('SDK успешно инициализирован!', 'success');
-        });
+        function testFullscreen() {
+            fullscreenActive = !fullscreenActive;
+            window.NajiApp.setFullscreen(fullscreenActive);
+        }
 
-        // Back button listener
-        sdk.backButton.onClick((payload) => {
-            const backLog = document.getElementById('backButtonLog');
-            backLog.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Кнопка "Назад" нажата! Время: ${new Date().toLocaleTimeString('ru-RU')}</div>`;
-            logEvent('Кнопка "Назад" нажата', 'success');
-        });
+        function testBackButton() {
+            window.NajiApp.backButton.show();
+            window.NajiApp.showAlert('Кнопка "Назад" теперь видна в заголовке', 'Готово', 'info');
+        }
 
-        // User & UI Tests
         function testOpenLink() {
-            sdk.openLink('https://github.com/najicreator/NMASDK');
-            logEvent('Отправлен запрос на открытие ссылки: https://github.com/najicreator/NMASDK', 'info');
+            window.NajiApp.openLink('https://solana.com');
         }
 
-        function testShowAlert() {
-            sdk.showAlert('Это тестовое уведомление от NajiSDK!');
-            logEvent('Отправлен запрос на показ уведомления', 'info');
+        // ============================================
+        // WALLET FUNCTIONS
+        // ============================================
+
+        async function testGetAddress() {
+            try {
+                const address = await window.NajiApp.getSolanaAddress();
+                document.getElementById('wallet-info').innerHTML = `
+                    <div class="space-y-2">
+                        <p class="text-sm font-semibold text-gray-700">Ваш адрес:</p>
+                        <p class="text-xs font-mono text-gray-900 break-all bg-white p-2 rounded">${address}</p>
+                    </div>
+                `;
+            } catch (error) {
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
+            }
         }
 
-        function testIsReady() {
-            sdk.isReady();
-            logEvent('Отправлено сообщение APP_READY', 'success');
+        async function testGetBalance() {
+            try {
+                const balance = await window.NajiApp.getSolanaBalance();
+                window.NajiApp.showAlert(`Ваш баланс: ${balance} SOL`, 'Баланс', 'info');
+            } catch (error) {
+                window.NajiApp.showAlert('Функция в разработке', 'Информация', 'info');
+            }
         }
 
-        function testGetInfo() {
-            const nickname = sdk.getNickname();
-            const theme = sdk.getColorScheme();
-            logEvent(`Никнейм: ${nickname || 'не определен'}, Тема: ${theme}`, 'info');
-        }
-
-        // Back Button Tests
-        function testBackButtonShow() {
-            sdk.backButton.show();
-            logEvent('Кнопка "Назад" показана', 'success');
-        }
-
-        function testBackButtonHide() {
-            sdk.backButton.hide();
-            logEvent('Кнопка "Назад" скрыта', 'warning');
-        }
-
-        // Storage Tests
-        async function testSetItem() {
-            const key = document.getElementById('storageKey').value;
-            const value = document.getElementById('storageValue').value;
+        async function testPayment() {
+            const recipient = document.getElementById('recipient-addr').value;
+            const amount = parseFloat(document.getElementById('amount').value);
             
-            if (!key || !value) {
-                logEvent('Ошибка: введите ключ и значение', 'error');
+            if (!recipient || !amount) {
+                window.NajiApp.showAlert('Заполните все поля', 'Внимание', 'warning');
                 return;
             }
-
+            
             try {
-                const result = await sdk.setItem(key, value);
-                const resultDiv = document.getElementById('storageResult');
-                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Сохранено: ${key} = ${value}</div>`;
-                logEvent(`Сохранено в хранилище: ${key} = ${value}`, 'success');
+                const result = await window.NajiApp.requestPayment(recipient, amount, 'SOL', 'Test payment from Naji Demo');
+                window.NajiApp.showAlert(`Транзакция отправлена!\nSignature: ${result.signature}`, 'Успех', 'success');
             } catch (error) {
-                logEvent(`Ошибка сохранения: ${error}`, 'error');
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
+            }
+        }
+
+        async function testSignMessage() {
+            try {
+                const result = await window.NajiApp.signMessage('Hello from Naji Demo App!');
+                window.NajiApp.showAlert('Сообщение подписано!', 'Успех', 'success');
+            } catch (error) {
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
+            }
+        }
+
+        // ============================================
+        // CONTRACT FUNCTIONS
+        // ============================================
+
+        async function testMintNFT() {
+            try {
+                const result = await window.NajiApp.mintNFT(
+                    'Naji Demo NFT',
+                    'DEMO',
+                    'https://arweave.net/demo-metadata.json'
+                );
+                window.NajiApp.showAlert(`NFT создан!\nMint: ${result.mintAddress}`, 'Успех', 'success');
+            } catch (error) {
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
+            }
+        }
+
+        async function testCustomContract() {
+            const programId = document.getElementById('program-id').value;
+            const description = document.getElementById('contract-description').value;
+            
+            if (!programId) {
+                window.NajiApp.showAlert('Введите Program ID', 'Внимание', 'warning');
+                return;
+            }
+            
+            try {
+                const result = await window.NajiApp.executeSmartContract({
+                    programId: programId,
+                    instruction: 'custom',
+                    accounts: [],
+                    data: new Uint8Array([1, 2, 3]),
+                    description: description || 'Кастомный вызов контракта'
+                });
+                
+                window.NajiApp.showAlert(`Контракт выполнен!\nSignature: ${result.signature}`, 'Успех', 'success');
+            } catch (error) {
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
+            }
+        }
+
+        async function exampleTokenTransfer() {
+            window.NajiApp.showAlert('Пример: перевод USDC через Token Program', 'Token Transfer', 'info');
+            document.getElementById('program-id').value = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+            document.getElementById('contract-description').value = 'Перевод 100 USDC';
+        }
+
+        async function exampleStaking() {
+            window.NajiApp.showAlert('Пример: стейкинг через Stake Program', 'Staking', 'info');
+            document.getElementById('program-id').value = 'Stake11111111111111111111111111111111111111';
+            document.getElementById('contract-description').value = 'Стейкинг 1 SOL';
+        }
+
+        // ============================================
+        // STORAGE FUNCTIONS
+        // ============================================
+
+        async function testSetItem() {
+            const key = document.getElementById('storage-key').value;
+            const value = document.getElementById('storage-value').value;
+            
+            if (!key || !value) {
+                window.NajiApp.showAlert('Заполните оба поля', 'Внимание', 'warning');
+                return;
+            }
+            
+            try {
+                await window.NajiApp.setItem(key, value);
+                document.getElementById('storage-result').innerHTML = `
+                    <p class="text-sm text-green-600 font-semibold">✅ Сохранено!</p>
+                    <p class="text-xs text-gray-600 mt-1">${key} = "${value}"</p>
+                `;
+            } catch (error) {
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
             }
         }
 
         async function testGetItem() {
-            const key = document.getElementById('storageKey').value;
+            const key = document.getElementById('storage-key').value;
             
             if (!key) {
-                logEvent('Ошибка: введите ключ', 'error');
+                window.NajiApp.showAlert('Введите ключ', 'Внимание', 'warning');
                 return;
             }
-
-            try {
-                const result = await sdk.getItem(key);
-                const resultDiv = document.getElementById('storageResult');
-                resultDiv.innerHTML = `<div class="text-sm"><span class="font-semibold text-blue-700">Ключ:</span> ${key}<br><span class="font-semibold text-blue-700">Значение:</span> ${JSON.stringify(result)}</div>`;
-                logEvent(`Получено из хранилища: ${key} = ${JSON.stringify(result)}`, 'info');
-            } catch (error) {
-                logEvent(`Ошибка получения: ${error}`, 'error');
-            }
-        }
-
-        // Invoice Tests
-        async function testCreateInvoice() {
-            const title = document.getElementById('invoiceTitle').value;
-            const amount = document.getElementById('invoiceAmount').value;
             
-            if (!title || !amount) {
-                logEvent('Ошибка: введите название и сумму', 'error');
-                return;
-            }
-
             try {
-                const result = await sdk.createInvoice(title, parseFloat(amount));
-                const resultDiv = document.getElementById('invoiceResult');
-                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Счет создан!<br>Результат: ${JSON.stringify(result, null, 2)}</div>`;
-                logEvent(`Счет создан: ${title}, сумма: ${amount}`, 'success');
+                const value = await window.NajiApp.getItem(key);
+                document.getElementById('storage-result').innerHTML = `
+                    <p class="text-sm text-blue-600 font-semibold">📥 Загружено:</p>
+                    <p class="text-xs text-gray-600 mt-1">${key} = "${value || 'null'}"</p>
+                `;
+                
+                if (value) {
+                    document.getElementById('storage-value').value = value;
+                }
             } catch (error) {
-                logEvent(`Ошибка создания счета: ${error}`, 'error');
+                window.NajiApp.showAlert('Ошибка: ' + error.message, 'Ошибка', 'error');
             }
         }
 
-        // Solana Tests
-        async function testGetSolanaAddress() {
+        async function loadCounter() {
             try {
-                const address = await sdk.getSolanaAddress();
-                const resultDiv = document.getElementById('solanaResult');
-                resultDiv.innerHTML = `<div class="text-sm"><span class="font-semibold text-cyan-700">Solana адрес:</span><br><code class="bg-gray-200 px-2 py-1 rounded break-all">${JSON.stringify(address)}</code></div>`;
-                logEvent(`Получен Solana адрес: ${JSON.stringify(address)}`, 'success');
+                const saved = await window.NajiApp.getItem('counter');
+                if (saved !== null) {
+                    counterValue = parseInt(saved);
+                    updateCounterDisplay();
+                }
             } catch (error) {
-                logEvent(`Ошибка получения адреса: ${error}`, 'error');
+                console.error('Load counter error:', error);
             }
         }
 
-        async function testRequestPayment() {
-            const recipient = document.getElementById('recipientAddr').value;
-            const amount = document.getElementById('paymentAmount').value;
-            const tokenMint = document.getElementById('tokenMint').value || 'SOL';
+        async function testCounter() {
+            counterValue++;
+            updateCounterDisplay();
             
-            if (!recipient || !amount) {
-                logEvent('Ошибка: введите адрес получателя и сумму', 'error');
-                return;
-            }
-
             try {
-                const result = await sdk.requestPayment(recipient, parseFloat(amount), tokenMint);
-                const resultDiv = document.getElementById('solanaResult');
-                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ Платеж запрошен!<br>Результат: ${JSON.stringify(result, null, 2)}</div>`;
-                logEvent(`Запрошен платеж: ${amount} ${tokenMint} на адрес ${recipient}`, 'success');
+                await window.NajiApp.setItem('counter', counterValue);
             } catch (error) {
-                logEvent(`Ошибка запроса платежа: ${error}`, 'error');
+                console.error('Save counter error:', error);
             }
         }
 
-        async function testMintNFT() {
-            const name = document.getElementById('nftName').value;
-            const symbol = document.getElementById('nftSymbol').value;
-            const uri = document.getElementById('nftUri').value;
-            
-            if (!name || !symbol || !uri) {
-                logEvent('Ошибка: заполните все поля NFT', 'error');
-                return;
-            }
-
-            try {
-                const result = await sdk.mintNFT(name, symbol, uri);
-                const resultDiv = document.getElementById('solanaResult');
-                resultDiv.innerHTML = `<div class="text-sm font-semibold text-green-700">✓ NFT создан!<br>Результат: ${JSON.stringify(result, null, 2)}</div>`;
-                logEvent(`NFT создан: ${name} (${symbol})`, 'success');
-            } catch (error) {
-                logEvent(`Ошибка создания NFT: ${error}`, 'error');
-            }
+        function updateCounterDisplay() {
+            document.getElementById('counter-display').innerHTML = `
+                <p class="text-4xl font-bold text-gray-800">${counterValue}</p>
+                <p class="text-sm text-gray-500">Кликов сохранено</p>
+            `;
         }
-
-        // Initial log
-        logEvent('Приложение загружено, ожидание инициализации SDK...', 'info');
     </script>
 </body>
 </html>
