@@ -3,582 +3,518 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naji Token Launcher</title>
+    <title>Naji SDK - Все функции</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-
-        .token-card {
-            transition: all 0.2s ease;
-        }
-
-        .token-card:hover {
-            transform: translateY(-2px);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out;
-        }
-    </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900">
-    <div id="app" class="max-w-2xl mx-auto p-4 space-y-4 animate-fade-in">
-        <!-- Header -->
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
-            <div class="flex items-center justify-between mb-3">
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">🚀 Token Launcher</h1>
-                <div id="wallet-badge" class="text-xs font-mono bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-lg">
-                    Загрузка...
-                </div>
+<body class="bg-gray-50 dark:bg-gray-900 p-4">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+            📚 Naji SDK v2.1 - Полный справочник функций
+        </h1>
+
+        <!-- User & Profile -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">👤 User & Profile</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testGetNickname()" class="btn">getNickname()</button>
+                <button onclick="testGetUser()" class="btn">getUser()</button>
+                <button onclick="testGetSparks()" class="btn">getSparks()</button>
             </div>
-            <p class="text-sm text-gray-600 dark:text-gray-400">
-                Создавайте токены и NFT на Solana
-            </p>
+            <pre id="user-result" class="result"></pre>
         </div>
 
-        <!-- Tabs -->
-        <div class="flex gap-2 overflow-x-auto pb-2">
-            <button onclick="switchTab('create')" id="tab-create" class="tab-btn bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors">
-                Создать токен
-            </button>
-            <button onclick="switchTab('nft')" id="tab-nft" class="tab-btn bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors">
-                Создать NFT
-            </button>
-            <button onclick="switchTab('transfer')" id="tab-transfer" class="tab-btn bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors">
-                Отправить
-            </button>
-            <button onclick="switchTab('history')" id="tab-history" class="tab-btn bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors">
-                История
-            </button>
+        <!-- Theme & UI -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🎨 Theme & UI</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testGetColorScheme()" class="btn">getColorScheme()</button>
+                <button onclick="testSetHeaderColor()" class="btn">setHeaderColor()</button>
+                <button onclick="testSetFullscreen()" class="btn">setFullscreen(true)</button>
+                <button onclick="testShowAlert()" class="btn">showAlert()</button>
+            </div>
+            <pre id="ui-result" class="result"></pre>
         </div>
 
-        <!-- Create Token Tab -->
-        <div id="content-create" class="tab-content">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    💎 Создать токен
-                </h2>
-                
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Название
-                        </label>
-                        <input 
-                            type="text" 
-                            id="token-name" 
-                            placeholder="My Awesome Token"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Символ (тикер)
-                        </label>
-                        <input 
-                            type="text" 
-                            id="token-symbol" 
-                            placeholder="AWESOME"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white uppercase"
-                            maxlength="10"
-                        />
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                Decimals
-                            </label>
-                            <input 
-                                type="number" 
-                                id="token-decimals" 
-                                value="9"
-                                min="0"
-                                max="9"
-                                class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                Supply
-                            </label>
-                            <input 
-                                type="number" 
-                                id="token-supply" 
-                                placeholder="1000000"
-                                class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            URI метаданных
-                        </label>
-                        <input 
-                            type="url" 
-                            id="token-uri" 
-                            placeholder="https://example.com/metadata.json"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        />
-                        <p class="text-xs text-gray-500 mt-1">
-                            ℹ️ Загрузите metadata.json на ваш сервер/IPFS и укажите URL
-                        </p>
-                    </div>
-
-                    <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                        <p class="text-xs text-blue-900 dark:text-blue-200 font-semibold mb-1">
-                            📝 Пример metadata.json:
-                        </p>
-                        <pre class="text-xs text-blue-800 dark:text-blue-300 overflow-x-auto">{
-  "name": "My Token",
-  "symbol": "MTK",
-  "description": "Description",
-  "image": "https://example.com/logo.png"
-}</pre>
-                    </div>
-
-                    <button 
-                        onclick="createToken()" 
-                        class="w-full py-3 bg-[#18A7B5] hover:bg-[#159aa7] text-white text-sm font-semibold rounded-xl transition-colors mt-2"
-                    >
-                        🚀 Создать токен
-                    </button>
-                </div>
+        <!-- Navigation -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🧭 Navigation</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testBackButtonShow()" class="btn">backButton.show()</button>
+                <button onclick="testBackButtonHide()" class="btn">backButton.hide()</button>
+                <button onclick="testOpenLink()" class="btn">openLink()</button>
             </div>
+            <pre id="nav-result" class="result"></pre>
         </div>
 
-        <!-- Create NFT Tab -->
-        <div id="content-nft" class="tab-content hidden">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    🎨 Создать NFT
-                </h2>
-                
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Название NFT
-                        </label>
-                        <input 
-                            type="text" 
-                            id="nft-name" 
-                            placeholder="Cool NFT #1"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Коллекция (символ)
-                        </label>
-                        <input 
-                            type="text" 
-                            id="nft-symbol" 
-                            placeholder="COOL"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white uppercase"
-                            maxlength="10"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            URI метаданных
-                        </label>
-                        <input 
-                            type="url" 
-                            id="nft-uri" 
-                            placeholder="https://example.com/nft-metadata.json"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        />
-                        <p class="text-xs text-gray-500 mt-1">
-                            ℹ️ Загрузите metadata.json на ваш сервер/IPFS
-                        </p>
-                    </div>
-
-                    <div class="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-800">
-                        <p class="text-xs text-purple-900 dark:text-purple-200 font-semibold mb-1">
-                            📝 Пример metadata.json:
-                        </p>
-                        <pre class="text-xs text-purple-800 dark:text-purple-300 overflow-x-auto">{
-  "name": "Cool NFT #1",
-  "image": "https://example.com/nft.png",
-  "attributes": [
-    {"trait_type": "Rarity", "value": "Rare"}
-  ]
-}</pre>
-                    </div>
-
-                    <button 
-                        onclick="createNFT()" 
-                        class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-xl transition-colors mt-2"
-                    >
-                        🎨 Создать NFT
-                    </button>
-                </div>
+        <!-- Storage -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💾 Storage</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testSetItem()" class="btn">setItem('test', 'value')</button>
+                <button onclick="testGetItem()" class="btn">getItem('test')</button>
+                <button onclick="testRemoveItem()" class="btn">removeItem('test')</button>
             </div>
+            <pre id="storage-result" class="result"></pre>
         </div>
 
-        <!-- Transfer Tab -->
-        <div id="content-transfer" class="tab-content hidden">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    💸 Отправить токены
-                </h2>
-                
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Адрес получателя
-                        </label>
-                        <input 
-                            type="text" 
-                            id="transfer-recipient" 
-                            placeholder="Solana address..."
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Токен
-                        </label>
-                        <select 
-                            id="transfer-token"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        >
-                            <option value="SOL">SOL (Solana)</option>
-                            <option value="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v">USDC</option>
-                            <option value="Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB">USDT</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                            Сумма
-                        </label>
-                        <input 
-                            type="number" 
-                            id="transfer-amount" 
-                            placeholder="0.1"
-                            step="0.000001"
-                            class="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#18A7B5] dark:text-white"
-                        />
-                    </div>
-
-                    <button 
-                        onclick="sendTokens()" 
-                        class="w-full py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors mt-2"
-                    >
-                        💸 Отправить
-                    </button>
-                </div>
-
-                <!-- Balance display -->
-                <div id="balance-display" class="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl">
-                    <p class="text-xs text-gray-500 mb-1">Ваш баланс:</p>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm font-bold text-gray-900 dark:text-white">—</span>
-                        <button 
-                            onclick="checkBalance()"
-                            class="text-xs text-[#18A7B5] hover:underline font-semibold"
-                        >
-                            Обновить
-                        </button>
-                    </div>
-                </div>
+        <!-- Payments -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💰 Payments (Sparks)</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testCreateInvoice()" class="btn">createInvoice('Test', 100)</button>
             </div>
+            <pre id="payment-result" class="result"></pre>
         </div>
 
-        <!-- History Tab -->
-        <div id="content-history" class="tab-content hidden">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    📜 История операций
-                </h2>
-                
-                <div id="history-list" class="space-y-2">
-                    <p class="text-sm text-gray-500 text-center py-8">
-                        Операции будут отображаться здесь
-                    </p>
-                </div>
+        <!-- Wallet -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💼 Solana Wallet</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testIsWalletConnected()" class="btn">isWalletConnected()</button>
+                <button onclick="testGetSolanaAddress()" class="btn">getSolanaAddress()</button>
+                <button onclick="testGetSolanaBalance()" class="btn">getSolanaBalance()</button>
+                <button onclick="testGetTokenBalance()" class="btn">getTokenBalance('USDC')</button>
             </div>
+            <pre id="wallet-result" class="result"></pre>
+        </div>
+
+        <!-- Transfers -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💸 Transfers</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testTransferSOL()" class="btn">transferSOL(recipient, 0.01)</button>
+                <button onclick="testTransferToken()" class="btn">transferToken(recipient, 1, 'USDC')</button>
+            </div>
+            <pre id="transfer-result" class="result"></pre>
+        </div>
+
+        <!-- Token Creation -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💎 Token Creation</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testCreateToken()" class="btn">createToken({decimals: 9, supply: 1000000, uri: '...'})</button>
+                <button onclick="testCreateNFT()" class="btn">createNFT({uri: '...'})</button>
+            </div>
+            <pre id="token-result" class="result"></pre>
+        </div>
+
+        <!-- Smart Contracts -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">⚡ Smart Contracts</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testSignMessage()" class="btn">signMessage('Hello')</button>
+                <button onclick="testExecuteSmartContract()" class="btn">executeSmartContract({...})</button>
+            </div>
+            <pre id="contract-result" class="result"></pre>
+        </div>
+
+        <!-- Platform -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">📱 Platform</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testGetPlatform()" class="btn">getPlatform()</button>
+                <button onclick="testIsMobile()" class="btn">isMobile()</button>
+                <button onclick="testIsIOS()" class="btn">isIOS()</button>
+                <button onclick="testIsAndroid()" class="btn">isAndroid()</button>
+            </div>
+            <pre id="platform-result" class="result"></pre>
+        </div>
+
+        <!-- Permissions -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🔐 Permissions</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testHasPermission()" class="btn">hasPermission('wallet')</button>
+            </div>
+            <pre id="permission-result" class="result"></pre>
+        </div>
+
+        <!-- Utilities -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🔧 Utilities</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testGetVersion()" class="btn">getVersion()</button>
+                <button onclick="testDebug()" class="btn">debug()</button>
+                <button onclick="testFormatAddress()" class="btn">formatSolanaAddress()</button>
+                <button onclick="testSolToLamports()" class="btn">solToLamports(1)</button>
+                <button onclick="testLamportsToSol()" class="btn">lamportsToSol(1000000000)</button>
+                <button onclick="testIsValidAddress()" class="btn">isValidSolanaAddress()</button>
+            </div>
+            <pre id="util-result" class="result"></pre>
+        </div>
+
+        <!-- Events -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">📡 Events</h2>
+            <div class="space-y-2 text-sm">
+                <button onclick="testSubscribeEvents()" class="btn">on('backButtonClicked', ...)</button>
+                <button onclick="testUnsubscribeEvents()" class="btn">off('backButtonClicked', ...)</button>
+            </div>
+            <pre id="event-result" class="result"></pre>
         </div>
     </div>
 
+    <style>
+        .btn {
+            padding: 8px 16px;
+            background: #18A7B5;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-block;
+            margin: 4px;
+        }
+        .btn:hover {
+            background: #159aa7;
+            transform: translateY(-1px);
+        }
+        .result {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            font-size: 12px;
+            overflow-x: auto;
+            color: #374151;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .dark .result {
+            background: #1f2937;
+            color: #d1d5db;
+        }
+    </style>
+
     <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
     <script>
-        // ============================================
-        // STATE
-        // ============================================
-        
-        let walletAddress = null;
-        let history = [];
-
         // ============================================
         // INITIALIZATION
         // ============================================
         
         window.NajiApp.onInit(() => {
-            console.log('✅ App initialized!');
-            updateWalletBadge();
-            loadHistory();
-            
+            console.log('✅ SDK initialized!');
             window.NajiApp.ready();
-            window.NajiApp.setHeaderColor('bg-white dark:bg-gray-900');
         });
 
-        async function updateWalletBadge() {
+        function showResult(id, data) {
+            const el = document.getElementById(id);
+            el.textContent = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+            el.classList.add('show');
+        }
+
+        // ============================================
+        // USER & PROFILE
+        // ============================================
+
+        function testGetNickname() {
+            const nickname = window.NajiApp.getNickname();
+            showResult('user-result', { nickname });
+        }
+
+        function testGetUser() {
+            const user = window.NajiApp.getUser();
+            showResult('user-result', user);
+        }
+
+        function testGetSparks() {
+            const sparks = window.NajiApp.getSparks();
+            showResult('user-result', { sparks });
+        }
+
+        // ============================================
+        // THEME & UI
+        // ============================================
+
+        function testGetColorScheme() {
+            const theme = window.NajiApp.getColorScheme();
+            showResult('ui-result', { theme });
+        }
+
+        function testSetHeaderColor() {
+            window.NajiApp.setHeaderColor('bg-gradient-to-r from-purple-500 to-pink-500');
+            showResult('ui-result', 'Header color changed to purple-pink gradient');
+        }
+
+        function testSetFullscreen() {
+            window.NajiApp.setFullscreen(true);
+            showResult('ui-result', 'Fullscreen enabled');
+            setTimeout(() => window.NajiApp.setFullscreen(false), 3000);
+        }
+
+        function testShowAlert() {
+            window.NajiApp.showAlert('Это тестовый alert!', 'Тест', 'success');
+            showResult('ui-result', 'Alert shown');
+        }
+
+        // ============================================
+        // NAVIGATION
+        // ============================================
+
+        function testBackButtonShow() {
+            window.NajiApp.backButton.show();
+            showResult('nav-result', 'Back button shown');
+        }
+
+        function testBackButtonHide() {
+            window.NajiApp.backButton.hide();
+            showResult('nav-result', 'Back button hidden');
+        }
+
+        function testOpenLink() {
+            window.NajiApp.openLink('https://solana.com');
+            showResult('nav-result', 'Link opened in new tab');
+        }
+
+        // ============================================
+        // STORAGE
+        // ============================================
+
+        async function testSetItem() {
+            await window.NajiApp.setItem('test_key', { foo: 'bar', timestamp: Date.now() });
+            showResult('storage-result', 'Item saved successfully');
+        }
+
+        async function testGetItem() {
+            const value = await window.NajiApp.getItem('test_key');
+            showResult('storage-result', value);
+        }
+
+        async function testRemoveItem() {
+            await window.NajiApp.removeItem('test_key');
+            showResult('storage-result', 'Item removed');
+        }
+
+        // ============================================
+        // PAYMENTS
+        // ============================================
+
+        async function testCreateInvoice() {
             try {
-                walletAddress = await window.NajiApp.getSolanaAddress();
-                document.getElementById('wallet-badge').textContent = window.formatSolanaAddress(walletAddress, 4, 4);
+                const paid = await window.NajiApp.createInvoice('Тест платёж', 100, 'Тестовая оплата');
+                showResult('payment-result', { paid });
             } catch (error) {
-                document.getElementById('wallet-badge').textContent = 'Не подключен';
+                showResult('payment-result', { error: error.message });
             }
         }
 
         // ============================================
-        // UI FUNCTIONS
+        // WALLET
         // ============================================
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(el => {
-                el.classList.remove('bg-[#18A7B5]', 'text-white', 'border-[#18A7B5]');
-                el.classList.add('bg-white', 'dark:bg-gray-800', 'border-gray-200', 'dark:border-gray-700');
-            });
-            
-            document.getElementById(`content-${tabName}`).classList.remove('hidden');
-            const btn = document.getElementById(`tab-${tabName}`);
-            btn.classList.remove('bg-white', 'dark:bg-gray-800', 'border-gray-200', 'dark:border-gray-700');
-            btn.classList.add('bg-[#18A7B5]', 'text-white', 'border-[#18A7B5]');
+        function testIsWalletConnected() {
+            const connected = window.NajiApp.isWalletConnected();
+            showResult('wallet-result', { connected });
         }
 
-        function addToHistory(type, details) {
-            const entry = {
-                id: Date.now(),
-                type,
-                details,
-                timestamp: new Date().toISOString()
-            };
-            
-            history.unshift(entry);
-            saveHistory();
-            renderHistory();
-        }
-
-        function renderHistory() {
-            const listEl = document.getElementById('history-list');
-            
-            if (history.length === 0) {
-                listEl.innerHTML = '<p class="text-sm text-gray-500 text-center py-8">Операции будут отображаться здесь</p>';
-                return;
-            }
-            
-            listEl.innerHTML = history.map(entry => `
-                <div class="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl">
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-sm font-semibold text-gray-900 dark:text-white">
-                            ${entry.type === 'token' ? '💎 Токен создан' : 
-                              entry.type === 'nft' ? '🎨 NFT создан' : 
-                              entry.type === 'transfer' ? '💸 Отправлено' : entry.type}
-                        </span>
-                        <span class="text-xs text-green-500">✓</span>
-                    </div>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">${entry.details}</p>
-                    <p class="text-xs text-gray-500">${new Date(entry.timestamp).toLocaleString()}</p>
-                </div>
-            `).join('');
-        }
-
-        async function saveHistory() {
+        async function testGetSolanaAddress() {
             try {
-                await window.NajiApp.setItem('tx_history', history);
+                const address = await window.NajiApp.getSolanaAddress();
+                showResult('wallet-result', { address });
             } catch (error) {
-                console.error('Save history error:', error);
+                showResult('wallet-result', { error: error.message });
             }
         }
 
-        async function loadHistory() {
+        async function testGetSolanaBalance() {
             try {
-                const saved = await window.NajiApp.getItem('tx_history');
-                if (saved) {
-                    history = saved;
-                    renderHistory();
-                }
+                const balance = await window.NajiApp.getSolanaBalance();
+                showResult('wallet-result', { balance, unit: 'SOL' });
             } catch (error) {
-                console.error('Load history error:', error);
+                showResult('wallet-result', { error: error.message });
+            }
+        }
+
+        async function testGetTokenBalance() {
+            try {
+                const balance = await window.NajiApp.getTokenBalance('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+                showResult('wallet-result', { balance, token: 'USDC' });
+            } catch (error) {
+                showResult('wallet-result', { error: error.message });
             }
         }
 
         // ============================================
-        // TOKEN OPERATIONS
+        // TRANSFERS
         // ============================================
 
-        async function createToken() {
-            const name = document.getElementById('token-name').value.trim();
-            const symbol = document.getElementById('token-symbol').value.trim().toUpperCase();
-            const decimals = parseInt(document.getElementById('token-decimals').value);
-            const supply = parseFloat(document.getElementById('token-supply').value);
-            const uri = document.getElementById('token-uri').value.trim();
-
-            if (!name || !symbol) {
-                window.NajiApp.showAlert('Заполните название и символ', 'Ошибка', 'error');
-                return;
+        async function testTransferSOL() {
+            try {
+                // Замените на реальный адрес для теста
+                const result = await window.NajiApp.transferSOL('RECIPIENT_ADDRESS_HERE', 0.01, 'Test transfer');
+                showResult('transfer-result', result);
+            } catch (error) {
+                showResult('transfer-result', { error: error.message });
             }
+        }
 
-            if (!supply || supply <= 0) {
-                window.NajiApp.showAlert('Укажите supply больше 0', 'Ошибка', 'error');
-                return;
+        async function testTransferToken() {
+            try {
+                const result = await window.NajiApp.transferToken(
+                    'RECIPIENT_ADDRESS_HERE', 
+                    1, 
+                    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+                    'Test USDC transfer'
+                );
+                showResult('transfer-result', result);
+            } catch (error) {
+                showResult('transfer-result', { error: error.message });
             }
+        }
 
-            if (!uri) {
-                window.NajiApp.showAlert('Укажите URI метаданных', 'Ошибка', 'error');
-                return;
-            }
+        // ============================================
+        // TOKEN CREATION
+        // ============================================
 
+        async function testCreateToken() {
             try {
                 const result = await window.NajiApp.createToken({
-                    name,
-                    symbol,
-                    decimals,
-                    supply,
-                    uri
+                    decimals: 9,
+                    supply: 1000000,
+                    uri: 'https://example.com/token-metadata.json'
                 });
-                
-                window.NajiApp.showAlert(
-                    `Токен создан!\nMint: ${window.formatSolanaAddress(result.mintAddress)}`,
-                    'Успех! 🎉',
-                    'success'
-                );
-
-                addToHistory('token', `${name} (${symbol}) - ${supply} токенов`);
-                
-                // Очистить форму
-                document.getElementById('token-name').value = '';
-                document.getElementById('token-symbol').value = '';
-                document.getElementById('token-supply').value = '';
-                document.getElementById('token-uri').value = '';
+                showResult('token-result', result);
             } catch (error) {
-                console.error('Create token error:', error);
-                window.NajiApp.showAlert(error.message, 'Ошибка', 'error');
+                showResult('token-result', { error: error.message });
             }
         }
 
-        async function createNFT() {
-            const name = document.getElementById('nft-name').value.trim();
-            const symbol = document.getElementById('nft-symbol').value.trim().toUpperCase();
-            const uri = document.getElementById('nft-uri').value.trim();
-
-            if (!name || !symbol) {
-                window.NajiApp.showAlert('Заполните название и символ', 'Ошибка', 'error');
-                return;
-            }
-
-            if (!uri) {
-                window.NajiApp.showAlert('Укажите URI метаданных', 'Ошибка', 'error');
-                return;
-            }
-
+        async function testCreateNFT() {
             try {
                 const result = await window.NajiApp.createNFT({
-                    name,
-                    symbol,
-                    uri
+                    uri: 'https://example.com/nft-metadata.json'
                 });
-                
-                window.NajiApp.showAlert(
-                    `NFT создан!\nMint: ${window.formatSolanaAddress(result.mintAddress)}`,
-                    'Успех! 🎉',
-                    'success'
-                );
-
-                addToHistory('nft', `${name} из коллекции ${symbol}`);
-                
-                // Очистить форму
-                document.getElementById('nft-name').value = '';
-                document.getElementById('nft-symbol').value = '';
-                document.getElementById('nft-uri').value = '';
+                showResult('token-result', result);
             } catch (error) {
-                console.error('Create NFT error:', error);
-                window.NajiApp.showAlert(error.message, 'Ошибка', 'error');
+                showResult('token-result', { error: error.message });
             }
         }
 
-        async function sendTokens() {
-            const recipient = document.getElementById('transfer-recipient').value.trim();
-            const token = document.getElementById('transfer-token').value;
-            const amount = parseFloat(document.getElementById('transfer-amount').value);
+        // ============================================
+        // SMART CONTRACTS
+        // ============================================
 
-            if (!recipient || !window.isValidSolanaAddress(recipient)) {
-                window.NajiApp.showAlert('Введите корректный адрес', 'Ошибка', 'error');
-                return;
-            }
-
-            if (!amount || amount <= 0) {
-                window.NajiApp.showAlert('Введите сумму больше 0', 'Ошибка', 'error');
-                return;
-            }
-
+        async function testSignMessage() {
             try {
-                let result;
-                if (token === 'SOL') {
-                    result = await window.NajiApp.transferSOL(recipient, amount);
-                } else {
-                    result = await window.NajiApp.transferToken(recipient, amount, token);
-                }
-                
-                window.NajiApp.showAlert(
-                    `Отправлено ${amount} ${token === 'SOL' ? 'SOL' : 'токенов'}!`,
-                    'Успех! ✅',
-                    'success'
-                );
-
-                addToHistory('transfer', `${amount} ${token === 'SOL' ? 'SOL' : 'токенов'} → ${window.formatSolanaAddress(recipient)}`);
-                
-                document.getElementById('transfer-recipient').value = '';
-                document.getElementById('transfer-amount').value = '';
+                const result = await window.NajiApp.signMessage('Hello from Naji SDK!');
+                showResult('contract-result', result);
             } catch (error) {
-                console.error('Transfer error:', error);
-                window.NajiApp.showAlert(error.message, 'Ошибка', 'error');
+                showResult('contract-result', { error: error.message });
             }
         }
 
-        async function checkBalance() {
-            const token = document.getElementById('transfer-token').value;
-            const displayEl = document.querySelector('#balance-display div span');
-            
+        async function testExecuteSmartContract() {
             try {
-                let balance;
-                if (token === 'SOL') {
-                    balance = await window.NajiApp.getSolanaBalance();
-                    displayEl.textContent = `${balance.toFixed(4)} SOL`;
-                } else {
-                    balance = await window.NajiApp.getTokenBalance(token);
-                    const tokenName = token === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' ? 'USDC' : 'USDT';
-                    displayEl.textContent = `${balance.toFixed(2)} ${tokenName}`;
-                }
+                const result = await window.NajiApp.executeSmartContract({
+                    programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+                    accounts: [],
+                    data: [1, 2, 3],
+                    description: 'Test contract call'
+                });
+                showResult('contract-result', result);
             } catch (error) {
-                console.error('Balance check error:', error);
-                displayEl.textContent = 'Ошибка';
+                showResult('contract-result', { error: error.message });
             }
         }
 
-        // Auto-check balance when switching to transfer tab
-        document.getElementById('tab-transfer').addEventListener('click', () => {
-            setTimeout(checkBalance, 100);
-        });
+        // ============================================
+        // PLATFORM
+        // ============================================
+
+        function testGetPlatform() {
+            const platform = window.NajiApp.getPlatform();
+            showResult('platform-result', { platform });
+        }
+
+        function testIsMobile() {
+            const isMobile = window.NajiApp.isMobile();
+            showResult('platform-result', { isMobile });
+        }
+
+        function testIsIOS() {
+            const isIOS = window.NajiApp.isIOS();
+            showResult('platform-result', { isIOS });
+        }
+
+        function testIsAndroid() {
+            const isAndroid = window.NajiApp.isAndroid();
+            showResult('platform-result', { isAndroid });
+        }
+
+        // ============================================
+        // PERMISSIONS
+        // ============================================
+
+        function testHasPermission() {
+            const wallet = window.NajiApp.hasPermission('wallet');
+            const transactions = window.NajiApp.hasPermission('transactions');
+            const storage = window.NajiApp.hasPermission('storage');
+            showResult('permission-result', { wallet, transactions, storage });
+        }
+
+        // ============================================
+        // UTILITIES
+        // ============================================
+
+        function testGetVersion() {
+            const version = window.NajiApp.getVersion();
+            showResult('util-result', { version });
+        }
+
+        function testDebug() {
+            const debug = window.NajiApp.debug();
+            showResult('util-result', debug);
+        }
+
+        function testFormatAddress() {
+            const formatted = window.formatSolanaAddress('DYw8jCTfwHNRJPGMD5Br6WnXDZXPNtpVsUMxYRMr3tWx', 4, 4);
+            showResult('util-result', { original: 'DYw8jCT...', formatted });
+        }
+
+        function testSolToLamports() {
+            const lamports = window.solToLamports(1);
+            showResult('util-result', { sol: 1, lamports });
+        }
+
+        function testLamportsToSol() {
+            const sol = window.lamportsToSol(1000000000);
+            showResult('util-result', { lamports: 1000000000, sol });
+        }
+
+        function testIsValidAddress() {
+            const valid1 = window.isValidSolanaAddress('DYw8jCTfwHNRJPGMD5Br6WnXDZXPNtpVsUMxYRMr3tWx');
+            const valid2 = window.isValidSolanaAddress('invalid');
+            showResult('util-result', { 
+                'DYw8j...': valid1, 
+                'invalid': valid2 
+            });
+        }
+
+        // ============================================
+        // EVENTS
+        // ============================================
+
+        let backButtonHandler = null;
+
+        function testSubscribeEvents() {
+            backButtonHandler = () => {
+                console.log('Back button clicked!');
+                window.NajiApp.showAlert('Back button clicked!', 'Event', 'info');
+            };
+            window.NajiApp.backButton.onClick(backButtonHandler);
+            showResult('event-result', 'Subscribed to backButtonClicked event. Click back button to test.');
+        }
+
+        function testUnsubscribeEvents() {
+            if (backButtonHandler) {
+                window.NajiApp.backButton.offClick(backButtonHandler);
+                showResult('event-result', 'Unsubscribed from backButtonClicked event');
+            } else {
+                showResult('event-result', 'No handler to unsubscribe');
+            }
+        }
     </script>
 </body>
 </html>
