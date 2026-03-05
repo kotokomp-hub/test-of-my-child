@@ -2,519 +2,80 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naji SDK - Все функции</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>NMA SDK Game</title>
+    <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@main/nmasdk.js"></script>
+    <style>
+        body { margin: 0; background: #1a1a2e; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #game-container { position: relative; width: 300px; height: 400px; border: 2px solid #16213e; background: #0f3460; border-radius: 10px; overflow: hidden; }
+        .particle { position: absolute; width: 20px; height: 20px; background: #e94560; border-radius: 50%; cursor: pointer; }
+        #stats { margin-bottom: 10px; font-size: 1.2rem; }
+        .controls { margin-top: 20px; display: flex; gap: 10px; }
+        button { padding: 10px; cursor: pointer; border: none; border-radius: 5px; background: #0f3460; color: white; }
+    </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 p-4">
-    <div class="max-w-4xl mx-auto">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-            📚 Naji SDK v2.1 - Полный справочник функций
-        </h1>
+<body>
 
-        <!-- User & Profile -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">👤 User & Profile</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testGetNickname()" class="btn">getNickname()</button>
-                <button onclick="testGetUser()" class="btn">getUser()</button>
-                <button onclick="testGetSparks()" class="btn">getSparks()</button>
-            </div>
-            <pre id="user-result" class="result"></pre>
-        </div>
+    <div id="stats">Энергия: <span id="score">0</span></div>
+    
+    <div id="game-container" id="area"></div>
 
-        <!-- Theme & UI -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🎨 Theme & UI</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testGetColorScheme()" class="btn">getColorScheme()</button>
-                <button onclick="testSetHeaderColor()" class="btn">setHeaderColor()</button>
-                <button onclick="testSetFullscreen()" class="btn">setFullscreen(true)</button>
-                <button onclick="testShowAlert()" class="btn">showAlert()</button>
-            </div>
-            <pre id="ui-result" class="result"></pre>
-        </div>
-
-        <!-- Navigation -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🧭 Navigation</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testBackButtonShow()" class="btn">backButton.show()</button>
-                <button onclick="testBackButtonHide()" class="btn">backButton.hide()</button>
-                <button onclick="testOpenLink()" class="btn">openLink()</button>
-            </div>
-            <pre id="nav-result" class="result"></pre>
-        </div>
-
-        <!-- Storage -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💾 Storage</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testSetItem()" class="btn">setItem('test', 'value')</button>
-                <button onclick="testGetItem()" class="btn">getItem('test')</button>
-                <button onclick="testRemoveItem()" class="btn">removeItem('test')</button>
-            </div>
-            <pre id="storage-result" class="result"></pre>
-        </div>
-
-        <!-- Payments -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💰 Payments (Sparks)</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testCreateInvoice()" class="btn">createInvoice('Test', 100)</button>
-            </div>
-            <pre id="payment-result" class="result"></pre>
-        </div>
-
-        <!-- Wallet -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💼 Solana Wallet</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testIsWalletConnected()" class="btn">isWalletConnected()</button>
-                <button onclick="testGetSolanaAddress()" class="btn">getSolanaAddress()</button>
-                <button onclick="testGetSolanaBalance()" class="btn">getSolanaBalance()</button>
-                <button onclick="testGetTokenBalance()" class="btn">getTokenBalance('USDC')</button>
-            </div>
-            <pre id="wallet-result" class="result"></pre>
-        </div>
-
-        <!-- Transfers -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💸 Transfers</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testTransferSOL()" class="btn">transferSOL(recipient, 0.01)</button>
-                <button onclick="testTransferToken()" class="btn">transferToken(recipient, 1, 'USDC')</button>
-            </div>
-            <pre id="transfer-result" class="result"></pre>
-        </div>
-
-        <!-- Token Creation -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">💎 Token Creation</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testCreateToken()" class="btn">createToken({decimals: 9, supply: 1000000, uri: '...'})</button>
-                <button onclick="testCreateNFT()" class="btn">createNFT({uri: '...'})</button>
-            </div>
-            <pre id="token-result" class="result"></pre>
-        </div>
-
-        <!-- Smart Contracts -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">⚡ Smart Contracts</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testSignMessage()" class="btn">signMessage('Hello')</button>
-                <button onclick="testExecuteSmartContract()" class="btn">executeSmartContract({...})</button>
-            </div>
-            <pre id="contract-result" class="result"></pre>
-        </div>
-
-        <!-- Platform -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">📱 Platform</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testGetPlatform()" class="btn">getPlatform()</button>
-                <button onclick="testIsMobile()" class="btn">isMobile()</button>
-                <button onclick="testIsIOS()" class="btn">isIOS()</button>
-                <button onclick="testIsAndroid()" class="btn">isAndroid()</button>
-            </div>
-            <pre id="platform-result" class="result"></pre>
-        </div>
-
-        <!-- Permissions -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🔐 Permissions</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testHasPermission()" class="btn">hasPermission('wallet')</button>
-            </div>
-            <pre id="permission-result" class="result"></pre>
-        </div>
-
-        <!-- Utilities -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">🔧 Utilities</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testGetVersion()" class="btn">getVersion()</button>
-                <button onclick="testDebug()" class="btn">debug()</button>
-                <button onclick="testFormatAddress()" class="btn">formatSolanaAddress()</button>
-                <button onclick="testSolToLamports()" class="btn">solToLamports(1)</button>
-                <button onclick="testLamportsToSol()" class="btn">lamportsToSol(1000000000)</button>
-                <button onclick="testIsValidAddress()" class="btn">isValidSolanaAddress()</button>
-            </div>
-            <pre id="util-result" class="result"></pre>
-        </div>
-
-        <!-- Events -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 border border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">📡 Events</h2>
-            <div class="space-y-2 text-sm">
-                <button onclick="testSubscribeEvents()" class="btn">on('backButtonClicked', ...)</button>
-                <button onclick="testUnsubscribeEvents()" class="btn">off('backButtonClicked', ...)</button>
-            </div>
-            <pre id="event-result" class="result"></pre>
-        </div>
+    <div class="controls">
+        <button onclick="requestExpand()">Развернуть</button>
+        <button onclick="sendResult()">Отправить результат</button>
+        <button onclick="closeGame()" style="background: #e94560;">Выйти</button>
     </div>
 
-    <style>
-        .btn {
-            padding: 8px 16px;
-            background: #18A7B5;
-            color: white;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.2s;
-            display: inline-block;
-            margin: 4px;
-        }
-        .btn:hover {
-            background: #159aa7;
-            transform: translateY(-1px);
-        }
-        .result {
-            margin-top: 12px;
-            padding: 12px;
-            background: #f9fafb;
-            border-radius: 8px;
-            font-size: 12px;
-            overflow-x: auto;
-            color: #374151;
-            display: none;
-        }
-        .result.show {
-            display: block;
-        }
-        .dark .result {
-            background: #1f2937;
-            color: #d1d5db;
-        }
-    </style>
-
-    <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
     <script>
-        // ============================================
-        // INITIALIZATION
-        // ============================================
+        // Инициализируем NMASDK
+        const nma = new NMASDK();
         
-        window.NajiApp.onInit(() => {
-            console.log('✅ SDK initialized!');
-            window.NajiApp.ready();
-        });
+        let score = 0;
+        const container = document.getElementById('game-container');
+        const scoreEl = document.getElementById('score');
 
-        function showResult(id, data) {
-            const el = document.getElementById(id);
-            el.textContent = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
-            el.classList.add('show');
-        }
+        // 1. Используем nma.ready() при запуске
+        nma.ready();
 
-        // ============================================
-        // USER & PROFILE
-        // ============================================
-
-        function testGetNickname() {
-            const nickname = window.NajiApp.getNickname();
-            showResult('user-result', { nickname });
-        }
-
-        function testGetUser() {
-            const user = window.NajiApp.getUser();
-            showResult('user-result', user);
-        }
-
-        function testGetSparks() {
-            const sparks = window.NajiApp.getSparks();
-            showResult('user-result', { sparks });
-        }
-
-        // ============================================
-        // THEME & UI
-        // ============================================
-
-        function testGetColorScheme() {
-            const theme = window.NajiApp.getColorScheme();
-            showResult('ui-result', { theme });
-        }
-
-        function testSetHeaderColor() {
-            window.NajiApp.setHeaderColor('bg-gradient-to-r from-purple-500 to-pink-500');
-            showResult('ui-result', 'Header color changed to purple-pink gradient');
-        }
-
-        function testSetFullscreen() {
-            window.NajiApp.setFullscreen(true);
-            showResult('ui-result', 'Fullscreen enabled');
-            setTimeout(() => window.NajiApp.setFullscreen(false), 3000);
-        }
-
-        function testShowAlert() {
-            window.NajiApp.showAlert('Это тестовый alert!', 'Тест', 'success');
-            showResult('ui-result', 'Alert shown');
-        }
-
-        // ============================================
-        // NAVIGATION
-        // ============================================
-
-        function testBackButtonShow() {
-            window.NajiApp.backButton.show();
-            showResult('nav-result', 'Back button shown');
-        }
-
-        function testBackButtonHide() {
-            window.NajiApp.backButton.hide();
-            showResult('nav-result', 'Back button hidden');
-        }
-
-        function testOpenLink() {
-            window.NajiApp.openLink('https://solana.com');
-            showResult('nav-result', 'Link opened in new tab');
-        }
-
-        // ============================================
-        // STORAGE
-        // ============================================
-
-        async function testSetItem() {
-            await window.NajiApp.setItem('test_key', { foo: 'bar', timestamp: Date.now() });
-            showResult('storage-result', 'Item saved successfully');
-        }
-
-        async function testGetItem() {
-            const value = await window.NajiApp.getItem('test_key');
-            showResult('storage-result', value);
-        }
-
-        async function testRemoveItem() {
-            await window.NajiApp.removeItem('test_key');
-            showResult('storage-result', 'Item removed');
-        }
-
-        // ============================================
-        // PAYMENTS
-        // ============================================
-
-        async function testCreateInvoice() {
-            try {
-                const paid = await window.NajiApp.createInvoice('Тест платёж', 100, 'Тестовая оплата');
-                showResult('payment-result', { paid });
-            } catch (error) {
-                showResult('payment-result', { error: error.message });
-            }
-        }
-
-        // ============================================
-        // WALLET
-        // ============================================
-
-        function testIsWalletConnected() {
-            const connected = window.NajiApp.isWalletConnected();
-            showResult('wallet-result', { connected });
-        }
-
-        async function testGetSolanaAddress() {
-            try {
-                const address = await window.NajiApp.getSolanaAddress();
-                showResult('wallet-result', { address });
-            } catch (error) {
-                showResult('wallet-result', { error: error.message });
-            }
-        }
-
-        async function testGetSolanaBalance() {
-            try {
-                const balance = await window.NajiApp.getSolanaBalance();
-                showResult('wallet-result', { balance, unit: 'SOL' });
-            } catch (error) {
-                showResult('wallet-result', { error: error.message });
-            }
-        }
-
-        async function testGetTokenBalance() {
-            try {
-                const balance = await window.NajiApp.getTokenBalance('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-                showResult('wallet-result', { balance, token: 'USDC' });
-            } catch (error) {
-                showResult('wallet-result', { error: error.message });
-            }
-        }
-
-        // ============================================
-        // TRANSFERS
-        // ============================================
-
-        async function testTransferSOL() {
-            try {
-                // Замените на реальный адрес для теста
-                const result = await window.NajiApp.transferSOL('RECIPIENT_ADDRESS_HERE', 0.01, 'Test transfer');
-                showResult('transfer-result', result);
-            } catch (error) {
-                showResult('transfer-result', { error: error.message });
-            }
-        }
-
-        async function testTransferToken() {
-            try {
-                const result = await window.NajiApp.transferToken(
-                    'RECIPIENT_ADDRESS_HERE', 
-                    1, 
-                    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-                    'Test USDC transfer'
-                );
-                showResult('transfer-result', result);
-            } catch (error) {
-                showResult('transfer-result', { error: error.message });
-            }
-        }
-
-        // ============================================
-        // TOKEN CREATION
-        // ============================================
-
-        async function testCreateToken() {
-            try {
-                const result = await window.NajiApp.createToken({
-                    decimals: 9,
-                    supply: 1000000,
-                    uri: 'https://example.com/token-metadata.json'
-                });
-                showResult('token-result', result);
-            } catch (error) {
-                showResult('token-result', { error: error.message });
-            }
-        }
-
-        async function testCreateNFT() {
-            try {
-                const result = await window.NajiApp.createNFT({
-                    uri: 'https://example.com/nft-metadata.json'
-                });
-                showResult('token-result', result);
-            } catch (error) {
-                showResult('token-result', { error: error.message });
-            }
-        }
-
-        // ============================================
-        // SMART CONTRACTS
-        // ============================================
-
-        async function testSignMessage() {
-            try {
-                const result = await window.NajiApp.signMessage('Hello from Naji SDK!');
-                showResult('contract-result', result);
-            } catch (error) {
-                showResult('contract-result', { error: error.message });
-            }
-        }
-
-        async function testExecuteSmartContract() {
-            try {
-                const result = await window.NajiApp.executeSmartContract({
-                    programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-                    accounts: [],
-                    data: [1, 2, 3],
-                    description: 'Test contract call'
-                });
-                showResult('contract-result', result);
-            } catch (error) {
-                showResult('contract-result', { error: error.message });
-            }
-        }
-
-        // ============================================
-        // PLATFORM
-        // ============================================
-
-        function testGetPlatform() {
-            const platform = window.NajiApp.getPlatform();
-            showResult('platform-result', { platform });
-        }
-
-        function testIsMobile() {
-            const isMobile = window.NajiApp.isMobile();
-            showResult('platform-result', { isMobile });
-        }
-
-        function testIsIOS() {
-            const isIOS = window.NajiApp.isIOS();
-            showResult('platform-result', { isIOS });
-        }
-
-        function testIsAndroid() {
-            const isAndroid = window.NajiApp.isAndroid();
-            showResult('platform-result', { isAndroid });
-        }
-
-        // ============================================
-        // PERMISSIONS
-        // ============================================
-
-        function testHasPermission() {
-            const wallet = window.NajiApp.hasPermission('wallet');
-            const transactions = window.NajiApp.hasPermission('transactions');
-            const storage = window.NajiApp.hasPermission('storage');
-            showResult('permission-result', { wallet, transactions, storage });
-        }
-
-        // ============================================
-        // UTILITIES
-        // ============================================
-
-        function testGetVersion() {
-            const version = window.NajiApp.getVersion();
-            showResult('util-result', { version });
-        }
-
-        function testDebug() {
-            const debug = window.NajiApp.debug();
-            showResult('util-result', debug);
-        }
-
-        function testFormatAddress() {
-            const formatted = window.formatSolanaAddress('DYw8jCTfwHNRJPGMD5Br6WnXDZXPNtpVsUMxYRMr3tWx', 4, 4);
-            showResult('util-result', { original: 'DYw8jCT...', formatted });
-        }
-
-        function testSolToLamports() {
-            const lamports = window.solToLamports(1);
-            showResult('util-result', { sol: 1, lamports });
-        }
-
-        function testLamportsToSol() {
-            const sol = window.lamportsToSol(1000000000);
-            showResult('util-result', { lamports: 1000000000, sol });
-        }
-
-        function testIsValidAddress() {
-            const valid1 = window.isValidSolanaAddress('DYw8jCTfwHNRJPGMD5Br6WnXDZXPNtpVsUMxYRMr3tWx');
-            const valid2 = window.isValidSolanaAddress('invalid');
-            showResult('util-result', { 
-                'DYw8j...': valid1, 
-                'invalid': valid2 
-            });
-        }
-
-        // ============================================
-        // EVENTS
-        // ============================================
-
-        let backButtonHandler = null;
-
-        function testSubscribeEvents() {
-            backButtonHandler = () => {
-                console.log('Back button clicked!');
-                window.NajiApp.showAlert('Back button clicked!', 'Event', 'info');
+        function createParticle() {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.left = Math.random() * 280 + 'px';
+            p.style.top = Math.random() * 380 + 'px';
+            
+            p.onclick = () => {
+                score++;
+                scoreEl.innerText = score;
+                p.remove();
+                
+                // 2. Вызываем вибрацию через SDK при клике
+                nma.haptic('impact', 'medium');
+                
+                createParticle();
             };
-            window.NajiApp.backButton.onClick(backButtonHandler);
-            showResult('event-result', 'Subscribed to backButtonClicked event. Click back button to test.');
+            container.appendChild(p);
         }
 
-        function testUnsubscribeEvents() {
-            if (backButtonHandler) {
-                window.NajiApp.backButton.offClick(backButtonHandler);
-                showResult('event-result', 'Unsubscribed from backButtonClicked event');
-            } else {
-                showResult('event-result', 'No handler to unsubscribe');
-            }
+        // Функции взаимодействия с SDK
+        function requestExpand() {
+            // 3. Просим платформу расширить окно
+            nma.expand();
         }
+
+        function sendResult() {
+            // 4. Отправляем данные платформе
+            const data = { score: score, timestamp: Date.now() };
+            nma.sendData(JSON.stringify(data));
+            alert("Данные отправлены родительскому окну!");
+        }
+
+        function closeGame() {
+            // 5. Просим закрыть игру
+            nma.close();
+        }
+
+        // Начинаем
+        createParticle();
+        createParticle();
     </script>
 </body>
 </html>
