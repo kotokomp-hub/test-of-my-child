@@ -2,80 +2,83 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>NMA SDK Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Naji Sparks Clicker</title>
     <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@main/nmasdk.js"></script>
     <style>
-        body { margin: 0; background: #1a1a2e; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        #game-container { position: relative; width: 300px; height: 400px; border: 2px solid #16213e; background: #0f3460; border-radius: 10px; overflow: hidden; }
-        .particle { position: absolute; width: 20px; height: 20px; background: #e94560; border-radius: 50%; cursor: pointer; }
-        #stats { margin-bottom: 10px; font-size: 1.2rem; }
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
-        button { padding: 10px; cursor: pointer; border: none; border-radius: 5px; background: #0f3460; color: white; }
+        body { margin: 0; background: #121212; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; }
+        .balance { font-size: 24px; margin: 20px; color: #00ff88; }
+        #player { 
+            width: 80px; height: 80px; margin: 50px auto; 
+            background: #555; border-radius: 15px; 
+            transition: 0.1s; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 40px;
+        }
+        #player:active { transform: scale(0.9); }
+        .shop { display: flex; justify-content: center; gap: 10px; margin-top: 30px; }
+        .skin-btn { 
+            padding: 10px; background: #333; border: 1px solid #555; 
+            color: white; cursor: pointer; border-radius: 8px;
+        }
+        .skin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .price { display: block; font-size: 12px; color: #ffd700; }
     </style>
 </head>
 <body>
 
-    <div id="stats">Энергия: <span id="score">0</span></div>
+    <div class="balance">Баланс: <span id="sparks">100</span> ✨</div>
     
-    <div id="game-container" id="area"></div>
+    <div id="player" onclick="clickPlayer()">👤</div>
+    <p>Нажми на персонажа!</p>
 
-    <div class="controls">
-        <button onclick="requestExpand()">Развернуть</button>
-        <button onclick="sendResult()">Отправить результат</button>
-        <button onclick="closeGame()" style="background: #e94560;">Выйти</button>
+    <div class="shop">
+        <button class="skin-btn" onclick="buySkin('🔥', 50)">
+            Скин Огонь <span class="price">50 Sparks</span>
+        </button>
+        <button class="skin-btn" onclick="buySkin('🧊', 80)">
+            Скин Лед <span class="price">80 Sparks</span>
+        </button>
     </div>
 
     <script>
-        // Инициализируем NMASDK
-        const nma = new NMASDK();
-        
-        let score = 0;
-        const container = document.getElementById('game-container');
-        const scoreEl = document.getElementById('score');
+        const sdk = new NMASDK();
+        let sparks = 100;
 
-        // 1. Используем nma.ready() при запуске
-        nma.ready();
-
-        function createParticle() {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            p.style.left = Math.random() * 280 + 'px';
-            p.style.top = Math.random() * 380 + 'px';
-            
-            p.onclick = () => {
-                score++;
-                scoreEl.innerText = score;
-                p.remove();
-                
-                // 2. Вызываем вибрацию через SDK при клике
-                nma.haptic('impact', 'medium');
-                
-                createParticle();
-            };
-            container.appendChild(p);
+        function updateUI() {
+            document.getElementById('sparks').innerText = sparks;
         }
 
-        // Функции взаимодействия с SDK
-        function requestExpand() {
-            // 3. Просим платформу расширить окно
-            nma.expand();
+        function clickPlayer() {
+            // Вибрация через SDK
+            sdk.haptic('impact', 'light');
+            sparks += 1;
+            updateUI();
         }
 
-        function sendResult() {
-            // 4. Отправляем данные платформе
-            const data = { score: score, timestamp: Date.now() };
-            nma.sendData(JSON.stringify(data));
-            alert("Данные отправлены родительскому окну!");
+        function buySkin(emoji, cost) {
+            if (sparks >= cost) {
+                sparks -= cost;
+                document.getElementById('player').innerText = emoji;
+                updateUI();
+
+                // ОТПРАВКА ДАННЫХ В ПЛАТФОРМУ
+                // Мы уведомляем систему, что потратили валюту и сменили скин
+                sdk.sendData(JSON.stringify({
+                    event: "skin_purchase",
+                    skin: emoji,
+                    remaining_sparks: sparks
+                }));
+
+                sdk.haptic('notification', 'success');
+            } else {
+                // Если не хватает, просим платформу расширить окно (для доната?)
+                sdk.expand();
+                alert("Недостаточно NajiSparks!");
+            }
         }
 
-        function closeGame() {
-            // 5. Просим закрыть игру
-            nma.close();
-        }
-
-        // Начинаем
-        createParticle();
-        createParticle();
+        // Сообщаем платформе, что игра загрузилась
+        sdk.ready();
     </script>
 </body>
 </html>
