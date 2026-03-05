@@ -3,82 +3,466 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naji Sparks Clicker</title>
+    <title>NMA Игрушка</title>
     <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@main/nmasdk.js"></script>
     <style>
-        body { margin: 0; background: #121212; color: white; font-family: 'Segoe UI', sans-serif; text-align: center; }
-        .balance { font-size: 24px; margin: 20px; color: #00ff88; }
-        #player { 
-            width: 80px; height: 80px; margin: 50px auto; 
-            background: #555; border-radius: 15px; 
-            transition: 0.1s; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 40px;
-        }
-        #player:active { transform: scale(0.9); }
-        .shop { display: flex; justify-content: center; gap: 10px; margin-top: 30px; }
-        .skin-btn { 
-            padding: 10px; background: #333; border: 1px solid #555; 
-            color: white; cursor: pointer; border-radius: 8px;
-        }
-        .skin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .price { display: block; font-size: 12px; color: #ffd700; }
-    </style>
-</head>
-<body>
-
-    <div class="balance">Баланс: <span id="sparks">100</span> ✨</div>
-    
-    <div id="player" onclick="clickPlayer()">👤</div>
-    <p>Нажми на персонажа!</p>
-
-    <div class="shop">
-        <button class="skin-btn" onclick="buySkin('🔥', 50)">
-            Скин Огонь <span class="price">50 Sparks</span>
-        </button>
-        <button class="skin-btn" onclick="buySkin('🧊', 80)">
-            Скин Лед <span class="price">80 Sparks</span>
-        </button>
-    </div>
-
-    <script>
-        const sdk = new NMASDK();
-        let sparks = 100;
-
-        function updateUI() {
-            document.getElementById('sparks').innerText = sparks;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        function clickPlayer() {
-            // Вибрация через SDK
-            sdk.haptic('impact', 'light');
-            sparks += 1;
-            updateUI();
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
         }
 
-        function buySkin(emoji, cost) {
-            if (sparks >= cost) {
-                sparks -= cost;
-                document.getElementById('player').innerText = emoji;
-                updateUI();
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+        }
 
-                // ОТПРАВКА ДАННЫХ В ПЛАТФОРМУ
-                // Мы уведомляем систему, что потратили валюту и сменили скин
-                sdk.sendData(JSON.stringify({
-                    event: "skin_purchase",
-                    skin: emoji,
-                    remaining_sparks: sparks
-                }));
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
 
-                sdk.haptic('notification', 'success');
-            } else {
-                // Если не хватает, просим платформу расширить окно (для доната?)
-                sdk.expand();
-                alert("Недостаточно NajiSparks!");
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .game-area {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 3em;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .cell:active {
+            transform: scale(0.95);
+        }
+
+        .cell.clicked {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            animation: pop 0.6s ease-out;
+        }
+
+        @keyframes pop {
+            0% {
+                transform: scale(0.3);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
             }
         }
 
-        // Сообщаем платформе, что игра загрузилась
-        sdk.ready();
+        .stats {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .message {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            font-weight: bold;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #28a745;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #17a2b8;
+        }
+
+        .combo {
+            text-align: center;
+            font-size: 2em;
+            font-weight: bold;
+            color: #f5576c;
+            margin-bottom: 20px;
+            animation: pulse 0.5s ease;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        .footer {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 NMA Игрушка</h1>
+        <p class="subtitle">Кликай по ячейкам и набирай очки!</p>
+        
+        <div id="message" class="message" style="display: none;"></div>
+        
+        <div id="combo" class="combo" style="display: none;"></div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-label">Очки</div>
+                <div class="stat-value" id="score">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Уровень</div>
+                <div class="stat-value" id="level">1</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Комбо</div>
+                <div class="stat-value" id="comboCount">0</div>
+            </div>
+        </div>
+
+        <div class="game-area" id="gameArea"></div>
+
+        <div class="controls">
+            <button class="btn-primary" onclick="game.start()">Начать</button>
+            <button class="btn-secondary" onclick="game.pause()">Пауза</button>
+            <button class="btn-danger" onclick="game.reset()">Сброс</button>
+        </div>
+
+        <div class="footer">
+            Сделано с ❤️ с использованием NMASDK
+        </div>
+    </div>
+
+    <script>
+        const game = {
+            score: 0,
+            level: 1,
+            combo: 0,
+            maxCombo: 0,
+            isRunning: false,
+            gameTime: 0,
+            gameMode: 'play',
+            cells: [],
+            comboTimer: null,
+
+            init() {
+                // Инициализируем NMASDK если доступен
+                if (typeof NMASDK !== 'undefined') {
+                    console.log('NMASDK загружена');
+                }
+
+                this.createCells();
+                this.updateDisplay();
+            },
+
+            createCells() {
+                const gameArea = document.getElementById('gameArea');
+                gameArea.innerHTML = '';
+                this.cells = [];
+
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('button');
+                    cell.className = 'cell';
+                    cell.textContent = this.getRandomEmoji();
+                    cell.onclick = () => this.cellClick(cell, i);
+                    gameArea.appendChild(cell);
+                    this.cells.push({
+                        element: cell,
+                        value: cell.textContent,
+                        index: i
+                    });
+                }
+            },
+
+            getRandomEmoji() {
+                const emojis = ['🌟', '🎨', '🚀', '🎯', '💎', '🔥', '⚡', '🎪', '🎭'];
+                return emojis[Math.floor(Math.random() * emojis.length)];
+            },
+
+            cellClick(element, index) {
+                if (!this.isRunning && this.gameMode === 'play') {
+                    this.showMessage('Нажми "Начать" чтобы начать игру!', 'info');
+                    return;
+                }
+
+                if (!this.isRunning) return;
+
+                element.classList.add('clicked');
+                
+                // Смена эмодзи
+                const oldEmoji = element.textContent;
+                element.textContent = this.getRandomEmoji();
+                this.cells[index].value = element.textContent;
+
+                // Проверяем совпадения с соседями
+                const matches = this.checkMatches(index);
+                
+                // Начисляем очки
+                const basePoints = 10 + (this.level * 5);
+                let points = basePoints;
+
+                if (matches > 0) {
+                    points = basePoints * (matches + 1);
+                    this.combo++;
+                } else {
+                    this.combo = 0;
+                }
+
+                this.score += points;
+                this.maxCombo = Math.max(this.maxCombo, this.combo);
+
+                // Показываем комбо
+                if (this.combo > 0) {
+                    this.showCombo();
+                }
+
+                this.levelUp();
+                this.updateDisplay();
+
+                // Сброс комбо через 2 секунды неактивности
+                clearTimeout(this.comboTimer);
+                this.comboTimer = setTimeout(() => {
+                    this.combo = 0;
+                    this.updateDisplay();
+                }, 2000);
+
+                // Удаляем класс clicked
+                setTimeout(() => {
+                    element.classList.remove('clicked');
+                }, 300);
+            },
+
+            checkMatches(index) {
+                const row = Math.floor(index / 3);
+                const col = index % 3;
+                const currentEmoji = this.cells[index].value;
+                let matches = 0;
+
+                // Проверяем соседей
+                const neighbors = [
+                    [row - 1, col],
+                    [row + 1, col],
+                    [row, col - 1],
+                    [row, col + 1]
+                ];
+
+                neighbors.forEach(([r, c]) => {
+                    if (r >= 0 && r < 3 && c >= 0 && c < 3) {
+                        const neighborIndex = r * 3 + c;
+                        if (this.cells[neighborIndex].value === currentEmoji) {
+                            matches++;
+                            this.cells[neighborIndex].element.style.filter = 'brightness(0.8)';
+                            setTimeout(() => {
+                                this.cells[neighborIndex].element.style.filter = '';
+                            }, 300);
+                        }
+                    }
+                });
+
+                return matches;
+            },
+
+            levelUp() {
+                const newLevel = Math.floor(this.score / 500) + 1;
+                if (newLevel > this.level) {
+                    this.level = newLevel;
+                    this.showMessage(`Уровень поднялся до ${this.level}! 🎉`, 'success');
+                }
+            },
+
+            showCombo() {
+                const comboEl = document.getElementById('combo');
+                comboEl.textContent = `Комбо x${this.combo}!`;
+                comboEl.style.display = 'block';
+                setTimeout(() => {
+                    comboEl.style.display = 'none';
+                }, 1000);
+            },
+
+            showMessage(text, type = 'info') {
+                const msgEl = document.getElementById('message');
+                msgEl.textContent = text;
+                msgEl.className = `message ${type}`;
+                msgEl.style.display = 'block';
+                
+                setTimeout(() => {
+                    msgEl.style.display = 'none';
+                }, 3000);
+            },
+
+            start() {
+                this.isRunning = true;
+                this.gameMode = 'play';
+                this.showMessage('Игра началась! Кликай быстрее! 🚀', 'success');
+            },
+
+            pause() {
+                this.isRunning = !this.isRunning;
+                if (this.isRunning) {
+                    this.showMessage('Игра продолжена!', 'info');
+                } else {
+                    this.showMessage('Пауза', 'info');
+                }
+            },
+
+            reset() {
+                this.score = 0;
+                this.level = 1;
+                this.combo = 0;
+                this.maxCombo = 0;
+                this.isRunning = false;
+                this.gameMode = 'play';
+                clearTimeout(this.comboTimer);
+                this.createCells();
+                this.updateDisplay();
+                this.showMessage('Игра сброшена! 🔄', 'info');
+            },
+
+            updateDisplay() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('level').textContent = this.level;
+                document.getElementById('comboCount').textContent = this.combo > 0 ? this.combo : this.maxCombo;
+            }
+        };
+
+        // Инициализируем игру при загрузке
+        window.addEventListener('load', () => {
+            game.init();
+        });
     </script>
 </body>
 </html>
