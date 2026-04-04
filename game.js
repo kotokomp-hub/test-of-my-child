@@ -70,6 +70,7 @@
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout:${ms}`)), ms))
   ]);
+  let bridgeReqCounter = 0;
   const fmtTime = (ms) => {
     if (!Number.isFinite(ms) || ms <= 0) return "00:00.0";
     const t = ms / 1000;
@@ -78,6 +79,43 @@
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${Math.floor((t % 1) * 10)}`;
   };
   const suffix = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+  function bridgeApiRequest(path, options = {}) {
+    return new Promise((resolve, reject) => {
+      if (!window.parent || window.parent === window) {
+        reject(new Error("Mini App bridge unavailable"));
+        return;
+      }
+
+      bridgeReqCounter += 1;
+      const reqId = `arena_api_${Date.now()}_${bridgeReqCounter}`;
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener("message", onMessage);
+        reject(new Error("Mini App bridge timeout"));
+      }, 15000);
+
+      function onMessage(event) {
+        const data = event.data || {};
+        if (data.type !== "NAJI_ASYNC_RESPONSE" || data.reqId !== reqId) return;
+        clearTimeout(timeoutId);
+        window.removeEventListener("message", onMessage);
+        if (data.error) reject(new Error(data.error));
+        else resolve(data.result);
+      }
+
+      window.addEventListener("message", onMessage);
+      window.parent.postMessage({
+        type: "API_REQUEST",
+        payload: {
+          reqId,
+          path,
+          method: options.method || "GET",
+          headers: options.headers || {},
+          body: options.body
+        }
+      }, "*");
+    });
+  }
 
   async function storageGet(key, fallback = null) {
     try {
@@ -110,6 +148,9 @@
         headers: options.headers || {},
         body: options.body
       });
+    }
+    if (window.parent && window.parent !== window) {
+      return bridgeApiRequest(path, options);
     }
     const response = await fetch(`${API_BASE}${path}`, {
       credentials: "include",
