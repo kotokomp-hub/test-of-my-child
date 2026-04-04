@@ -616,8 +616,9 @@
       state.selectedSkin = key;
       await storageSet("arena_rush_selected_skin", key);
       applySkinToPlayer();
+      state.processingSkinKey = null;
       renderSkinShop();
-      await toast(result.already_owned ? "Skin already unlocked" : `${skin.title} unlocked`, "success");
+      toast(result.already_owned ? "Skin already unlocked" : `${skin.title} unlocked`, "success");
     } catch (e) {
       await toast(e.message || "Purchase failed", "error");
     } finally {
