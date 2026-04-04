@@ -1,0 +1,717 @@
+(() => {
+  const sdk = window.NajiMiniApp || null;
+  const ui = {
+    startScreen: document.getElementById("startScreen"),
+    finishScreen: document.getElementById("finishScreen"),
+    startButton: document.getElementById("startButton"),
+    closeButton: document.getElementById("closeButton"),
+    restartButton: document.getElementById("restartButton"),
+    shareButton: document.getElementById("shareButton"),
+    finishTitle: document.getElementById("finishTitle"),
+    finishSummary: document.getElementById("finishSummary"),
+    positionValue: document.getElementById("positionValue"),
+    lapValue: document.getElementById("lapValue"),
+    speedValue: document.getElementById("speedValue"),
+    timeValue: document.getElementById("timeValue"),
+    pilotName: document.getElementById("pilotName"),
+    pilotMeta: document.getElementById("pilotMeta"),
+    boostMeter: document.getElementById("boostMeter"),
+    boostText: document.getElementById("boostText"),
+    leaderboardList: document.getElementById("leaderboardList"),
+    skinShop: document.getElementById("skinShop"),
+    sparkBalance: document.getElementById("sparkBalance"),
+    root: document.getElementById("game"),
+  };
+
+  const TRACK = { rx: 68, rz: 46, width: 18, laps: 3 };
+  const PLAYER = { maxSpeed: 42, maxBoostSpeed: 58, accel: 34, brake: 44, drag: 12, steer: 17, grip: 7.5, boostDrain: 0.45, boostFill: 0.18, boostAccel: 56 };
+  const STORAGE = { best: "arena_rush_best_time_ms", stats: "arena_rush_stats_v1" };
+  const API_BASE = window.__APP_CONFIG__?.API_BASE_URL || "https://testapi.najime.org/api";
+  const COLORS = [0x5ce1e6, 0xffd166, 0xff7b7b, 0x8f9dff];
+  const AI_NAMES = ["Nova", "Pulse", "Vanta"];
+  const SKINS = [
+    { key: "default", title: "Pulse Cyan", price: 0, color: 0x5ce1e6, glow: 0x5ce1e6, accent: "#5ce1e6", preview: "linear-gradient(135deg, #5ce1e6, #8fd5ff)" },
+    { key: "sunflare", title: "Sunflare", price: 45, color: 0xffb347, glow: 0xffd166, accent: "#ffd166", preview: "linear-gradient(135deg, #ffd166, #ff8f5e)" },
+    { key: "voidrunner", title: "Voidrunner", price: 65, color: 0xa78bfa, glow: 0x8f9dff, accent: "#8f9dff", preview: "linear-gradient(135deg, #8f9dff, #191e4b)" },
+    { key: "crimson", title: "Crimson Shock", price: 80, color: 0xff5e7d, glow: 0xff7b7b, accent: "#ff7b7b", preview: "linear-gradient(135deg, #ff7b7b, #7a1029)" }
+  ];
+
+  const state = {
+    started: false, finished: false, elapsed: 0, startedAt: 0, bestTimeMs: null, lastResult: null,
+    pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
+    currentBalance: 0, botName: null, selectedSkin: "default", ownedSkins: new Set(["default"]),
+    keys: { up: false, down: false, left: false, right: false, boost: false }
+  };
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x06101b);
+  scene.fog = new THREE.FogExp2(0x071423, 0.012);
+  const camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.1, 800);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  ui.root.appendChild(renderer.domElement);
+
+  const clock = new THREE.Clock();
+  const racers = [];
+  const collectibles = [];
+  const sparks = [];
+  const laneMarkers = [];
+  const cameraRig = { position: new THREE.Vector3(0, 14, 24), lookAt: new THREE.Vector3() };
+  const world = { player: null, raceTimer: 0, trackGroup: new THREE.Group(), arenaGlow: null };
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const wrap01 = (v) => ((v % 1) + 1) % 1;
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout:${ms}`)), ms))
+  ]);
+  const fmtTime = (ms) => {
+    if (!Number.isFinite(ms) || ms <= 0) return "00:00.0";
+    const t = ms / 1000;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${Math.floor((t % 1) * 10)}`;
+  };
+  const suffix = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+  async function storageGet(key, fallback = null) {
+    try {
+      if (sdk?.storage?.get) {
+        const value = await sdk.storage.get(key);
+        return value == null || value === "" ? fallback : value;
+      }
+    } catch (e) { console.warn("[ArenaRush] storage get failed", e); }
+    const value = localStorage.getItem(key);
+    return value == null ? fallback : value;
+  }
+
+  async function storageSet(key, value) {
+    try {
+      if (sdk?.storage?.set) return await sdk.storage.set(key, value);
+    } catch (e) { console.warn("[ArenaRush] storage set failed", e); }
+    localStorage.setItem(key, value);
+  }
+
+  async function toast(message, type = "info") {
+    try {
+      if (sdk?.ui?.toast) return await sdk.ui.toast(message, type);
+    } catch (e) { console.warn("[ArenaRush] toast failed", e); }
+  }
+
+  async function apiFetch(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success === false) {
+      throw new Error(data.message || data.error || `HTTP ${response.status}`);
+    }
+    return data;
+  }
+
+  function getSkin(key) {
+    return SKINS.find((skin) => skin.key === key) || SKINS[0];
+  }
+
+  function pointAt(progress, lane = 0) {
+    const a = progress * Math.PI * 2;
+    return new THREE.Vector3(Math.cos(a) * (TRACK.rx + lane), 0, Math.sin(a) * (TRACK.rz + lane));
+  }
+
+  function tangentAt(progress) {
+    const a = progress * Math.PI * 2;
+    return new THREE.Vector3(-Math.sin(a) * TRACK.rx, 0, Math.cos(a) * TRACK.rz).normalize();
+  }
+
+  function normalAt(progress) {
+    const t = tangentAt(progress);
+    return new THREE.Vector3(-t.z, 0, t.x).normalize();
+  }
+
+  function buildArena() {
+    scene.add(new THREE.HemisphereLight(0x8fd5ff, 0x09111f, 1.15));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+    sun.position.set(40, 70, 25);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.left = -140;
+    sun.shadow.camera.right = 140;
+    sun.shadow.camera.top = 140;
+    sun.shadow.camera.bottom = -140;
+    scene.add(sun);
+
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(150, 170, 8, 80), new THREE.MeshStandardMaterial({ color: 0x091522, metalness: 0.08, roughness: 0.92 }));
+    floor.receiveShadow = true;
+    floor.position.y = -4;
+    scene.add(floor);
+
+    const shape = new THREE.Shape();
+    shape.absellipse(0, 0, TRACK.rx + TRACK.width * 0.5, TRACK.rz + TRACK.width * 0.5, 0, Math.PI * 2, false, 0);
+    const hole = new THREE.Path();
+    hole.absellipse(0, 0, TRACK.rx - TRACK.width * 0.5, TRACK.rz - TRACK.width * 0.5, 0, Math.PI * 2, true, 0);
+    shape.holes.push(hole);
+
+    const track = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.8, bevelEnabled: false, curveSegments: 96 }), new THREE.MeshStandardMaterial({ color: 0x13263d, metalness: 0.2, roughness: 0.55 }));
+    track.rotation.x = -Math.PI / 2;
+    track.receiveShadow = true;
+    world.trackGroup.add(track);
+
+    const glow = new THREE.Mesh(new THREE.TorusGeometry((TRACK.rx + TRACK.rz) * 0.5 - 4, 2.2, 24, 140), new THREE.MeshBasicMaterial({ color: 0x103752, transparent: true, opacity: 0.18 }));
+    glow.rotation.x = Math.PI / 2;
+    glow.scale.set(1.2, 1, 0.84);
+    glow.position.y = 0.4;
+    world.trackGroup.add(glow);
+    world.arenaGlow = glow;
+
+    for (let i = 0; i < 36; i += 1) {
+      const p = i / 36;
+      const marker = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.3, 0.55), new THREE.MeshStandardMaterial({ color: i % 2 === 0 ? 0x5ce1e6 : 0xffd166, emissive: i % 2 === 0 ? 0x123948 : 0x3a2b0b, emissiveIntensity: 0.7 }));
+      marker.position.copy(pointAt(p));
+      marker.position.y = 0.55;
+      marker.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangentAt(p));
+      marker.castShadow = true;
+      laneMarkers.push(marker);
+      world.trackGroup.add(marker);
+    }
+
+    const gate = new THREE.Mesh(new THREE.TorusGeometry(8.8, 0.65, 14, 64, Math.PI), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x4f7dff, emissiveIntensity: 0.85 }));
+    gate.rotation.set(0, Math.PI * 0.5, Math.PI);
+    gate.position.set(TRACK.rx + 1.2, 6.5, 0);
+    world.trackGroup.add(gate);
+    scene.add(world.trackGroup);
+  }
+
+  function createRacer(index, opts = {}) {
+    const root = new THREE.Group();
+    const color = opts.color || COLORS[index % COLORS.length];
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(3.1, 1.2, 5.6), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.22, metalness: 0.28, roughness: 0.38 }));
+    hull.castShadow = true;
+    root.add(hull);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 2.2), new THREE.MeshStandardMaterial({ color: 0xe6fbff, transparent: true, opacity: 0.82, metalness: 0.08, roughness: 0.12 }));
+    canopy.position.set(0, 0.72, 0.2);
+    root.add(canopy);
+    const flames = [];
+    [-0.75, 0.75].forEach((x) => {
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.8, 12), new THREE.MeshBasicMaterial({ color: 0x5ce1e6, transparent: true, opacity: 0.9 }));
+      flame.rotation.x = Math.PI / 2;
+      flame.position.set(x, 0, 3.2);
+      root.add(flame);
+      flames.push(flame);
+    });
+    scene.add(root);
+    const racer = {
+      id: opts.id || `racer_${index}`, name: opts.name || `Pilot ${index + 1}`, isPlayer: !!opts.isPlayer, color,
+      root, hull, canopy, flames, progress: opts.progress || 0, lastProgress: opts.progress || 0, speed: opts.isPlayer ? 0 : 27 + index * 2.4,
+      laneBase: opts.laneBase || 0, lane: opts.laneBase || 0, targetLane: opts.laneBase || 0, drift: 0, wobble: Math.random() * Math.PI * 2,
+      boost: 1, lap: 1, finished: false, finishMs: null
+    };
+    racers.push(racer);
+    if (racer.isPlayer) world.player = racer;
+    return racer;
+  }
+
+  function placeRacer(racer) {
+    const pos = pointAt(racer.progress, racer.lane);
+    const tangent = tangentAt(racer.progress);
+    const bank = Math.sin(racer.progress * Math.PI * 2) * 0.08;
+    racer.root.position.copy(pos);
+    racer.root.position.y = 1.25 + Math.sin(world.raceTimer * 4 + racer.wobble) * 0.12;
+    racer.root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
+    racer.root.rotateY(Math.PI);
+    racer.root.rotateZ(bank - racer.drift * 0.018);
+  }
+
+  function spawnCollectibles() {
+    collectibles.forEach((item) => scene.remove(item.mesh));
+    collectibles.length = 0;
+    for (let i = 0; i < 10; i += 1) {
+      const progress = wrap01(0.08 + i * 0.091 + (i % 2) * 0.012);
+      const lane = (i % 3 - 1) * 4.4;
+      const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(1.05), new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0x5c4410, emissiveIntensity: 1.1, metalness: 0.35, roughness: 0.25 }));
+      mesh.position.copy(pointAt(progress, lane));
+      mesh.position.y = 2.3;
+      scene.add(mesh);
+      collectibles.push({ progress, lane, mesh, active: true, respawn: 0 });
+    }
+  }
+
+  function addSpark(position, color, scale = 1) {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22 * scale, 8, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 }));
+    mesh.position.copy(position);
+    scene.add(mesh);
+    sparks.push({ mesh, velocity: new THREE.Vector3((Math.random() - 0.5) * 8, 4 + Math.random() * 5, (Math.random() - 0.5) * 8), life: 0.4 + Math.random() * 0.35 });
+  }
+
+  function applySkinToPlayer() {
+    const player = world.player;
+    if (!player) return;
+    const skin = getSkin(state.selectedSkin);
+    player.color = skin.color;
+    player.hull.material.color.setHex(skin.color);
+    player.hull.material.emissive.setHex(skin.glow || skin.color);
+    player.canopy.material.color.setHex(0xe6fbff);
+    player.flames.forEach((flame) => {
+      flame.material.color.setHex(skin.glow || skin.color);
+    });
+  }
+
+  function resetRace() {
+    state.started = false;
+    state.finished = false;
+    state.elapsed = 0;
+    state.startedAt = 0;
+    racers.forEach((r) => scene.remove(r.root));
+    racers.length = 0;
+    createRacer(0, { id: "player", name: state.pilotName, isPlayer: true, laneBase: -5.2, progress: 0.048, color: COLORS[0] });
+    createRacer(1, { name: AI_NAMES[0], laneBase: -1.6, progress: 0.032, color: COLORS[1] });
+    createRacer(2, { name: AI_NAMES[1], laneBase: 1.8, progress: 0.016, color: COLORS[2] });
+    createRacer(3, { name: AI_NAMES[2], laneBase: 5.2, progress: 0.004, color: COLORS[3] });
+    applySkinToPlayer();
+    spawnCollectibles();
+    racers.forEach(placeRacer);
+    updateHud();
+    renderLeaderboard();
+  }
+
+  function orderedRacers() {
+    return [...racers].sort((a, b) => (((b.finished ? TRACK.laps + 1 : b.lap) + b.progress) - ((a.finished ? TRACK.laps + 1 : a.lap) + a.progress)));
+  }
+
+  function updateHud() {
+    const player = world.player;
+    if (!player) return;
+    const rank = orderedRacers();
+    const pos = rank.findIndex((r) => r.id === player.id) + 1;
+    ui.positionValue.textContent = `${pos}/${racers.length}`;
+    ui.lapValue.textContent = `${clamp(player.lap, 1, TRACK.laps)}/${TRACK.laps}`;
+    ui.speedValue.textContent = String(Math.round(player.speed * 4.2));
+    ui.timeValue.textContent = fmtTime(state.elapsed);
+    ui.boostMeter.style.width = `${Math.round(player.boost * 100)}%`;
+    ui.boostText.textContent = player.boost > 0.95 ? "Boost fully charged" : player.boost > 0.25 ? "Use boost on a straight" : "Charge recovering";
+  }
+
+  function renderLeaderboard() {
+    ui.leaderboardList.innerHTML = orderedRacers().map((r, i) => {
+      const meta = r.finished && r.finishMs ? fmtTime(r.finishMs) : `Lap ${clamp(r.lap, 1, TRACK.laps)}`;
+      return `<div class="row"><span><strong>${i + 1}.</strong> ${r.name}</span><span>${meta}</span></div>`;
+    }).join("");
+  }
+
+  function renderSkinShop() {
+    if (!ui.skinShop) return;
+    ui.sparkBalance.textContent = `Balance: ${state.currentBalance || 0} Sparks`;
+    ui.skinShop.innerHTML = SKINS.map((skin) => {
+      const owned = state.ownedSkins.has(skin.key);
+      const selected = state.selectedSkin === skin.key;
+      const buyDisabled = skin.price > 0 && state.currentBalance < skin.price && !owned;
+      return `
+        <div class="skin-card">
+          <div class="skin-preview" style="background:${skin.preview};"></div>
+          <div class="skin-topline">
+            <div class="skin-name">${skin.title}</div>
+            <div class="skin-price">${skin.price > 0 ? `${skin.price} Sparks` : "Free"}</div>
+          </div>
+          <div class="skin-badge">${owned ? (selected ? "Equipped" : "Owned") : "Locked"}</div>
+          <div class="skin-actions">
+            ${owned
+              ? `<button class="${selected ? "secondary" : ""}" data-skin-action="equip" data-skin-key="${skin.key}">${selected ? "Active" : "Equip"}</button>`
+              : `<button ${buyDisabled ? "disabled" : ""} data-skin-action="buy" data-skin-key="${skin.key}">${buyDisabled ? "Need Sparks" : "Buy"}</button>`
+            }
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    ui.skinShop.querySelectorAll("[data-skin-action]").forEach((button) => {
+      button.addEventListener("click", async (event) => {
+        const key = event.currentTarget.getAttribute("data-skin-key");
+        const action = event.currentTarget.getAttribute("data-skin-action");
+        if (action === "equip") {
+          state.selectedSkin = key;
+          await storageSet("arena_rush_selected_skin", key);
+          applySkinToPlayer();
+          renderSkinShop();
+          return;
+        }
+        if (action === "buy") {
+          await buySkin(key);
+        }
+      });
+    });
+  }
+
+  function updatePlayer(racer, dt) {
+    if (!state.started) {
+      racer.speed = lerp(racer.speed, 0, dt * 4);
+      racer.boost = clamp(racer.boost + PLAYER.boostFill * dt, 0, 1);
+      return;
+    }
+    const turn = (state.keys.left ? 1 : 0) - (state.keys.right ? 1 : 0);
+    const boost = state.keys.boost && racer.boost > 0.02 && racer.speed > 18;
+    if (state.keys.up) racer.speed += PLAYER.accel * dt;
+    if (state.keys.down) racer.speed -= PLAYER.brake * dt;
+    if (!state.keys.up && !state.keys.down) racer.speed -= PLAYER.drag * dt;
+    racer.targetLane = clamp(racer.targetLane + turn * PLAYER.steer * dt, -TRACK.width * 0.35, TRACK.width * 0.35);
+    racer.lane = lerp(racer.lane, racer.targetLane, dt * PLAYER.grip);
+    racer.drift = lerp(racer.drift, turn * racer.speed, dt * 6);
+    if (boost) {
+      racer.speed += PLAYER.boostAccel * dt;
+      racer.boost = clamp(racer.boost - PLAYER.boostDrain * dt, 0, 1);
+      addSpark(racer.root.position, 0x5ce1e6, 2);
+    } else {
+      racer.boost = clamp(racer.boost + PLAYER.boostFill * dt, 0, 1);
+    }
+    racer.speed = clamp(racer.speed, 0, boost ? PLAYER.maxBoostSpeed : PLAYER.maxSpeed);
+    racer.progress = wrap01(racer.progress + dt * racer.speed / 360);
+  }
+
+  function updateAI(racer, dt, idx) {
+    if (racer.finished) return;
+    if (!state.started) {
+      racer.speed = lerp(racer.speed, 0, dt * 5);
+      racer.lane = lerp(racer.lane, racer.laneBase, dt * 4);
+      racer.drift = lerp(racer.drift, 0, dt * 6);
+      return;
+    }
+    const pulse = Math.sin(world.raceTimer * 0.7 + idx * 1.4) * 0.5 + 0.5;
+    const targetSpeed = 26.4 + idx * 2.2 + pulse * 8;
+    racer.speed = lerp(racer.speed, targetSpeed, dt * 0.9);
+    racer.targetLane = racer.laneBase + Math.sin(world.raceTimer * 0.9 + idx) * 2.2;
+    racer.lane = lerp(racer.lane, racer.targetLane, dt * 1.7);
+    racer.drift = Math.sin(world.raceTimer * 2.3 + idx) * 8;
+    if (state.started && Math.random() < 0.018) addSpark(racer.root.position, racer.color, 1);
+    racer.progress = wrap01(racer.progress + dt * racer.speed / 360);
+  }
+
+  function updateLaps(racer) {
+    if (!racer.finished && racer.progress < 0.08 && racer.lastProgress > 0.92) {
+      racer.lap += 1;
+      if (racer.lap > TRACK.laps) {
+        racer.finished = true;
+        racer.finishMs = state.elapsed;
+        if (racer.isPlayer) finishRace();
+      }
+    }
+    racer.lastProgress = racer.progress;
+  }
+
+  function updateCollectibles(dt) {
+    collectibles.forEach((item, idx) => {
+      if (!item.active) {
+        item.respawn -= dt;
+        if (item.respawn <= 0) {
+          item.active = true;
+          item.mesh.visible = true;
+        }
+        return;
+      }
+      item.mesh.rotation.y += dt * 2.2;
+      item.mesh.position.y = 2.2 + Math.sin(world.raceTimer * 2.8 + idx) * 0.35;
+      const player = world.player;
+      if (player && player.root.position.distanceTo(item.mesh.position) < 3.4) {
+        player.boost = clamp(player.boost + 0.28, 0, 1);
+        item.active = false;
+        item.mesh.visible = false;
+        item.respawn = 7 + idx * 0.2;
+        toast("Boost core collected", "success");
+      }
+    });
+  }
+
+  function updateSparks(dt) {
+    for (let i = sparks.length - 1; i >= 0; i -= 1) {
+      const s = sparks[i];
+      s.life -= dt;
+      s.mesh.position.addScaledVector(s.velocity, dt);
+      s.velocity.y -= 18 * dt;
+      s.mesh.material.opacity = clamp(s.life * 2.2, 0, 0.85);
+      s.mesh.scale.setScalar(clamp(s.life * 2, 0.1, 1.2));
+      if (s.life <= 0) {
+        scene.remove(s.mesh);
+        sparks.splice(i, 1);
+      }
+    }
+  }
+
+  function updateCamera(dt) {
+    const player = world.player;
+    if (!player) return;
+    const tangent = tangentAt(player.progress);
+    const normal = normalAt(player.progress);
+    const targetPos = player.root.position.clone().addScaledVector(tangent, -16).addScaledVector(normal, -player.lane * 0.25).add(new THREE.Vector3(0, 10.5, 0));
+    const targetLook = player.root.position.clone().addScaledVector(tangent, 14).add(new THREE.Vector3(0, 2, 0));
+    cameraRig.position.lerp(targetPos, 1 - Math.exp(-dt * 4.2));
+    cameraRig.lookAt.lerp(targetLook, 1 - Math.exp(-dt * 5.4));
+    camera.position.copy(cameraRig.position);
+    camera.lookAt(cameraRig.lookAt);
+  }
+
+  async function finishRace() {
+    if (state.finished) return;
+    state.finished = true;
+    state.started = false;
+    racers.forEach((racer) => {
+      racer.speed = 0;
+      racer.targetLane = racer.lane;
+      racer.drift = 0;
+      if (!racer.isPlayer) {
+        racer.finished = true;
+        if (racer.finishMs == null) racer.finishMs = state.elapsed;
+      }
+    });
+    const rank = orderedRacers();
+    const pos = rank.findIndex((r) => r.isPlayer) + 1;
+    const isRecord = state.bestTimeMs == null || state.elapsed < state.bestTimeMs;
+    if (isRecord) {
+      state.bestTimeMs = state.elapsed;
+      await storageSet(STORAGE.best, String(Math.round(state.elapsed)));
+    }
+    const prevStats = JSON.parse(await storageGet(STORAGE.stats, "{\"races\":0,\"wins\":0}"));
+    await storageSet(STORAGE.stats, JSON.stringify({ races: (prevStats.races || 0) + 1, wins: (prevStats.wins || 0) + (pos === 1 ? 1 : 0), updatedAt: new Date().toISOString() }));
+    state.lastResult = { position: pos, timeMs: state.elapsed };
+    ui.finishTitle.textContent = pos === 1 ? "Victory Lap" : "Heat Complete";
+    ui.finishSummary.textContent = `${suffix(pos)} place in ${fmtTime(state.elapsed)}${isRecord ? " • new personal best" : state.bestTimeMs ? ` • best ${fmtTime(state.bestTimeMs)}` : ""}`;
+    ui.finishScreen.style.display = "flex";
+    renderLeaderboard();
+    await toast(isRecord ? "New record saved" : `Finished ${suffix(pos)}`, pos === 1 ? "success" : "info");
+  }
+
+  async function loadSkinState() {
+    try {
+      const selectedSkin = await storageGet("arena_rush_selected_skin", "default");
+      if (selectedSkin) state.selectedSkin = selectedSkin;
+    } catch (e) {
+      console.warn("[ArenaRush] selected skin load failed", e);
+    }
+
+    if (!state.botName) {
+      renderSkinShop();
+      return;
+    }
+
+    try {
+      const [inventory, balance] = await Promise.all([
+        apiFetch("/miniapp/inventory", {
+          method: "POST",
+          body: JSON.stringify({ bot_username: state.botName, item_type: "skin" })
+        }),
+        apiFetch("/najisparks_get", { method: "GET", headers: {} })
+      ]);
+
+      state.ownedSkins = new Set(["default"]);
+      (inventory.items || []).forEach((item) => {
+        if (item.item_key) state.ownedSkins.add(item.item_key);
+      });
+      state.currentBalance = Number(balance.najisparks || 0);
+      if (!state.ownedSkins.has(state.selectedSkin)) state.selectedSkin = "default";
+    } catch (e) {
+      console.warn("[ArenaRush] inventory load failed", e);
+    }
+    renderSkinShop();
+    applySkinToPlayer();
+  }
+
+  async function buySkin(key) {
+    const skin = getSkin(key);
+    if (!state.botName) {
+      await toast("Attach this Mini App to a bot first", "error");
+      return;
+    }
+    if (state.ownedSkins.has(key)) {
+      state.selectedSkin = key;
+      await storageSet("arena_rush_selected_skin", key);
+      applySkinToPlayer();
+      renderSkinShop();
+      return;
+    }
+
+    try {
+      const result = await apiFetch("/miniapp/purchase", {
+        method: "POST",
+        body: JSON.stringify({
+          bot_username: state.botName,
+          item_type: "skin",
+          item_key: skin.key,
+          title: skin.title,
+          price_sparks: skin.price,
+          purchase_meta: {
+            source: "arena-rush",
+            color: skin.color,
+            glow: skin.glow
+          }
+        })
+      });
+      state.currentBalance = Number(result.new_balance || state.currentBalance);
+      state.ownedSkins.add(key);
+      state.selectedSkin = key;
+      await storageSet("arena_rush_selected_skin", key);
+      applySkinToPlayer();
+      renderSkinShop();
+      await toast(result.already_owned ? "Skin already unlocked" : `${skin.title} unlocked`, "success");
+    } catch (e) {
+      await toast(e.message || "Purchase failed", "error");
+    }
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    world.raceTimer += dt;
+    if (!state.finished && state.started) state.elapsed = performance.now() - state.startedAt;
+
+    laneMarkers.forEach((marker, i) => { marker.material.emissiveIntensity = 0.35 + Math.sin(world.raceTimer * 2.6 + i * 0.3) * 0.22; });
+    if (world.arenaGlow) {
+      const pulse = 1 + Math.sin(world.raceTimer * 1.3) * 0.035;
+      world.arenaGlow.scale.set(1.2 * pulse, 1, 0.84 * pulse);
+      world.arenaGlow.material.opacity = 0.15 + Math.sin(world.raceTimer * 1.8) * 0.04;
+    }
+
+    racers.forEach((racer, idx) => {
+      racer.isPlayer ? updatePlayer(racer, dt) : updateAI(racer, dt, idx);
+      updateLaps(racer);
+      placeRacer(racer);
+      racer.flames.forEach((flame, fi) => {
+        const flicker = 0.55 + Math.sin(world.raceTimer * 18 + fi + idx) * 0.12;
+        flame.scale.setScalar(flicker + racer.speed / 70 + (state.keys.boost && racer.isPlayer ? 0.55 : 0));
+        flame.material.opacity = clamp(0.5 + racer.speed / 80, 0.35, 0.95);
+      });
+    });
+
+    updateCollectibles(dt);
+    updateSparks(dt);
+    updateCamera(dt);
+    updateHud();
+    renderLeaderboard();
+    renderer.render(scene, camera);
+  }
+
+  async function initSdk() {
+    ui.pilotName.textContent = state.pilotName;
+    ui.pilotMeta.textContent = state.pilotMeta;
+    if (!sdk) return;
+    try {
+      const initData = await withTimeout(sdk.init(), 2500);
+      if (typeof sdk.ready === "function") sdk.ready();
+      if (typeof sdk.expand === "function") sdk.expand();
+      if (typeof sdk.setHeaderColor === "function") sdk.setHeaderColor("#09111f");
+      if (sdk.backButton?.show) sdk.backButton.show();
+      if (sdk.backButton?.onClick) sdk.backButton.onClick(() => {
+        if (state.finished) restartRace();
+        else if (!state.started) sdk.close();
+        else { state.started = false; ui.startScreen.style.display = "flex"; }
+      });
+      const ctx = sdk.requestContext ? await withTimeout(sdk.requestContext(), 2500) : null;
+      const user = ctx?.user || initData?.user || null;
+      state.botName = ctx?.botName || initData?.botName || null;
+      state.pilotName = user?.display_name || user?.first_name || user?.username || state.pilotName;
+      const walletAddress = ctx?.wallet?.address || ctx?.wallet?.publicKey || null;
+      const wallet = walletAddress ? `Wallet ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "SDK profile linked";
+      state.pilotMeta = user?.username ? `@${user.username} • ${wallet}` : wallet;
+      ui.pilotName.textContent = state.pilotName;
+      ui.pilotMeta.textContent = state.pilotMeta;
+    } catch (e) {
+      console.warn("[ArenaRush] sdk init failed", e);
+      ui.pilotMeta.textContent = "Standalone mode";
+    }
+  }
+
+  async function loadStats() {
+    const best = await storageGet(STORAGE.best);
+    if (best && !Number.isNaN(Number(best))) state.bestTimeMs = Number(best);
+  }
+
+  function startRace() {
+    if (state.started) return;
+    ui.startScreen.style.display = "none";
+    ui.finishScreen.style.display = "none";
+    state.started = true;
+    state.finished = false;
+    state.elapsed = 0;
+    state.startedAt = performance.now();
+    racers.forEach((r) => { r.finished = false; r.finishMs = null; });
+    toast("Race started", "info");
+  }
+
+  function restartRace() {
+    ui.finishScreen.style.display = "none";
+    ui.startScreen.style.display = "flex";
+    resetRace();
+  }
+
+  async function shareResult() {
+    if (!state.lastResult) return;
+    const text = `Arena Rush 3D: ${suffix(state.lastResult.position)} place in ${fmtTime(state.lastResult.timeMs)}${state.bestTimeMs ? ` | best ${fmtTime(state.bestTimeMs)}` : ""}`;
+    try {
+      if (sdk?.ui?.copy) {
+        await sdk.ui.copy(text);
+        return toast("Result copied", "success");
+      }
+      await navigator.clipboard.writeText(text);
+      await toast("Result copied", "success");
+    } catch (e) {
+      console.warn("[ArenaRush] copy failed", e);
+    }
+  }
+
+  function bindInput() {
+    const setKey = (code, value) => {
+      if (code === "ArrowUp" || code === "KeyW") state.keys.up = value;
+      if (code === "ArrowDown" || code === "KeyS") state.keys.down = value;
+      if (code === "ArrowLeft" || code === "KeyA") state.keys.left = value;
+      if (code === "ArrowRight" || code === "KeyD") state.keys.right = value;
+      if (code === "ShiftLeft" || code === "ShiftRight" || code === "Space") state.keys.boost = value;
+      if (value && code === "KeyR") restartRace();
+    };
+    window.addEventListener("keydown", (e) => {
+      setKey(e.code, true);
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
+      if (!state.started && !state.finished && e.code === "Enter") startRace();
+    });
+    window.addEventListener("keyup", (e) => setKey(e.code, false));
+    document.querySelectorAll("[data-touch]").forEach((button) => {
+      const key = button.getAttribute("data-touch");
+      const activate = (value) => {
+        state.keys[key] = value;
+        if (key === "up" && value && !state.started && !state.finished) startRace();
+      };
+      ["touchstart", "pointerdown"].forEach((name) => button.addEventListener(name, (e) => { e.preventDefault(); activate(true); }, { passive: false }));
+      ["touchend", "touchcancel", "pointerup", "pointerleave"].forEach((name) => button.addEventListener(name, (e) => { e.preventDefault(); activate(false); }, { passive: false }));
+    });
+  }
+
+  function resize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  async function bootstrap() {
+    buildArena();
+    bindInput();
+    ui.startButton.addEventListener("click", startRace);
+    ui.closeButton.addEventListener("click", () => sdk?.close ? sdk.close() : window.close());
+    ui.restartButton.addEventListener("click", restartRace);
+    ui.shareButton.addEventListener("click", shareResult);
+    window.addEventListener("resize", resize);
+    resetRace();
+    animate();
+    await Promise.allSettled([initSdk(), loadStats()]);
+    await loadSkinState();
+    ui.pilotName.textContent = state.pilotName;
+    ui.pilotMeta.textContent = state.bestTimeMs ? `${state.pilotMeta} • best ${fmtTime(state.bestTimeMs)}` : state.pilotMeta;
+    renderSkinShop();
+  }
+
+  bootstrap();
+})();
