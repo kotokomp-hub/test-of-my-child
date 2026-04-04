@@ -495,25 +495,32 @@
       console.warn("[ArenaRush] selected skin load failed", e);
     }
 
+    try {
+      const context = sdk?.initData || null;
+      const contextBalance = Number(context?.sparks?.balance ?? context?.user?.najisparks ?? state.currentBalance ?? 0);
+      if (Number.isFinite(contextBalance) && contextBalance >= 0) {
+        state.currentBalance = contextBalance;
+      }
+    } catch (e) {
+      console.warn("[ArenaRush] context balance load failed", e);
+    }
+
     if (!state.botName) {
       renderSkinShop();
+      applySkinToPlayer();
       return;
     }
 
     try {
-      const [inventory, balance] = await Promise.all([
-        apiFetch("/miniapp/inventory", {
+      const inventory = await apiFetch("/miniapp/inventory", {
           method: "POST",
           body: JSON.stringify({ bot_username: state.botName, item_type: "skin" })
-        }),
-        apiFetch("/najisparks_get", { method: "GET", headers: {} })
-      ]);
+      });
 
       state.ownedSkins = new Set(["default"]);
       (inventory.items || []).forEach((item) => {
         if (item.item_key) state.ownedSkins.add(item.item_key);
       });
-      state.currentBalance = Number(balance.najisparks || 0);
       if (!state.ownedSkins.has(state.selectedSkin)) state.selectedSkin = "default";
     } catch (e) {
       console.warn("[ArenaRush] inventory load failed", e);
@@ -614,12 +621,17 @@
       const ctx = sdk.requestContext ? await withTimeout(sdk.requestContext(), 2500) : null;
       const user = ctx?.user || initData?.user || null;
       state.botName = ctx?.botName || initData?.botName || null;
+      const sparksBalance = Number(ctx?.sparks?.balance ?? initData?.sparks?.balance ?? user?.najisparks ?? 0);
+      if (Number.isFinite(sparksBalance) && sparksBalance >= 0) {
+        state.currentBalance = sparksBalance;
+      }
       state.pilotName = user?.display_name || user?.first_name || user?.username || state.pilotName;
       const walletAddress = ctx?.wallet?.address || ctx?.wallet?.publicKey || null;
       const wallet = walletAddress ? `Wallet ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "SDK profile linked";
       state.pilotMeta = user?.username ? `@${user.username} • ${wallet}` : wallet;
       ui.pilotName.textContent = state.pilotName;
       ui.pilotMeta.textContent = state.pilotMeta;
+      renderSkinShop();
     } catch (e) {
       console.warn("[ArenaRush] sdk init failed", e);
       ui.pilotMeta.textContent = "Standalone mode";
