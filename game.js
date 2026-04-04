@@ -39,7 +39,7 @@
   const state = {
     started: false, finished: false, elapsed: 0, startedAt: 0, bestTimeMs: null, lastResult: null,
     pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
-    currentBalance: 0, botName: null, selectedSkin: "default", ownedSkins: new Set(["default"]),
+    currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]),
     keys: { up: false, down: false, left: false, right: false, boost: false }
   };
 
@@ -553,7 +553,7 @@
       console.warn("[ArenaRush] context balance load failed", e);
     }
 
-    if (!state.botName) {
+    if (!state.botUsername) {
       renderSkinShop();
       applySkinToPlayer();
       return;
@@ -562,7 +562,7 @@
     try {
       const inventory = await apiFetch("/miniapp/inventory", {
           method: "POST",
-          body: JSON.stringify({ bot_username: state.botName, item_type: "skin" })
+          body: JSON.stringify({ bot_username: state.botUsername, item_type: "skin" })
       });
 
       state.ownedSkins = new Set(["default"]);
@@ -579,7 +579,7 @@
 
   async function buySkin(key) {
     const skin = getSkin(key);
-    if (!state.botName) {
+    if (!state.botUsername) {
       await toast("Attach this Mini App to a bot first", "error");
       return;
     }
@@ -595,7 +595,7 @@
       const result = await apiFetch("/miniapp/purchase", {
         method: "POST",
         body: JSON.stringify({
-          bot_username: state.botName,
+          bot_username: state.botUsername,
           item_type: "skin",
           item_key: skin.key,
           title: skin.title,
@@ -669,6 +669,7 @@
       const ctx = sdk.requestContext ? await withTimeout(sdk.requestContext(), 2500) : null;
       const user = ctx?.user || initData?.user || null;
       state.botName = ctx?.botName || initData?.botName || null;
+      state.botUsername = ctx?.botUsername || initData?.botUsername || null;
       const sparksBalance = Number(ctx?.sparks?.balance ?? initData?.sparks?.balance ?? user?.najisparks ?? 0);
       if (Number.isFinite(sparksBalance) && sparksBalance >= 0) {
         state.currentBalance = sparksBalance;
