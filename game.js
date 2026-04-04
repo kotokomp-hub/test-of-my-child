@@ -104,6 +104,13 @@
   }
 
   async function apiFetch(path, options = {}) {
+    if (sdk?.api?.request) {
+      return sdk.api.request(path, {
+        method: options.method || "GET",
+        headers: options.headers || {},
+        body: options.body
+      });
+    }
     const response = await fetch(`${API_BASE}${path}`, {
       credentials: "include",
       ...options,
