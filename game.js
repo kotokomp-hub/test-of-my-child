@@ -39,7 +39,7 @@
   const state = {
     started: false, finished: false, elapsed: 0, startedAt: 0, bestTimeMs: null, lastResult: null,
     pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
-    currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]),
+    currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]), processingSkinKey: null,
     keys: { up: false, down: false, left: false, right: false, boost: false }
   };
 
@@ -362,6 +362,7 @@
     ui.skinShop.innerHTML = SKINS.map((skin) => {
       const owned = state.ownedSkins.has(skin.key);
       const selected = state.selectedSkin === skin.key;
+      const isProcessing = state.processingSkinKey === skin.key;
       const buyDisabled = skin.price > 0 && state.currentBalance < skin.price && !owned;
       return `
         <div class="skin-card">
@@ -373,8 +374,8 @@
           <div class="skin-badge">${owned ? (selected ? "Equipped" : "Owned") : "Locked"}</div>
           <div class="skin-actions">
             ${owned
-              ? `<button class="${selected ? "secondary" : ""}" data-skin-action="equip" data-skin-key="${skin.key}">${selected ? "Active" : "Equip"}</button>`
-              : `<button ${buyDisabled ? "disabled" : ""} data-skin-action="buy" data-skin-key="${skin.key}">${buyDisabled ? "Need Sparks" : "Buy"}</button>`
+              ? `<button ${isProcessing ? "disabled" : ""} class="${selected ? "secondary" : ""}" data-skin-action="equip" data-skin-key="${skin.key}">${isProcessing ? "Processing..." : (selected ? "Active" : "Equip")}</button>`
+              : `<button ${(buyDisabled || isProcessing) ? "disabled" : ""} data-skin-action="buy" data-skin-key="${skin.key}">${isProcessing ? "Processing..." : (buyDisabled ? "Need Sparks" : "Buy")}</button>`
             }
           </div>
         </div>
@@ -579,6 +580,7 @@
 
   async function buySkin(key) {
     const skin = getSkin(key);
+    if (state.processingSkinKey) return;
     if (!state.botUsername) {
       await toast("Attach this Mini App to a bot first", "error");
       return;
@@ -592,6 +594,8 @@
     }
 
     try {
+      state.processingSkinKey = key;
+      renderSkinShop();
       const result = await apiFetch("/miniapp/purchase", {
         method: "POST",
         body: JSON.stringify({
@@ -616,6 +620,9 @@
       await toast(result.already_owned ? "Skin already unlocked" : `${skin.title} unlocked`, "success");
     } catch (e) {
       await toast(e.message || "Purchase failed", "error");
+    } finally {
+      state.processingSkinKey = null;
+      renderSkinShop();
     }
   }
 
