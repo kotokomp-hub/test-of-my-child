@@ -29,6 +29,8 @@
   const API_BASE = window.__APP_CONFIG__?.API_BASE_URL || "https://testapi.najime.org/api";
   const COLORS = [0x5ce1e6, 0xffd166, 0xff7b7b, 0x8f9dff];
   const AI_NAMES = ["Nova", "Pulse", "Vanta"];
+  const INPUT_KEYS = ["up", "down", "left", "right", "boost"];
+  const GAMEPAD_DEADZONE = 0.35;
   const SKINS = [
     { key: "default", title: "Pulse Cyan", price: 0, color: 0x5ce1e6, glow: 0x5ce1e6, accent: "#5ce1e6", preview: "linear-gradient(135deg, #5ce1e6, #8fd5ff)" },
     { key: "sunflare", title: "Sunflare", price: 45, color: 0xffb347, glow: 0xffd166, accent: "#ffd166", preview: "linear-gradient(135deg, #ffd166, #ff8f5e)" },
@@ -36,11 +38,18 @@
     { key: "crimson", title: "Crimson Shock", price: 80, color: 0xff5e7d, glow: 0xff7b7b, accent: "#ff7b7b", preview: "linear-gradient(135deg, #ff7b7b, #7a1029)" }
   ];
 
+  const createInputState = () => ({ up: false, down: false, left: false, right: false, boost: false });
+
   const state = {
     started: false, finished: false, elapsed: 0, startedAt: 0, bestTimeMs: null, lastResult: null,
     pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
     currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]), processingSkinKey: null,
-    keys: { up: false, down: false, left: false, right: false, boost: false }
+    input: {
+      keyboard: createInputState(),
+      touch: createInputState(),
+      gamepad: createInputState()
+    },
+    keys: createInputState()
   };
 
   const scene = new THREE.Scene();
@@ -79,6 +88,58 @@
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${Math.floor((t % 1) * 10)}`;
   };
   const suffix = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+
+  function syncKeys() {
+    INPUT_KEYS.forEach((key) => {
+      state.keys[key] = Boolean(
+        state.input.keyboard[key]
+        || state.input.touch[key]
+        || state.input.gamepad[key]
+      );
+    });
+  }
+
+  function setInputSource(source, key, value) {
+    if (!state.input[source] || !INPUT_KEYS.includes(key)) return;
+    state.input[source][key] = Boolean(value);
+    syncKeys();
+  }
+
+  function setInputState(source, nextState) {
+    if (!state.input[source]) return;
+    INPUT_KEYS.forEach((key) => {
+      state.input[source][key] = Boolean(nextState?.[key]);
+    });
+    syncKeys();
+  }
+
+  function mapGamepadsToInput(gamepads) {
+    const primary = Array.isArray(gamepads) ? gamepads[0] : null;
+    if (!primary) return createInputState();
+
+    const axes = Array.isArray(primary.axes) ? primary.axes : [];
+    const buttons = Array.isArray(primary.buttons) ? primary.buttons : [];
+    const horizontal = Number(axes[0] || 0);
+    const vertical = Number(axes[1] || 0);
+    const isPressed = (index) => Boolean(buttons[index]?.pressed || Number(buttons[index]?.value || 0) > 0.5);
+
+    return {
+      up: vertical < -GAMEPAD_DEADZONE || isPressed(12),
+      down: vertical > GAMEPAD_DEADZONE || isPressed(13),
+      left: horizontal < -GAMEPAD_DEADZONE || isPressed(14),
+      right: horizontal > GAMEPAD_DEADZONE || isPressed(15),
+      boost: isPressed(0) || isPressed(1) || isPressed(5) || isPressed(6) || isPressed(7)
+    };
+  }
+
+  function syncGamepadInput(payload) {
+    const gamepads = Array.isArray(payload) ? payload : payload?.gamepads;
+    const nextInput = mapGamepadsToInput(gamepads);
+    setInputState("gamepad", nextInput);
+    if ((nextInput.up || nextInput.boost) && !state.started && !state.finished) {
+      startRace();
+    }
+  }
 
   function bridgeApiRequest(path, options = {}) {
     return new Promise((resolve, reject) => {
@@ -675,6 +736,15 @@
         else { state.started = false; ui.startScreen.style.display = "flex"; }
       });
       const ctx = sdk.requestContext ? await withTimeout(sdk.requestContext(), 2500) : null;
+      if (sdk.gamepad?.onChange) sdk.gamepad.onChange(syncGamepadInput);
+      if (sdk.gamepad?.onConnect) sdk.gamepad.onConnect(syncGamepadInput);
+      if (sdk.gamepad?.onDisconnect) sdk.gamepad.onDisconnect(syncGamepadInput);
+      syncGamepadInput(ctx?.gamepads || initData?.gamepads || sdk.gamepad?.state || sdk.gamepads || []);
+      if (sdk.gamepad?.getState) {
+        withTimeout(sdk.gamepad.getState(), 2500)
+          .then(syncGamepadInput)
+          .catch((error) => console.warn("[ArenaRush] gamepad sync failed", error));
+      }
       const user = ctx?.user || initData?.user || null;
       state.botName = ctx?.botName || initData?.botName || null;
       state.botUsername = ctx?.botUsername || initData?.botUsername || null;
@@ -735,11 +805,11 @@
 
   function bindInput() {
     const setKey = (code, value) => {
-      if (code === "ArrowUp" || code === "KeyW") state.keys.up = value;
-      if (code === "ArrowDown" || code === "KeyS") state.keys.down = value;
-      if (code === "ArrowLeft" || code === "KeyA") state.keys.left = value;
-      if (code === "ArrowRight" || code === "KeyD") state.keys.right = value;
-      if (code === "ShiftLeft" || code === "ShiftRight" || code === "Space") state.keys.boost = value;
+      if (code === "ArrowUp" || code === "KeyW") setInputSource("keyboard", "up", value);
+      if (code === "ArrowDown" || code === "KeyS") setInputSource("keyboard", "down", value);
+      if (code === "ArrowLeft" || code === "KeyA") setInputSource("keyboard", "left", value);
+      if (code === "ArrowRight" || code === "KeyD") setInputSource("keyboard", "right", value);
+      if (code === "ShiftLeft" || code === "ShiftRight" || code === "Space") setInputSource("keyboard", "boost", value);
       if (value && code === "KeyR") restartRace();
     };
     window.addEventListener("keydown", (e) => {
@@ -751,7 +821,7 @@
     document.querySelectorAll("[data-touch]").forEach((button) => {
       const key = button.getAttribute("data-touch");
       const activate = (value) => {
-        state.keys[key] = value;
+        setInputSource("touch", key, value);
         if (key === "up" && value && !state.started && !state.finished) startRace();
       };
       ["touchstart", "pointerdown"].forEach((name) => button.addEventListener(name, (e) => { e.preventDefault(); activate(true); }, { passive: false }));
