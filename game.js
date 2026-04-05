@@ -136,8 +136,9 @@
     const gamepads = Array.isArray(payload) ? payload : payload?.gamepads;
     const nextInput = mapGamepadsToInput(gamepads);
     setInputState("gamepad", nextInput);
-    if ((nextInput.up || nextInput.boost) && !state.started && !state.finished) {
-      startRace();
+    if (nextInput.up || nextInput.boost) {
+      if (state.finished) restartRace();
+      else if (!state.started) startRace();
     }
   }
 
@@ -435,8 +436,8 @@
           <div class="skin-badge">${owned ? (selected ? "Equipped" : "Owned") : "Locked"}</div>
           <div class="skin-actions">
             ${owned
-              ? `<button ${isProcessing ? "disabled" : ""} class="${selected ? "secondary" : ""}" data-skin-action="equip" data-skin-key="${skin.key}">${isProcessing ? "Processing..." : (selected ? "Active" : "Equip")}</button>`
-              : `<button ${(buyDisabled || isProcessing) ? "disabled" : ""} data-skin-action="buy" data-skin-key="${skin.key}">${isProcessing ? "Processing..." : (buyDisabled ? "Need Sparks" : "Buy")}</button>`
+              ? `<button class="${selected ? "secondary" : ""}" data-skin-action="equip" data-skin-key="${skin.key}" data-skin-processing="${isProcessing ? "true" : "false"}">${isProcessing ? "Processing..." : (selected ? "Active" : "Equip")}</button>`
+              : `<button data-skin-action="buy" data-skin-key="${skin.key}" data-skin-processing="${isProcessing ? "true" : "false"}" data-skin-affordable="${buyDisabled ? "false" : "true"}">${isProcessing ? "Processing..." : (buyDisabled ? "Need Sparks" : "Buy")}</button>`
             }
           </div>
         </div>
@@ -447,6 +448,9 @@
       button.addEventListener("click", async (event) => {
         const key = event.currentTarget.getAttribute("data-skin-key");
         const action = event.currentTarget.getAttribute("data-skin-action");
+        const isProcessing = event.currentTarget.getAttribute("data-skin-processing") === "true";
+        const isAffordable = event.currentTarget.getAttribute("data-skin-affordable") !== "false";
+        if (isProcessing) return;
         if (action === "equip") {
           state.selectedSkin = key;
           await storageSet("arena_rush_selected_skin", key);
@@ -455,6 +459,10 @@
           return;
         }
         if (action === "buy") {
+          if (!isAffordable && !state.ownedSkins.has(key)) {
+            await toast("Not enough Sparks", "error");
+            return;
+          }
           await buySkin(key);
         }
       });
@@ -815,14 +823,20 @@
     window.addEventListener("keydown", (e) => {
       setKey(e.code, true);
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
-      if (!state.started && !state.finished && e.code === "Enter") startRace();
+      if (e.code === "Enter" && !state.started) {
+        if (state.finished) restartRace();
+        else startRace();
+      }
     });
     window.addEventListener("keyup", (e) => setKey(e.code, false));
     document.querySelectorAll("[data-touch]").forEach((button) => {
       const key = button.getAttribute("data-touch");
       const activate = (value) => {
         setInputSource("touch", key, value);
-        if (key === "up" && value && !state.started && !state.finished) startRace();
+        if (key === "up" && value) {
+          if (state.finished) restartRace();
+          else if (!state.started) startRace();
+        }
       };
       ["touchstart", "pointerdown"].forEach((name) => button.addEventListener(name, (e) => { e.preventDefault(); activate(true); }, { passive: false }));
       ["touchend", "touchcancel", "pointerup", "pointerleave"].forEach((name) => button.addEventListener(name, (e) => { e.preventDefault(); activate(false); }, { passive: false }));
