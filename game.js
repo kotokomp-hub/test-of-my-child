@@ -44,6 +44,8 @@
     started: false, finished: false, elapsed: 0, startedAt: 0, bestTimeMs: null, lastResult: null,
     pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
     currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]), processingSkinKey: null,
+    paused: false,
+    gamepadStartPressed: false,
     input: {
       keyboard: createInputState(),
       touch: createInputState(),
@@ -132,14 +134,66 @@
     };
   }
 
+  function isGamepadStartPressed(gamepads) {
+    const primary = Array.isArray(gamepads) ? gamepads[0] : null;
+    if (!primary) return false;
+    const buttons = Array.isArray(primary.buttons) ? primary.buttons : [];
+    return Boolean(buttons[9]?.pressed || Number(buttons[9]?.value || 0) > 0.5);
+  }
+
+  function refreshStartButton() {
+    if (!ui.startButton) return;
+    ui.startButton.textContent = state.paused ? "Resume Race" : "Start Race";
+  }
+
+  function pauseRace() {
+    if (!state.started || state.finished) return;
+    state.started = false;
+    state.paused = true;
+    ui.startScreen.style.display = "flex";
+    refreshStartButton();
+    toast("Race paused", "info");
+  }
+
+  function resumeRace() {
+    if (!state.paused || state.finished) return;
+    ui.startScreen.style.display = "none";
+    ui.finishScreen.style.display = "none";
+    state.started = true;
+    state.paused = false;
+    state.startedAt = performance.now() - state.elapsed;
+    refreshStartButton();
+    toast("Race resumed", "info");
+  }
+
+  function handlePrimaryAction() {
+    if (state.finished) {
+      restartRace();
+      return;
+    }
+    if (state.started) {
+      pauseRace();
+      return;
+    }
+    if (state.paused) {
+      resumeRace();
+      return;
+    }
+    startRace();
+  }
+
   function syncGamepadInput(payload) {
     const gamepads = Array.isArray(payload) ? payload : payload?.gamepads;
+    const nextStartPressed = isGamepadStartPressed(gamepads);
     const nextInput = mapGamepadsToInput(gamepads);
     setInputState("gamepad", nextInput);
-    if (nextInput.up || nextInput.boost) {
+    if (nextStartPressed && !state.gamepadStartPressed) {
+      handlePrimaryAction();
+    } else if (nextInput.up || nextInput.boost) {
       if (state.finished) restartRace();
       else if (!state.started) startRace();
     }
+    state.gamepadStartPressed = nextStartPressed;
   }
 
   function bridgeApiRequest(path, options = {}) {
@@ -379,8 +433,10 @@
   function resetRace() {
     state.started = false;
     state.finished = false;
+    state.paused = false;
     state.elapsed = 0;
     state.startedAt = 0;
+    refreshStartButton();
     racers.forEach((r) => scene.remove(r.root));
     racers.length = 0;
     createRacer(0, { id: "player", name: state.pilotName, isPlayer: true, laneBase: -5.2, progress: 0.048, color: COLORS[0] });
@@ -740,8 +796,9 @@
       if (sdk.backButton?.show) sdk.backButton.show();
       if (sdk.backButton?.onClick) sdk.backButton.onClick(() => {
         if (state.finished) restartRace();
-        else if (!state.started) sdk.close();
-        else { state.started = false; ui.startScreen.style.display = "flex"; }
+        else if (state.started) pauseRace();
+        else if (state.paused) resumeRace();
+        else sdk.close();
       });
       const ctx = sdk.requestContext ? await withTimeout(sdk.requestContext(), 2500) : null;
       if (sdk.gamepad?.onChange) sdk.gamepad.onChange(syncGamepadInput);
@@ -780,9 +837,14 @@
 
   function startRace() {
     if (state.started) return;
+    if (state.paused) {
+      resumeRace();
+      return;
+    }
     ui.startScreen.style.display = "none";
     ui.finishScreen.style.display = "none";
     state.started = true;
+    state.paused = false;
     state.finished = false;
     state.elapsed = 0;
     state.startedAt = performance.now();
