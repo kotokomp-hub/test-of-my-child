@@ -95,7 +95,16 @@
             padding: 20px; pointer-events: auto;
             z-index: 4;
         }
-        .center-card { width: min(560px, calc(100vw - 24px)); text-align: center; }
+        .center-card {
+            width: min(560px, calc(100vw - 24px));
+            max-height: min(calc(100vh - 24px), 820px);
+            text-align: center;
+            overflow: hidden;
+        }
+        .start-card {
+            display: flex;
+            flex-direction: column;
+        }
         .center-card h1, .leaderboard h2 { margin: 0; font-size: 20px; }
         .center-card p { margin: 10px 0 0; color: var(--muted); line-height: 1.5; }
         .actions { display: flex; gap: 12px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
@@ -104,6 +113,13 @@
             text-align: left;
             border-top: 1px solid rgba(255,255,255,.08);
             padding-top: 16px;
+        }
+        .start-card .shop-panel {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         .shop-head {
             display: flex;
@@ -117,6 +133,13 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
             margin-top: 14px;
+        }
+        .start-card .shop-grid {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            align-content: start;
+            padding-right: 4px;
         }
         .skin-card {
             border: 1px solid rgba(255,255,255,.1);
@@ -234,7 +257,18 @@
             .touch-btn { width: 64px; height: 64px; border-radius: 18px; }
             .touch-btn.utility { width: 64px; height: 48px; }
             .center-layer { align-items: flex-start; padding-top: 14px; overflow-y: auto; }
-            .center-card { margin-bottom: 84px; }
+            .center-card { margin-bottom: 84px; max-height: calc(100vh - 98px); }
+        }
+        @media (max-width: 640px) {
+            .shop-grid {
+                grid-template-columns: 1fr;
+            }
+            .skin-card {
+                padding: 10px;
+            }
+            .skin-preview {
+                height: 60px;
+            }
         }
     </style>
 </head>
@@ -274,7 +308,7 @@
             </div>
         </div>
         <div class="center-layer" id="startScreen">
-            <div class="center-card panel">
+            <div class="center-card start-card panel">
                 <h1>Arena Rush 3D</h1>
                 <p>Короткая соревновательная 3D-гонка против трёх AI-пилотов. Использует Naji Mini App SDK для профиля, хранения рекорда, кнопки назад и уведомлений.</p>
                 <div class="actions"><button id="startButton">Start Race</button><button class="secondary" id="closeButton">Close Mini App</button></div>
