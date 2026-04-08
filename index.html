@@ -68,6 +68,28 @@
             display: inline-flex; align-items: center; padding: 7px 12px; border-radius: 999px;
             border: 1px solid rgba(255,255,255,.14); font-size: 12px; color: var(--muted); margin: 6px 6px 0 0;
         }
+        .control-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .hud-btn {
+            flex: 1;
+            border: 1px solid rgba(255,255,255,.14);
+            border-radius: 12px;
+            background: rgba(255,255,255,.06);
+            color: var(--text);
+            padding: 10px 12px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: none;
+        }
+        .hud-btn.primary {
+            background: linear-gradient(135deg, var(--accent), #8fd5ff);
+            color: #061019;
+            border-color: transparent;
+        }
         .center-layer {
             position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
             padding: 20px; pointer-events: auto;
@@ -149,14 +171,50 @@
         }
         button.secondary { color: var(--text); background: rgba(255,255,255,.08); box-shadow: none; border: 1px solid rgba(255,255,255,.12); }
         .touch-controls {
-            position: absolute; inset-inline: 0; bottom: 18px; display: none; justify-content: space-between; padding: 0 18px; pointer-events: auto;
+            position: absolute; inset-inline: 0; bottom: 18px; display: none; justify-content: space-between; align-items: flex-end; padding: 0 18px; pointer-events: auto; gap: 14px;
         }
         .cluster { display: grid; grid-template-columns: repeat(2, 72px); gap: 10px; }
+        .touch-side { display: flex; flex-direction: column; gap: 10px; }
+        .touch-actions { display: flex; gap: 10px; justify-content: space-between; }
         .touch-btn {
             width: 72px; height: 72px; border-radius: 22px; color: var(--text);
             background: rgba(7,19,32,.72); border: 1px solid rgba(120,215,255,.22); box-shadow: 0 12px 24px rgba(0,0,0,.24);
         }
         .touch-btn.boost { background: linear-gradient(135deg, var(--accent-2), #ff9f68); color: #291500; }
+        .touch-btn.utility {
+            width: 72px;
+            height: 58px;
+            border-radius: 18px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        body[data-orientation="landscape"] .touch-controls {
+            bottom: 12px;
+            padding: 0 12px;
+        }
+        body[data-orientation="landscape"] .leaderboard {
+            width: min(280px, 36vw);
+            bottom: 12px;
+        }
+        body[data-orientation="landscape"] .stats {
+            min-width: min(520px, calc(100vw - 28px));
+        }
+        body[data-orientation="landscape"] .center-card {
+            width: min(520px, calc(100vw - 20px));
+        }
+        @media (orientation: landscape) and (max-height: 560px) {
+            .hud { top: 10px; left: 10px; right: 10px; gap: 10px; }
+            .stats { gap: 8px; padding: 12px; }
+            .value { font-size: 20px; }
+            .player-name { font-size: 18px; }
+            .user-card, .boost-wrap, .leaderboard, .control-card, .center-card { padding: 12px; }
+            .leaderboard { left: 10px; bottom: 10px; }
+            .controls { right: 10px; bottom: 10px; }
+            .center-card h1 { font-size: 18px; }
+            .center-card p { font-size: 13px; }
+            .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+            .skin-preview { height: 56px; }
+        }
         @media (max-width: 900px) {
             .hud { flex-direction: column; }
             .stats { min-width: unset; grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -164,6 +222,19 @@
             .boost-wrap, .user-card { width: 100%; min-width: 0; }
             .leaderboard, .controls { display: none; }
             .touch-controls { display: flex; }
+        }
+        @media (max-width: 900px) and (orientation: landscape) {
+            .hud {
+                display: grid;
+                grid-template-columns: minmax(0, 1.1fr) minmax(220px, .9fr);
+                align-items: start;
+            }
+            .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            .right-stack { gap: 8px; }
+            .touch-btn { width: 64px; height: 64px; border-radius: 18px; }
+            .touch-btn.utility { width: 64px; height: 48px; }
+            .center-layer { align-items: flex-start; padding-top: 14px; overflow-y: auto; }
+            .center-card { margin-bottom: 84px; }
         }
     </style>
 </head>
@@ -191,7 +262,17 @@
             </div>
         </div>
         <div class="leaderboard panel"><h2>Track Sheet</h2><div class="leaderboard-list" id="leaderboardList"></div></div>
-        <div class="controls"><div class="control-card panel"><span class="pill">WASD / Arrows</span><span class="pill">Shift boost</span><span class="pill">R restart</span></div></div>
+        <div class="controls">
+            <div class="control-card panel">
+                <span class="pill">WASD / Arrows</span>
+                <span class="pill">Shift / Space boost</span>
+                <span class="pill">Enter pause</span>
+                <div class="control-actions">
+                    <button class="hud-btn primary" id="pauseButton">Start</button>
+                    <button class="hud-btn" id="restartQuickButton">Restart</button>
+                </div>
+            </div>
+        </div>
         <div class="center-layer" id="startScreen">
             <div class="center-card panel">
                 <h1>Arena Rush 3D</h1>
@@ -217,13 +298,21 @@
             </div>
         </div>
         <div class="touch-controls">
-            <div class="cluster">
-                <button class="touch-btn" data-touch="left">◀</button>
-                <button class="touch-btn" data-touch="up">▲</button>
-                <button class="touch-btn" data-touch="down">▼</button>
-                <button class="touch-btn" data-touch="right">▶</button>
+            <div class="touch-side">
+                <div class="cluster">
+                    <button class="touch-btn" data-touch="left">◀</button>
+                    <button class="touch-btn" data-touch="up">▲</button>
+                    <button class="touch-btn" data-touch="down">▼</button>
+                    <button class="touch-btn" data-touch="right">▶</button>
+                </div>
+                <div class="touch-actions">
+                    <button class="touch-btn utility" id="touchPrimaryButton">GO</button>
+                    <button class="touch-btn utility" id="touchRestartButton">RESTART</button>
+                </div>
             </div>
-            <button class="touch-btn boost" data-touch="boost">BOOST</button>
+            <div class="touch-side">
+                <button class="touch-btn boost" data-touch="boost">BOOST</button>
+            </div>
         </div>
     </div>
     <script src="./game.js"></script>
