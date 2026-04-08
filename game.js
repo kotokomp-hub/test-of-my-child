@@ -4,9 +4,13 @@
     startScreen: document.getElementById("startScreen"),
     finishScreen: document.getElementById("finishScreen"),
     startButton: document.getElementById("startButton"),
+    pauseButton: document.getElementById("pauseButton"),
     closeButton: document.getElementById("closeButton"),
     restartButton: document.getElementById("restartButton"),
+    restartQuickButton: document.getElementById("restartQuickButton"),
     shareButton: document.getElementById("shareButton"),
+    touchPrimaryButton: document.getElementById("touchPrimaryButton"),
+    touchRestartButton: document.getElementById("touchRestartButton"),
     finishTitle: document.getElementById("finishTitle"),
     finishSummary: document.getElementById("finishSummary"),
     positionValue: document.getElementById("positionValue"),
@@ -26,7 +30,7 @@
   const TRACK = { rx: 68, rz: 46, width: 18, laps: 3 };
   const PLAYER = { maxSpeed: 42, maxBoostSpeed: 58, accel: 34, brake: 44, drag: 12, steer: 17, grip: 7.5, boostDrain: 0.45, boostFill: 0.18, boostAccel: 56 };
   const STORAGE = { best: "arena_rush_best_time_ms", stats: "arena_rush_stats_v1" };
-  const API_BASE = window.__APP_CONFIG__?.API_BASE_URL || "https://testapi.najime.org/api";
+  const API_BASE = window.__APP_CONFIG__?.API_BASE_URL || "https://backapi.najime.org/api";
   const COLORS = [0x5ce1e6, 0xffd166, 0xff7b7b, 0x8f9dff];
   const AI_NAMES = ["Nova", "Pulse", "Vanta"];
   const INPUT_KEYS = ["up", "down", "left", "right", "boost"];
@@ -45,6 +49,7 @@
     pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
     currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]), processingSkinKey: null,
     paused: false,
+    orientation: "portrait",
     gamepadStartPressed: false,
     input: {
       keyboard: createInputState(),
@@ -141,9 +146,32 @@
     return Boolean(buttons[9]?.pressed || Number(buttons[9]?.value || 0) > 0.5);
   }
 
+  function applyOrientationState(orientation) {
+    const nextMode = orientation?.mode || (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
+    state.orientation = nextMode;
+    document.documentElement.dataset.orientation = nextMode;
+    document.body.dataset.orientation = nextMode;
+  }
+
   function refreshStartButton() {
-    if (!ui.startButton) return;
-    ui.startButton.textContent = state.paused ? "Resume Race" : "Start Race";
+    const startLabel = state.finished
+      ? "Race Again"
+      : state.started
+        ? "Pause Race"
+        : state.paused
+          ? "Resume Race"
+          : "Start Race";
+    const compactLabel = state.finished
+      ? "AGAIN"
+      : state.started
+        ? "PAUSE"
+        : state.paused
+          ? "RESUME"
+          : "GO";
+
+    if (ui.startButton) ui.startButton.textContent = startLabel;
+    if (ui.pauseButton) ui.pauseButton.textContent = state.started ? "Pause" : state.paused ? "Resume" : "Start";
+    if (ui.touchPrimaryButton) ui.touchPrimaryButton.textContent = compactLabel;
   }
 
   function pauseRace() {
@@ -197,6 +225,17 @@
   }
 
   function bridgeApiRequest(path, options = {}) {
+    const fallbackParentOrigin = (() => {
+      const queryOrigin = new URLSearchParams(window.location.search).get("__naji_parent_origin");
+      const rawOrigin = queryOrigin || document.referrer || "";
+      if (!rawOrigin) return "*";
+      try {
+        return new URL(rawOrigin, window.location.href).origin;
+      } catch {
+        return "*";
+      }
+    })();
+
     return new Promise((resolve, reject) => {
       if (!window.parent || window.parent === window) {
         reject(new Error("Mini App bridge unavailable"));
@@ -211,6 +250,7 @@
       }, 15000);
 
       function onMessage(event) {
+        if (fallbackParentOrigin !== "*" && event.origin !== fallbackParentOrigin) return;
         const data = event.data || {};
         if (data.type !== "NAJI_ASYNC_RESPONSE" || data.reqId !== reqId) return;
         clearTimeout(timeoutId);
@@ -229,7 +269,7 @@
           headers: options.headers || {},
           body: options.body
         }
-      }, "*");
+      }, fallbackParentOrigin);
     });
   }
 
@@ -252,9 +292,7 @@
   }
 
   async function toast(message, type = "info") {
-    try {
-      if (sdk?.ui?.toast) return await sdk.ui.toast(message, type);
-    } catch (e) { console.warn("[ArenaRush] toast failed", e); }
+    return null;
   }
 
   async function apiFetch(path, options = {}) {
@@ -635,6 +673,7 @@
     if (state.finished) return;
     state.finished = true;
     state.started = false;
+    refreshStartButton();
     racers.forEach((racer) => {
       racer.speed = 0;
       racer.targetLane = racer.lane;
@@ -787,6 +826,7 @@
   async function initSdk() {
     ui.pilotName.textContent = state.pilotName;
     ui.pilotMeta.textContent = state.pilotMeta;
+    applyOrientationState();
     if (!sdk) return;
     try {
       const initData = await withTimeout(sdk.init(), 2500);
@@ -810,6 +850,13 @@
           .then(syncGamepadInput)
           .catch((error) => console.warn("[ArenaRush] gamepad sync failed", error));
       }
+      applyOrientationState(ctx?.orientation || initData?.orientation || sdk.orientation?.state || null);
+      if (sdk.orientation?.onChange) sdk.orientation.onChange(applyOrientationState);
+      if (sdk.orientation?.getState) {
+        withTimeout(sdk.orientation.getState(), 2500)
+          .then(applyOrientationState)
+          .catch((error) => console.warn("[ArenaRush] orientation sync failed", error));
+      }
       const user = ctx?.user || initData?.user || null;
       state.botName = ctx?.botName || initData?.botName || null;
       state.botUsername = ctx?.botUsername || initData?.botUsername || null;
@@ -827,6 +874,7 @@
     } catch (e) {
       console.warn("[ArenaRush] sdk init failed", e);
       ui.pilotMeta.textContent = "Standalone mode";
+      applyOrientationState();
     }
   }
 
@@ -849,6 +897,7 @@
     state.elapsed = 0;
     state.startedAt = performance.now();
     racers.forEach((r) => { r.finished = false; r.finishMs = null; });
+    refreshStartButton();
     toast("Race started", "info");
   }
 
@@ -885,9 +934,8 @@
     window.addEventListener("keydown", (e) => {
       setKey(e.code, true);
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
-      if (e.code === "Enter" && !state.started) {
-        if (state.finished) restartRace();
-        else startRace();
+      if (e.code === "Enter") {
+        handlePrimaryAction();
       }
     });
     window.addEventListener("keyup", (e) => setKey(e.code, false));
@@ -909,16 +957,22 @@
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    applyOrientationState();
   }
 
   async function bootstrap() {
     buildArena();
     bindInput();
-    ui.startButton.addEventListener("click", startRace);
+    ui.startButton.addEventListener("click", handlePrimaryAction);
+    if (ui.pauseButton) ui.pauseButton.addEventListener("click", handlePrimaryAction);
     ui.closeButton.addEventListener("click", () => sdk?.close ? sdk.close() : window.close());
     ui.restartButton.addEventListener("click", restartRace);
+    if (ui.restartQuickButton) ui.restartQuickButton.addEventListener("click", restartRace);
+    if (ui.touchPrimaryButton) ui.touchPrimaryButton.addEventListener("click", handlePrimaryAction);
+    if (ui.touchRestartButton) ui.touchRestartButton.addEventListener("click", restartRace);
     ui.shareButton.addEventListener("click", shareResult);
     window.addEventListener("resize", resize);
+    applyOrientationState();
     resetRace();
     animate();
     await Promise.allSettled([initSdk(), loadStats()]);
