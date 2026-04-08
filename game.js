@@ -36,10 +36,17 @@
   const INPUT_KEYS = ["up", "down", "left", "right", "boost"];
   const GAMEPAD_DEADZONE = 0.35;
   const SKINS = [
-    { key: "default", title: "Pulse Cyan", price: 0, color: 0x5ce1e6, glow: 0x5ce1e6, accent: "#5ce1e6", preview: "linear-gradient(135deg, #5ce1e6, #8fd5ff)" },
-    { key: "sunflare", title: "Sunflare", price: 45, color: 0xffb347, glow: 0xffd166, accent: "#ffd166", preview: "linear-gradient(135deg, #ffd166, #ff8f5e)" },
-    { key: "voidrunner", title: "Voidrunner", price: 65, color: 0xa78bfa, glow: 0x8f9dff, accent: "#8f9dff", preview: "linear-gradient(135deg, #8f9dff, #191e4b)" },
-    { key: "crimson", title: "Crimson Shock", price: 80, color: 0xff5e7d, glow: 0xff7b7b, accent: "#ff7b7b", preview: "linear-gradient(135deg, #ff7b7b, #7a1029)" }
+    { key: "default", title: "Pulse Cyan", priceSol: "0", color: 0x5ce1e6, glow: 0x5ce1e6, accent: "#5ce1e6", preview: "linear-gradient(135deg, #5ce1e6, #8fd5ff)" },
+    { key: "sunflare", title: "Sunflare", priceSol: "0.020", color: 0xffb347, glow: 0xffd166, accent: "#ffd166", preview: "linear-gradient(135deg, #ffd166, #ff8f5e)" },
+    { key: "voidrunner", title: "Voidrunner", priceSol: "0.030", color: 0xa78bfa, glow: 0x8f9dff, accent: "#8f9dff", preview: "linear-gradient(135deg, #8f9dff, #191e4b)" },
+    { key: "crimson", title: "Crimson Shock", priceSol: "0.045", color: 0xff5e7d, glow: 0xff7b7b, accent: "#ff7b7b", preview: "linear-gradient(135deg, #ff7b7b, #7a1029)" },
+    { key: "aurora", title: "Aurora Pulse", priceSol: "0.055", color: 0x64ffda, glow: 0x5ce1e6, accent: "#64ffda", preview: "linear-gradient(135deg, #64ffda, #4f8cff, #c084fc)" },
+    { key: "goldrush", title: "Gold Rush", priceSol: "0.060", color: 0xffd54f, glow: 0xffb300, accent: "#ffd54f", preview: "linear-gradient(135deg, #fff1a8, #ffbf47, #b96a00)" },
+    { key: "midnight", title: "Midnight Coil", priceSol: "0.065", color: 0x3b3f77, glow: 0x7c3aed, accent: "#7c3aed", preview: "linear-gradient(135deg, #0f1024, #312e81, #7c3aed)" },
+    { key: "acidwave", title: "Acid Wave", priceSol: "0.072", color: 0x9cff57, glow: 0x6effb7, accent: "#9cff57", preview: "linear-gradient(135deg, #c6ff63, #41f19a, #0d5c63)" },
+    { key: "rosegold", title: "Rose Gold", priceSol: "0.078", color: 0xff9f9f, glow: 0xffd6a5, accent: "#ffb4a2", preview: "linear-gradient(135deg, #ffd6d6, #ffb4a2, #b56576)" },
+    { key: "glacier", title: "Glacier Run", priceSol: "0.085", color: 0x9bd7ff, glow: 0xdff6ff, accent: "#9bd7ff", preview: "linear-gradient(135deg, #eefbff, #9bd7ff, #4c83ff)" },
+    { key: "inferno", title: "Inferno Rail", priceSol: "0.095", color: 0xff6a00, glow: 0xff2d55, accent: "#ff6a00", preview: "linear-gradient(135deg, #ffd166, #ff6a00, #b00020)" }
   ];
 
   const createInputState = () => ({ up: false, down: false, left: false, right: false, boost: false });
@@ -48,6 +55,8 @@
     started: false, finished: false, elapsed: 0, startedAt: 0, bestTimeMs: null, lastResult: null,
     pilotName: "Guest Racer", pilotMeta: "Mini App Arena",
     currentBalance: 0, botName: null, botUsername: null, selectedSkin: "default", ownedSkins: new Set(["default"]), processingSkinKey: null,
+    walletAddress: null, walletNetwork: "devnet",
+    shopStatusMessage: null,
     paused: false,
     orientation: "portrait",
     gamepadStartPressed: false,
@@ -82,11 +91,14 @@
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const wrap01 = (v) => ((v % 1) + 1) % 1;
+  const formatWalletAddress = (value) => value ? `${String(value).slice(0, 4)}...${String(value).slice(-4)}` : null;
+  const isSkinFree = (skin) => Number(skin?.priceSol || 0) <= 0;
   const withTimeout = (promise, ms) => Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout:${ms}`)), ms))
   ]);
   let bridgeReqCounter = 0;
+  let shopStatusTimeout = null;
   const fmtTime = (ms) => {
     if (!Number.isFinite(ms) || ms <= 0) return "00:00.0";
     const t = ms / 1000;
@@ -151,6 +163,26 @@
     state.orientation = nextMode;
     document.documentElement.dataset.orientation = nextMode;
     document.body.dataset.orientation = nextMode;
+  }
+
+  function applyWalletState(wallet) {
+    const nextWallet = wallet && typeof wallet === "object" ? wallet : null;
+    state.walletAddress = nextWallet?.address || nextWallet?.publicKey || null;
+    state.walletNetwork = String(nextWallet?.network || "devnet").toLowerCase();
+    renderSkinShop();
+  }
+
+  function showShopStatus(message, duration = 4200) {
+    state.shopStatusMessage = message || null;
+    renderSkinShop();
+    if (shopStatusTimeout) clearTimeout(shopStatusTimeout);
+    if (duration > 0) {
+      shopStatusTimeout = setTimeout(() => {
+        shopStatusTimeout = null;
+        state.shopStatusMessage = null;
+        renderSkinShop();
+      }, duration);
+    }
   }
 
   function refreshStartButton() {
@@ -514,24 +546,30 @@
 
   function renderSkinShop() {
     if (!ui.skinShop) return;
-    ui.sparkBalance.textContent = `Balance: ${state.currentBalance || 0} Sparks`;
+    if (ui.sparkBalance) {
+      ui.sparkBalance.textContent = state.shopStatusMessage || (
+        state.walletAddress
+          ? `Devnet • ${formatWalletAddress(state.walletAddress)}`
+          : "Devnet • Solana checkout"
+      );
+    }
     ui.skinShop.innerHTML = SKINS.map((skin) => {
       const owned = state.ownedSkins.has(skin.key);
       const selected = state.selectedSkin === skin.key;
       const isProcessing = state.processingSkinKey === skin.key;
-      const buyDisabled = skin.price > 0 && state.currentBalance < skin.price && !owned;
+      const freeSkin = isSkinFree(skin);
       return `
         <div class="skin-card">
           <div class="skin-preview" style="background:${skin.preview};"></div>
           <div class="skin-topline">
             <div class="skin-name">${skin.title}</div>
-            <div class="skin-price">${skin.price > 0 ? `${skin.price} Sparks` : "Free"}</div>
+            <div class="skin-price">${freeSkin ? "Free" : `${skin.priceSol} SOL`}</div>
           </div>
-          <div class="skin-badge">${owned ? (selected ? "Equipped" : "Owned") : "Locked"}</div>
+          <div class="skin-badge">${owned ? (selected ? "Equipped" : "Owned") : (freeSkin ? "Starter" : "Solana Devnet")}</div>
           <div class="skin-actions">
             ${owned
               ? `<button class="${selected ? "secondary" : ""}" data-skin-action="equip" data-skin-key="${skin.key}" data-skin-processing="${isProcessing ? "true" : "false"}">${isProcessing ? "Processing..." : (selected ? "Active" : "Equip")}</button>`
-              : `<button data-skin-action="buy" data-skin-key="${skin.key}" data-skin-processing="${isProcessing ? "true" : "false"}" data-skin-affordable="${buyDisabled ? "false" : "true"}">${isProcessing ? "Processing..." : (buyDisabled ? "Need Sparks" : "Buy")}</button>`
+              : `<button data-skin-action="buy" data-skin-key="${skin.key}" data-skin-processing="${isProcessing ? "true" : "false"}">${isProcessing ? "Processing..." : (freeSkin ? "Unlock" : `Pay ${skin.priceSol} SOL`)}</button>`
             }
           </div>
         </div>
@@ -543,7 +581,6 @@
         const key = event.currentTarget.getAttribute("data-skin-key");
         const action = event.currentTarget.getAttribute("data-skin-action");
         const isProcessing = event.currentTarget.getAttribute("data-skin-processing") === "true";
-        const isAffordable = event.currentTarget.getAttribute("data-skin-affordable") !== "false";
         if (isProcessing) return;
         if (action === "equip") {
           state.selectedSkin = key;
@@ -553,10 +590,6 @@
           return;
         }
         if (action === "buy") {
-          if (!isAffordable && !state.ownedSkins.has(key)) {
-            await toast("Not enough Sparks", "error");
-            return;
-          }
           await buySkin(key);
         }
       });
@@ -710,12 +743,9 @@
 
     try {
       const context = sdk?.initData || null;
-      const contextBalance = Number(context?.sparks?.balance ?? context?.user?.najisparks ?? state.currentBalance ?? 0);
-      if (Number.isFinite(contextBalance) && contextBalance >= 0) {
-        state.currentBalance = contextBalance;
-      }
+      applyWalletState(context?.wallet || null);
     } catch (e) {
-      console.warn("[ArenaRush] context balance load failed", e);
+      console.warn("[ArenaRush] wallet context load failed", e);
     }
 
     if (!state.botUsername) {
@@ -746,7 +776,7 @@
     const skin = getSkin(key);
     if (state.processingSkinKey) return;
     if (!state.botUsername) {
-      await toast("Attach this Mini App to a bot first", "error");
+      showShopStatus("Attach Arena Rush to a bot first");
       return;
     }
     if (state.ownedSkins.has(key)) {
@@ -760,31 +790,44 @@
     try {
       state.processingSkinKey = key;
       renderSkinShop();
-      const result = await apiFetch("/miniapp/purchase", {
-        method: "POST",
-        body: JSON.stringify({
-          bot_username: state.botUsername,
-          item_type: "skin",
-          item_key: skin.key,
-          title: skin.title,
-          price_sparks: skin.price,
-          purchase_meta: {
-            source: "arena-rush",
-            color: skin.color,
-            glow: skin.glow
-          }
-        })
+      if (isSkinFree(skin)) {
+        state.ownedSkins.add(key);
+        state.selectedSkin = key;
+        await storageSet("arena_rush_selected_skin", key);
+        applySkinToPlayer();
+        renderSkinShop();
+        return;
+      }
+
+      if (!sdk?.payments?.solana) {
+        throw new Error("Solana payments are available only inside Naji Mini Apps");
+      }
+
+      await sdk.payments.solana({
+        bot_username: state.botUsername,
+        item_type: "skin",
+        item_key: skin.key,
+        title: `${skin.title} skin`,
+        description: `${skin.title} unlock for Arena Rush on Solana Devnet`,
+        amount_sol: skin.priceSol,
+        purchase_meta: {
+          source: "arena-rush",
+          color: skin.color,
+          glow: skin.glow,
+          preview: skin.preview,
+          payment_currency: "SOL"
+        }
       });
-      state.currentBalance = Number(result.new_balance || state.currentBalance);
       state.ownedSkins.add(key);
       state.selectedSkin = key;
       await storageSet("arena_rush_selected_skin", key);
       applySkinToPlayer();
       state.processingSkinKey = null;
+      showShopStatus(`${skin.title} unlocked on Solana Devnet`);
       renderSkinShop();
-      toast(result.already_owned ? "Skin already unlocked" : `${skin.title} unlocked`, "success");
     } catch (e) {
-      await toast(e.message || "Purchase failed", "error");
+      console.warn("[ArenaRush] Solana skin purchase failed", e);
+      showShopStatus(e?.message || "Solana payment failed");
     } finally {
       state.processingSkinKey = null;
       renderSkinShop();
@@ -844,6 +887,7 @@
       if (sdk.gamepad?.onChange) sdk.gamepad.onChange(syncGamepadInput);
       if (sdk.gamepad?.onConnect) sdk.gamepad.onConnect(syncGamepadInput);
       if (sdk.gamepad?.onDisconnect) sdk.gamepad.onDisconnect(syncGamepadInput);
+      if (sdk.on) sdk.on("walletChanged", applyWalletState);
       syncGamepadInput(ctx?.gamepads || initData?.gamepads || sdk.gamepad?.state || sdk.gamepads || []);
       if (sdk.gamepad?.getState) {
         withTimeout(sdk.gamepad.getState(), 2500)
@@ -860,13 +904,14 @@
       const user = ctx?.user || initData?.user || null;
       state.botName = ctx?.botName || initData?.botName || null;
       state.botUsername = ctx?.botUsername || initData?.botUsername || null;
+      applyWalletState(ctx?.wallet || initData?.wallet || null);
       const sparksBalance = Number(ctx?.sparks?.balance ?? initData?.sparks?.balance ?? user?.najisparks ?? 0);
       if (Number.isFinite(sparksBalance) && sparksBalance >= 0) {
         state.currentBalance = sparksBalance;
       }
       state.pilotName = user?.display_name || user?.first_name || user?.username || state.pilotName;
-      const walletAddress = ctx?.wallet?.address || ctx?.wallet?.publicKey || null;
-      const wallet = walletAddress ? `Wallet ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "SDK profile linked";
+      const walletAddress = state.walletAddress;
+      const wallet = walletAddress ? `Wallet ${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : "Solana checkout ready";
       state.pilotMeta = user?.username ? `@${user.username} • ${wallet}` : wallet;
       ui.pilotName.textContent = state.pilotName;
       ui.pilotMeta.textContent = state.pilotMeta;
