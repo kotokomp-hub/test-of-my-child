@@ -410,6 +410,8 @@
     localPlayerId: `guest_${Date.now().toString(36)}`,
     localPlayerName: "Guest",
     isMiniApp: Boolean(sdk),
+    embeddedHost: typeof window !== "undefined" ? window.parent !== window : false,
+    sdkReady: false,
     multiplayerSupported: Boolean(sdk?.multiplayer),
     currentRoom: null,
     currentQueue: null,
@@ -541,6 +543,41 @@
     }
     return isPrimaryLocalFighter(fighter) ? "ТЫ" : "СОП";
   };
+  const getMiniAppRealtimeUnavailableReason = () => {
+    if (!sdk) {
+      return "Mini App SDK недоступен. Для комнат открой игру внутри мессенджера.";
+    }
+    if (!state.embeddedHost) {
+      return "Комнаты работают только внутри встроенного Mini App окна, а не в отдельной вкладке.";
+    }
+    if (!state.sdkReady) {
+      return "Mini App bridge еще не инициализировался. Подожди пару секунд и попробуй снова.";
+    }
+    if (!sdk?.multiplayer) {
+      return "Realtime bridge недоступен для этой сессии Mini App.";
+    }
+    if (!state.botUsername) {
+      return "Игра должна быть открыта как Mini App конкретного бота, иначе комнаты недоступны.";
+    }
+    return "";
+  };
+  const getLocalRoomPlayer = (room) => {
+    const localId = String(state.localPlayerId || "").trim();
+    if (!localId) return null;
+    return roomPlayersOf(room).find((player) => {
+      const playerId = String(playerIdOf(player) || "").trim();
+      const username = String(player?.username || "").trim();
+      return playerId === localId || username === localId;
+    }) || null;
+  };
+  const isLocalRoomHost = (room) => {
+    const localPlayer = getLocalRoomPlayer(room);
+    if (localPlayer?.isHost || localPlayer?.is_host) return true;
+    const hostId = String(hostIdOf(room) || "").trim();
+    const localId = String(state.localPlayerId || "").trim();
+    const localUsername = String(localPlayer?.username || "").trim();
+    return Boolean(hostId && (hostId === localId || hostId === localUsername));
+  };
   const cloneMapConfig = (mapId) => JSON.parse(JSON.stringify(MAP_LIBRARY[mapId] || MAP_LIBRARY.battlefield));
   const getSkinConfig = (skinKey, fallbackIndex = 0) => {
     const direct = SKIN_LIBRARY[skinKey];
@@ -654,6 +691,17 @@
     const room = state.currentRoom;
     const remainingMs = match.active ? Math.max(0, match.timeLimitMs - match.elapsedMs) : match.timeLimitMs;
     const roomCode = roomCodeOf(room);
+    const players = roomPlayersOf(room);
+    const isHost = isLocalRoomHost(room);
+    const startDisabledReason = !room
+      ? "Сначала создай комнату или войди в неё."
+      : !isHost
+        ? "Матч может запустить только хост комнаты."
+        : players.length < 2
+          ? "Нужны минимум два игрока в комнате."
+          : players.some((player) => !isPlayerReady(player))
+            ? "Все игроки должны нажать Ready."
+            : "Комната готова к старту.";
     const phaseTitle = match.active
       ? (match.ended ? "Матч завершен" : "Бой идет")
       : state.phase === "lobby"
@@ -680,13 +728,15 @@
     ui.voiceButton.textContent = state.voiceConnected ? (state.voiceMuted ? "Включить микрофон" : "Выйти из голоса") : "Голос";
     ui.pauseButton.textContent = state.isPaused ? "Продолжить" : "Пауза";
     ui.pauseButton.disabled = !match.active || state.mode === "quick" || state.mode === "room";
-    ui.startMatchButton.disabled = !net.isHost || roomPlayersOf(room).length < 2 || roomPlayersOf(room).some((player) => !isPlayerReady(player));
+    ui.startMatchButton.disabled = !room || !isHost || players.length < 2 || players.some((player) => !isPlayerReady(player));
     ui.lobbyStartButton.disabled = ui.startMatchButton.disabled;
+    ui.startMatchButton.title = startDisabledReason;
+    ui.lobbyStartButton.title = startDisabledReason;
     ui.readyButton.textContent = state.localReady ? "Готов" : "Ready";
     ui.lobbyReadyButton.textContent = state.localReady ? "Снять готовность" : "Готов";
     ui.roomRibbonMain.textContent = roomCode ? roomCode : "WAITING";
     ui.roomRibbonMeta.textContent = room
-      ? `${roomPlayersOf(room).length} бойца в комнате${net.isHost ? " • ты хост" : ""}`
+      ? `${players.length} бойца в комнате${isHost ? " • ты хост" : ""}`
       : state.currentQueue
         ? `Очередь ${state.currentQueue.queueKey || state.currentQueue.queue_key || "default"}`
         : "Создай комнату или жми Quick Match";
@@ -716,7 +766,7 @@
       const element = document.createElement("div");
       const playerId = playerIdOf(player);
       const isLocal = playerId === state.localPlayerId;
-      const isHost = playerId === hostIdOf(room);
+      const isHost = Boolean(player?.isHost || player?.is_host || playerId === hostIdOf(room) || player?.username === hostIdOf(room));
       const skinKey = player?.state?.skinKey || player?.state?.skin_key || (index === 0 ? "crimson_ninja" : "blue_fighter");
       const skinName = SKIN_LIBRARY[skinKey]?.name || "Стандарт";
       element.className = "lobby-player";
@@ -855,8 +905,8 @@
     state.currentRoom = nextRoom || null;
     state.currentQueue = nextQueue || null;
     net.roomState = nextRoom || null;
-    net.isHost = Boolean(nextRoom && hostIdOf(nextRoom) === state.localPlayerId);
-    state.localReady = Boolean(roomPlayersOf(nextRoom).find((player) => playerIdOf(player) === state.localPlayerId)?.state?.ready);
+    net.isHost = isLocalRoomHost(nextRoom);
+    state.localReady = Boolean(getLocalRoomPlayer(nextRoom)?.state?.ready);
     renderLobby();
     updateHud();
   }
@@ -1518,7 +1568,12 @@
       themeIndex: index,
       spawnIndex: index,
       skinKey: player?.state?.skinKey || player?.state?.skin_key || (index === 0 ? "crimson_ninja" : "blue_fighter"),
-      controlSlot: playerIdOf(player) === state.localPlayerId ? "p1" : null
+      controlSlot: (() => {
+        const playerId = String(playerIdOf(player) || "").trim();
+        const username = String(player?.username || "").trim();
+        const localId = String(state.localPlayerId || "").trim();
+        return playerId === localId || username === localId ? "p1" : null;
+      })()
     }));
   }
 
@@ -2318,7 +2373,12 @@
   }
 
   async function setReadyState(ready) {
-    if (!sdk?.multiplayer || !state.currentRoom) return;
+    const unavailableReason = getMiniAppRealtimeUnavailableReason();
+    if (unavailableReason) {
+      setStatus(unavailableReason, "danger", 5200);
+      return;
+    }
+    if (!state.currentRoom) return;
     try {
       const nextState = await sdk.multiplayer.updateState({
         ready: Boolean(ready),
@@ -2330,7 +2390,7 @@
       handleMultiplayerStateChange(nextState);
     } catch (error) {
       console.warn("[SuperSmash3D] Failed to update ready state:", error);
-      setStatus("Не удалось обновить ready-статус.", "danger");
+      setStatus(error?.message || "Не удалось обновить ready-статус.", "danger", 5200);
     }
   }
 
@@ -2366,8 +2426,9 @@
   }
 
   async function createPrivateRoom() {
-    if (!sdk?.multiplayer) {
-      setStatus("Мультиплеер доступен только внутри Mini App host.", "danger");
+    const unavailableReason = getMiniAppRealtimeUnavailableReason();
+    if (unavailableReason) {
+      setStatus(unavailableReason, "danger", 5200);
       return;
     }
     await leaveCurrentRoom({ quiet: true });
@@ -2375,6 +2436,7 @@
     state.localMode = "online";
     state.autoVoiceRequested = true;
     try {
+      setStatus("Создаю приватную комнату...", "info", 0);
       const nextState = await sdk.multiplayer.createRoom({
         mode: "room",
         visibility: "private",
@@ -2389,7 +2451,7 @@
       void setReadyState(true);
     } catch (error) {
       console.warn("[SuperSmash3D] Failed to create room:", error);
-      setStatus("Не удалось создать комнату прямо сейчас.", "danger");
+      setStatus(error?.message || "Не удалось создать комнату прямо сейчас.", "danger", 5200);
     }
   }
 
@@ -2399,8 +2461,9 @@
       setStatus("Сначала введи код комнаты.", "danger");
       return;
     }
-    if (!sdk?.multiplayer) {
-      setStatus("Вход в комнату работает только внутри Mini App host.", "danger");
+    const unavailableReason = getMiniAppRealtimeUnavailableReason();
+    if (unavailableReason) {
+      setStatus(unavailableReason, "danger", 5200);
       return;
     }
     await leaveCurrentRoom({ quiet: true });
@@ -2408,6 +2471,7 @@
     state.localMode = "online";
     state.autoVoiceRequested = true;
     try {
+      setStatus(`Вхожу в комнату ${roomCode}...`, "info", 0);
       const nextState = await sdk.multiplayer.joinRoom({
         room_code: roomCode,
         max_players: 2
@@ -2418,13 +2482,14 @@
       void setReadyState(true);
     } catch (error) {
       console.warn("[SuperSmash3D] Failed to join room:", error);
-      setStatus("Комната не найдена или уже заполнена.", "danger");
+      setStatus(error?.message || "Комната не найдена или уже заполнена.", "danger", 5200);
     }
   }
 
   async function joinQuickMatch() {
-    if (!sdk?.multiplayer) {
-      setStatus("Quick Match требует Mini App realtime bridge.", "danger");
+    const unavailableReason = getMiniAppRealtimeUnavailableReason();
+    if (unavailableReason) {
+      setStatus(unavailableReason, "danger", 5200);
       return;
     }
     await leaveCurrentRoom({ quiet: true });
@@ -2434,6 +2499,7 @@
     setPhase("lobby");
     renderLobby();
     try {
+      setStatus("Подключаю Quick Match...", "info", 0);
       const nextState = await sdk.multiplayer.joinMatchmaking({
         queue_key: "super-smash-3d",
         min_players: 2,
@@ -2441,17 +2507,36 @@
         metadata: { game: "super-smash-3d", mode: "platform-fighter", mapId: state.selectedMapId }
       });
       handleMultiplayerStateChange(nextState);
-      setStatus("Searching for opponents...", "info", 0);
+      setStatus("Ищу соперника...", "info", 0);
     } catch (error) {
       console.warn("[SuperSmash3D] Failed to join matchmaking:", error);
-      setStatus("Quick Match сейчас недоступен.", "danger");
+      setStatus(error?.message || "Quick Match сейчас недоступен.", "danger", 5200);
       setPhase("menu");
     }
   }
 
   async function startHostedRoomMatch() {
-    if (!state.currentRoom || !net.isHost) return;
-    const roster = createRosterFromRoom(state.currentRoom);
+    const room = state.currentRoom;
+    if (!room) {
+      setStatus("Комната еще не синхронизировалась. Попробуй снова через секунду.", "danger");
+      return;
+    }
+    if (!isLocalRoomHost(room)) {
+      setStatus("Матч может запустить только хост комнаты.", "danger");
+      return;
+    }
+    const players = roomPlayersOf(room);
+    if (players.length < 2) {
+      setStatus("Для старта нужны минимум 2 бойца.", "danger");
+      return;
+    }
+    const notReadyPlayers = players.filter((player) => !isPlayerReady(player));
+    if (notReadyPlayers.length) {
+      const waitingNames = notReadyPlayers.map((player) => playerNameOf(player)).filter(Boolean).join(", ");
+      setStatus(`Не все игроки готовы${waitingNames ? `: ${waitingNames}` : ""}.`, "danger");
+      return;
+    }
+    const roster = createRosterFromRoom(room);
     if (roster.length < 2) {
       setStatus("Для старта нужны минимум 2 бойца.", "danger");
       return;
@@ -2460,14 +2545,14 @@
     beginMatch(roster, {
       authoritative: true,
       practice: false,
-      roomId: roomIdOf(state.currentRoom),
+      roomId: roomIdOf(room),
       matchId,
       timeLimitMs: PHYSICS.timeLimitMs,
       mapId: state.selectedMapId
     });
     await sendRoomEvent("match_start", {
       matchId,
-      roomId: roomIdOf(state.currentRoom),
+      roomId: roomIdOf(room),
       timeLimitMs: PHYSICS.timeLimitMs,
       roster,
       mapId: state.selectedMapId
@@ -2926,6 +3011,7 @@
 
   async function initializeSdk() {
     if (!sdk) {
+      state.sdkReady = false;
       state.localPlayerName = "Гость";
       ui.playerNameLabel.textContent = state.localPlayerName;
       ui.playerMetaLabel.textContent = "Web preview: доступны локальная игра и тренировка. Premium-скины требуют Mini App host.";
@@ -2934,8 +3020,24 @@
       return;
     }
 
+    if (!state.embeddedHost) {
+      state.sdkReady = false;
+      state.localPlayerName = "Гость";
+      ui.playerNameLabel.textContent = state.localPlayerName;
+      ui.playerMetaLabel.textContent = "Игра открыта вне Mini App iframe. Локальный бой работает, комнаты и голос недоступны.";
+      applyOrientation(normalizeOrientation(null));
+      renderMenuSelections();
+      return;
+    }
+
     try {
-      const initData = await sdk.init();
+      const initData = await Promise.race([
+        sdk.init(),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Mini App host did not respond to SDK init")), 6000);
+        })
+      ]);
+      state.sdkReady = true;
       sdk.ready();
       sdk.expand?.();
       sdk.setHeaderColor?.("#08111f");
@@ -2971,6 +3073,7 @@
       await sdk.voice?.getState?.();
     } catch (error) {
       console.warn("[SuperSmash3D] Failed to initialize Mini App SDK:", error);
+      state.sdkReady = false;
       state.localPlayerName = "Гость";
       ui.playerNameLabel.textContent = state.localPlayerName;
       ui.playerMetaLabel.textContent = "SDK не подключился. Запущен офлайн preview-режим.";
