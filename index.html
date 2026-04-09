@@ -3,352 +3,1075 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arena Rush 3D</title>
+    <title>Super Smash 3D</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.1/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+
         :root {
-            --bg: #09111f;
-            --panel: rgba(8, 15, 28, 0.8);
-            --panel-border: rgba(120, 215, 255, 0.2);
-            --text: #ecf7ff;
-            --muted: #95a9bd;
-            --accent: #5ce1e6;
-            --accent-2: #ffd166;
+            --bg-top: #050913;
+            --bg-mid: #0c1830;
+            --bg-bottom: #112746;
+            --panel: rgba(9, 18, 34, 0.78);
+            --panel-strong: rgba(10, 19, 37, 0.9);
+            --panel-border: rgba(136, 208, 255, 0.16);
+            --text: #eef6ff;
+            --muted: #90a8c8;
+            --accent: #8ef5ff;
+            --accent-2: #ffd574;
+            --danger: #ff7d7d;
+            --success: #75f0b6;
+            --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
         }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
         html, body {
-            margin: 0; width: 100%; height: 100%; overflow: hidden;
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             font-family: "Space Grotesk", system-ui, sans-serif;
-            background:
-                radial-gradient(circle at top, rgba(73,145,255,.14), transparent 42%),
-                radial-gradient(circle at bottom right, rgba(92,225,230,.12), transparent 35%),
-                linear-gradient(160deg, #050b14 0%, #0b1320 45%, #071423 100%);
             color: var(--text);
+            background:
+                radial-gradient(circle at 20% 15%, rgba(142, 245, 255, 0.14), transparent 26%),
+                radial-gradient(circle at 80% 20%, rgba(255, 213, 116, 0.12), transparent 24%),
+                radial-gradient(circle at 50% 100%, rgba(99, 132, 255, 0.18), transparent 32%),
+                linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 48%, var(--bg-bottom) 100%);
         }
-        #game, #overlay { position: fixed; inset: 0; }
-        #game { z-index: 0; }
-        #overlay { z-index: 2; }
+
+        #game {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+        }
+
+        #overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+        }
+
         .panel {
             background: var(--panel);
             border: 1px solid var(--panel-border);
-            border-radius: 18px;
-            backdrop-filter: blur(14px);
-            box-shadow: 0 18px 50px rgba(0,0,0,.24);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(16px);
+            border-radius: 20px;
         }
+
         .hud {
-            position: absolute; top: 16px; left: 16px; right: 16px;
-            display: flex; justify-content: space-between; gap: 16px; pointer-events: none;
-        }
-        .stats {
-            display: grid; grid-template-columns: repeat(4, minmax(72px, 1fr));
-            gap: 12px; padding: 14px; min-width: min(560px, calc(100vw - 32px));
-        }
-        .stat { display: flex; flex-direction: column; gap: 4px; }
-        .label { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
-        .value { font-size: 24px; font-weight: 700; }
-        .subtle { color: var(--muted); font-size: 13px; }
-        .right-stack { display: flex; flex-direction: column; gap: 12px; align-items: flex-end; }
-        .user-card, .boost-wrap, .leaderboard, .control-card, .center-card { padding: 14px; }
-        .user-card { min-width: 220px; }
-        .boost-wrap { width: 220px; }
-        .player-name { font-size: 20px; font-weight: 700; margin-top: 2px; }
-        .meter { margin-top: 10px; height: 10px; background: rgba(255,255,255,.08); border-radius: 999px; overflow: hidden; }
-        .meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #7ca8ff); transition: width .12s linear; }
-        .leaderboard {
-            position: absolute; bottom: 16px; left: 16px; width: min(320px, calc(100vw - 32px)); pointer-events: auto;
-        }
-        .leaderboard-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-        .row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
-        .row strong { color: var(--accent-2); }
-        .controls { position: absolute; bottom: 16px; right: 16px; pointer-events: auto; }
-        .control-card { width: min(280px, calc(100vw - 32px)); }
-        .pill {
-            display: inline-flex; align-items: center; padding: 7px 12px; border-radius: 999px;
-            border: 1px solid rgba(255,255,255,.14); font-size: 12px; color: var(--muted); margin: 6px 6px 0 0;
-        }
-        .control-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 14px;
-        }
-        .hud-btn {
-            flex: 1;
-            border: 1px solid rgba(255,255,255,.14);
-            border-radius: 12px;
-            background: rgba(255,255,255,.06);
-            color: var(--text);
-            padding: 10px 12px;
-            font: inherit;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: none;
-        }
-        .hud-btn.primary {
-            background: linear-gradient(135deg, var(--accent), #8fd5ff);
-            color: #061019;
-            border-color: transparent;
-        }
-        .center-layer {
-            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-            padding: 20px; pointer-events: auto;
-            z-index: 4;
-        }
-        .center-card {
-            width: min(560px, calc(100vw - 24px));
-            max-height: min(calc(100vh - 24px), 820px);
-            text-align: center;
-            overflow: hidden;
-        }
-        .start-card {
-            display: flex;
-            flex-direction: column;
-        }
-        .center-card h1, .leaderboard h2 { margin: 0; font-size: 20px; }
-        .center-card p { margin: 10px 0 0; color: var(--muted); line-height: 1.5; }
-        .actions { display: flex; gap: 12px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
-        .shop-panel {
-            margin-top: 18px;
-            text-align: left;
-            border-top: 1px solid rgba(255,255,255,.08);
-            padding-top: 16px;
-        }
-        .start-card .shop-panel {
-            flex: 1;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .shop-head {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
             display: flex;
             justify-content: space-between;
-            gap: 12px;
-            align-items: center;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .hud-block {
+            pointer-events: auto;
+            padding: 14px 16px;
+            min-width: 220px;
+        }
+
+        .hud-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
+        .hud-hero {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
             flex-wrap: wrap;
         }
-        .shop-grid {
+
+        .hud-main {
+            font-size: 28px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .hud-sub {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button, input {
+            font: inherit;
+        }
+
+        button {
+            border: none;
+            border-radius: 14px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            filter: brightness(1.04);
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .primary-btn {
+            background: linear-gradient(135deg, var(--accent), #88aaff);
+            color: #07111f;
+            font-weight: 700;
+        }
+
+        .secondary-btn {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .danger-btn {
+            background: rgba(255, 125, 125, 0.14);
+            color: #ffd7d7;
+            border: 1px solid rgba(255, 125, 125, 0.22);
+        }
+
+        .accent-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            color: var(--muted);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .status-banner {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 18px;
+            max-width: min(540px, calc(100vw - 32px));
+            padding: 12px 16px;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .status-banner.hidden {
+            display: none;
+        }
+
+        .status-strong {
+            color: var(--accent);
+        }
+
+        .controls-info {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: min(760px, calc(100vw - 120px));
+            padding: 14px 18px;
+            text-align: center;
+            border-radius: 14px;
+            background: rgba(0, 0, 0, 0.64);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f5fbff;
+            font-size: 13px;
+            line-height: 1.55;
+            z-index: 4;
+        }
+
+        .controls-info.hidden {
+            display: none;
+        }
+
+        .voice-status {
+            position: absolute;
+            top: 18px;
+            right: 20px;
+            z-index: 4;
+            padding: 10px 14px;
+            border-radius: 12px;
+            background: rgba(4, 24, 12, 0.72);
+            border: 1px solid rgba(117, 240, 182, 0.28);
+            color: #86ffc8;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+
+        .voice-status.hidden {
+            display: none;
+        }
+
+        .screen-layer {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            pointer-events: auto;
+        }
+
+        .screen-card {
+            width: min(680px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            overflow: auto;
+            padding: 22px;
+        }
+
+        .screen-card h1, .screen-card h2, .screen-card h3, .hud h3 {
+            margin: 0;
+        }
+
+        .screen-eyebrow {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .screen-title {
+            font-size: clamp(34px, 6vw, 64px);
+            line-height: 0.94;
+            margin-bottom: 10px;
+        }
+
+        .screen-title em {
+            color: var(--accent-2);
+            font-style: normal;
+        }
+
+        .screen-copy {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+            max-width: 56ch;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+            gap: 16px;
+            margin-top: 18px;
+        }
+
+        .smash-menu-card {
+            width: min(1080px, calc(100vw - 26px));
+            padding: 28px;
+            background:
+                linear-gradient(180deg, rgba(22, 24, 44, 0.9), rgba(9, 14, 28, 0.88)),
+                radial-gradient(circle at top left, rgba(233, 69, 96, 0.14), transparent 30%);
+            border-color: rgba(233, 69, 96, 0.28);
+        }
+
+        .menu-panel-grid {
+            margin-top: 20px;
+        }
+
+        .menu-panel {
+            background: rgba(0, 0, 0, 0.44);
+            border: 1px solid rgba(233, 69, 96, 0.24);
+            border-radius: 22px;
+            padding: 20px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+        }
+
+        .settings-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .settings-block {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .settings-block label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--muted);
+        }
+
+        .settings-block select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(13, 21, 40, 0.92);
+            color: var(--text);
+            font-size: 15px;
+        }
+
+        .menu-small-btn {
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+
+        .menu-meta-text {
+            min-height: 40px;
+            font-size: 12px;
+            line-height: 1.45;
+            color: var(--muted);
+        }
+
+        .menu-account-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .menu-account-card {
+            min-height: 88px;
+        }
+
+        .store-feature {
+            margin-bottom: 18px;
+        }
+
+        .skin-store-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .skin-card {
+            border-radius: 16px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.045);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .skin-card.owned {
+            border-color: rgba(117, 240, 182, 0.28);
+            box-shadow: inset 0 0 0 1px rgba(117, 240, 182, 0.08);
+        }
+
+        .skin-card.locked {
+            border-color: rgba(255, 213, 116, 0.22);
+        }
+
+        .skin-preview {
+            height: 72px;
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03));
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .skin-card-title {
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .skin-card-meta {
+            font-size: 12px;
+            line-height: 1.45;
+            color: var(--muted);
+            min-height: 34px;
+        }
+
+        .skin-card-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .menu-action-group {
+            justify-content: center;
+            margin-top: 12px;
+        }
+
+        .menu-action-group button {
+            min-width: 210px;
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .online-btn {
+            background: linear-gradient(135deg, #153964, #0d5688);
+            color: #eef6ff;
+        }
+
+        .menu-join-row {
+            margin-top: 16px;
+        }
+
+        .feature-list, .lobby-list, .result-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .feature {
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .feature strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .feature span {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .stack {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            min-width: 160px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+            outline: none;
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(144, 168, 200, 0.72);
+        }
+
+        .lobby-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(240px, 0.8fr);
+            gap: 16px;
+            margin-top: 18px;
+        }
+
+        .lobby-section {
+            padding: 16px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .lobby-section h3 {
+            margin-bottom: 12px;
+            font-size: 15px;
+        }
+
+        .lobby-player {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .lobby-player-main {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .lobby-player-name {
+            font-size: 14px;
+            font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .lobby-player-meta {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 74px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .pill.success {
+            color: var(--success);
+            border-color: rgba(117, 240, 182, 0.22);
+            background: rgba(117, 240, 182, 0.08);
+        }
+
+        .pill.warning {
+            color: var(--accent-2);
+            border-color: rgba(255, 213, 116, 0.22);
+            background: rgba(255, 213, 116, 0.08);
+        }
+
+        .pill.danger {
+            color: #ffd1d1;
+            border-color: rgba(255, 125, 125, 0.24);
+            background: rgba(255, 125, 125, 0.1);
+        }
+
+        .room-ribbon {
+            position: absolute;
+            left: 16px;
+            bottom: 16px;
+            max-width: min(380px, calc(100vw - 32px));
+            padding: 14px 16px;
+            pointer-events: auto;
+        }
+
+        .room-ribbon.hidden,
+        .hud.hidden,
+        .fighter-hud.hidden,
+        .touch-controls.hidden,
+        .screen-layer.hidden {
+            display: none;
+        }
+
+        .fighter-hud {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 16px;
+            width: min(980px, calc(100vw - 32px));
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
-            margin-top: 14px;
+            pointer-events: none;
         }
-        .start-card .shop-grid {
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            align-content: start;
-            padding-right: 4px;
+
+        .fighter-card {
+            padding: 18px 22px;
+            border-radius: 18px;
+            background: rgba(0, 0, 0, 0.72);
+            border: 2px solid rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(12px);
+            min-height: 148px;
+            pointer-events: none;
         }
-        .skin-card {
-            border: 1px solid rgba(255,255,255,.1);
-            border-radius: 14px;
-            background: rgba(255,255,255,.03);
-            padding: 12px;
+
+        .fighter-card.local {
+            border-color: rgba(233, 69, 96, 0.4);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(233, 69, 96, 0.08) inset;
         }
-        .skin-preview {
-            height: 70px;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            border: 1px solid rgba(255,255,255,.08);
-        }
-        .skin-topline {
+
+        .fighter-card-header {
             display: flex;
             justify-content: space-between;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
         }
-        .skin-name {
+
+        .fighter-name {
             font-size: 14px;
             font-weight: 700;
         }
-        .skin-price {
-            font-size: 12px;
-            color: var(--accent-2);
-            white-space: nowrap;
+
+        .fighter-swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            vertical-align: middle;
+            box-shadow: 0 0 12px currentColor;
         }
-        .skin-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 10px;
-        }
-        .skin-actions button {
-            flex: 1;
-            padding: 10px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-        }
-        .skin-badge {
-            display: inline-flex;
-            margin-top: 8px;
-            padding: 5px 8px;
+
+        .fighter-meta {
             font-size: 11px;
             color: var(--muted);
-            border: 1px solid rgba(255,255,255,.1);
-            border-radius: 999px;
+            margin-top: 4px;
+            line-height: 1.35;
         }
-        button {
-            border: none; border-radius: 14px; padding: 12px 18px; font: inherit; font-weight: 700; cursor: pointer;
-            color: #061019; background: linear-gradient(135deg, var(--accent), #8fd5ff); box-shadow: 0 12px 34px rgba(92,225,230,.25);
+
+        .fighter-stats {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 12px;
         }
-        button.secondary { color: var(--text); background: rgba(255,255,255,.08); box-shadow: none; border: 1px solid rgba(255,255,255,.12); }
+
+        .fighter-stat strong {
+            display: block;
+            font-size: 42px;
+            line-height: 1;
+        }
+
+        .fighter-stat span {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
+        .fighter-stock-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            min-height: 42px;
+            align-items: center;
+        }
+
+        .fighter-stock-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.24);
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.38);
+            opacity: 0.46;
+        }
+
+        .fighter-stock-dot.alive {
+            background: var(--stock-color, #8ef5ff);
+            border-color: rgba(255, 255, 255, 0.82);
+            box-shadow: 0 0 18px rgba(255, 255, 255, 0.18);
+            opacity: 1;
+        }
+
         .touch-controls {
-            position: absolute; inset-inline: 0; bottom: 18px; display: none; justify-content: space-between; align-items: flex-end; padding: 0 18px; pointer-events: auto; gap: 14px;
+            position: absolute;
+            inset-inline: 0;
+            bottom: 16px;
+            padding: 0 16px;
+            display: none;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 16px;
+            pointer-events: auto;
         }
-        .cluster { display: grid; grid-template-columns: repeat(2, 72px); gap: 10px; }
-        .touch-side { display: flex; flex-direction: column; gap: 10px; }
-        .touch-actions { display: flex; gap: 10px; justify-content: space-between; }
+
+        .touch-cluster {
+            display: grid;
+            grid-template-columns: repeat(3, 64px);
+            gap: 10px;
+        }
+
+        .touch-slot {
+            width: 64px;
+            height: 64px;
+        }
+
         .touch-btn {
-            width: 72px; height: 72px; border-radius: 22px; color: var(--text);
-            background: rgba(7,19,32,.72); border: 1px solid rgba(120,215,255,.22); box-shadow: 0 12px 24px rgba(0,0,0,.24);
-        }
-        .touch-btn.boost { background: linear-gradient(135deg, var(--accent-2), #ff9f68); color: #291500; }
-        .touch-btn.utility {
-            width: 72px;
-            height: 58px;
-            border-radius: 18px;
-            font-size: 13px;
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            background: rgba(8, 15, 30, 0.72);
+            border: 1px solid rgba(143, 207, 255, 0.18);
+            color: var(--text);
+            font-size: 18px;
             font-weight: 700;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
         }
-        body[data-orientation="landscape"] .touch-controls {
-            bottom: 12px;
-            padding: 0 12px;
+
+        .touch-btn.big {
+            width: 82px;
+            height: 82px;
+            border-radius: 24px;
+            font-size: 16px;
         }
-        body[data-orientation="landscape"] .leaderboard {
-            width: min(280px, 36vw);
-            bottom: 12px;
+
+        .touch-btn.primary {
+            background: linear-gradient(135deg, var(--accent), #7ca8ff);
+            color: #07111f;
         }
-        body[data-orientation="landscape"] .stats {
-            min-width: min(520px, calc(100vw - 28px));
+
+        .touch-btn.special {
+            background: linear-gradient(135deg, var(--accent-2), #ff9d6c);
+            color: #291100;
         }
-        body[data-orientation="landscape"] .center-card {
-            width: min(520px, calc(100vw - 20px));
+
+        .touch-actions {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
         }
-        @media (orientation: landscape) and (max-height: 560px) {
-            .hud { top: 10px; left: 10px; right: 10px; gap: 10px; }
-            .stats { gap: 8px; padding: 12px; }
-            .value { font-size: 20px; }
-            .player-name { font-size: 18px; }
-            .user-card, .boost-wrap, .leaderboard, .control-card, .center-card { padding: 12px; }
-            .leaderboard { left: 10px; bottom: 10px; }
-            .controls { right: 10px; bottom: 10px; }
-            .center-card h1 { font-size: 18px; }
-            .center-card p { font-size: 13px; }
-            .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-            .skin-preview { height: 56px; }
+
+        .result-list {
+            margin-top: 16px;
         }
-        @media (max-width: 900px) {
-            .hud { flex-direction: column; }
-            .stats { min-width: unset; grid-template-columns: repeat(2, minmax(0,1fr)); }
-            .right-stack { align-items: stretch; }
-            .boost-wrap, .user-card { width: 100%; min-width: 0; }
-            .leaderboard, .controls { display: none; }
-            .touch-controls { display: flex; }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 14px;
         }
-        @media (max-width: 900px) and (orientation: landscape) {
-            .hud {
-                display: grid;
-                grid-template-columns: minmax(0, 1.1fr) minmax(220px, .9fr);
-                align-items: start;
-            }
-            .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-            .right-stack { gap: 8px; }
-            .touch-btn { width: 64px; height: 64px; border-radius: 18px; }
-            .touch-btn.utility { width: 64px; height: 48px; }
-            .center-layer { align-items: flex-start; padding-top: 14px; overflow-y: auto; }
-            .center-card { margin-bottom: 84px; max-height: calc(100vh - 98px); }
+
+        .result-card {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.78);
+            border-color: rgba(233, 69, 96, 0.24);
         }
-        @media (max-width: 640px) {
-            .shop-grid {
+
+        @media (max-width: 980px) {
+            .settings-row,
+            .menu-account-row,
+            .skin-store-grid {
                 grid-template-columns: 1fr;
             }
-            .skin-card {
-                padding: 10px;
+
+            .menu-action-group button {
+                min-width: 0;
+                width: 100%;
             }
-            .skin-preview {
-                height: 60px;
+
+            .hero-grid,
+            .lobby-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .fighter-hud {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                width: min(620px, calc(100vw - 24px));
+            }
+        }
+
+        @media (max-width: 860px) {
+            .hud {
+                flex-direction: column;
+            }
+
+            .hud-block {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .fighter-hud {
+                bottom: 94px;
+            }
+
+            .touch-controls {
+                display: flex;
+            }
+
+            .controls-info {
+                max-width: calc(100vw - 28px);
+                top: 12px;
+                font-size: 12px;
+            }
+
+            .voice-status {
+                top: auto;
+                bottom: 144px;
+                right: 12px;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .screen-card {
+                padding: 18px;
+                border-radius: 18px;
+            }
+
+            .screen-title {
+                font-size: clamp(28px, 10vw, 46px);
+            }
+
+            .fighter-hud {
+                width: calc(100vw - 24px);
+                gap: 10px;
+            }
+
+            .fighter-card {
+                min-height: 86px;
+                padding: 12px;
+            }
+        }
+
+        @media (max-width: 720px) and (orientation: landscape) {
+            .hud {
+                display: grid;
+                grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+            }
+
+            .room-ribbon {
+                bottom: 10px;
+                left: 10px;
+                max-width: min(320px, 40vw);
+            }
+
+            .fighter-hud {
+                width: min(760px, calc(100vw - 20px));
+                bottom: 10px;
+                left: auto;
+                right: 10px;
+                transform: none;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .touch-controls {
+                padding: 0 10px;
+                bottom: 10px;
+            }
+
+            .touch-btn,
+            .touch-slot {
+                width: 56px;
+                height: 56px;
+            }
+
+            .touch-btn.big {
+                width: 70px;
+                height: 70px;
+            }
+
+            .screen-layer {
+                align-items: flex-start;
+                padding-top: 12px;
+                overflow-y: auto;
+            }
+
+            .screen-card {
+                max-height: calc(100vh - 24px);
+                margin-bottom: 82px;
             }
         }
     </style>
 </head>
 <body>
     <div id="game"></div>
+
     <div id="overlay">
-        <div class="hud">
-            <div class="stats panel">
-                <div class="stat"><span class="label">Position</span><span class="value" id="positionValue">4/4</span></div>
-                <div class="stat"><span class="label">Lap</span><span class="value" id="lapValue">1/3</span></div>
-                <div class="stat"><span class="label">Speed</span><span class="value" id="speedValue">0</span></div>
-                <div class="stat"><span class="label">Time</span><span class="value" id="timeValue">00:00.0</span></div>
-            </div>
-            <div class="right-stack">
-                <div class="user-card panel">
-                    <div class="subtle">Pilot</div>
-                    <div class="player-name" id="pilotName">Guest Racer</div>
-                    <div class="subtle" id="pilotMeta">Mini App Arena</div>
+        <div id="statusBanner" class="status-banner panel hidden"></div>
+        <div id="controlsInfo" class="controls-info hidden"></div>
+        <div id="voiceStatus" class="voice-status hidden">Голос: офлайн</div>
+
+        <div id="hud" class="hud hidden">
+            <div class="hud-block panel">
+                <div class="hud-title">Super Smash 3D</div>
+                <div class="hud-hero">
+                    <div id="phaseValue" class="hud-main">Меню</div>
+                    <div id="phaseMeta" class="hud-sub">Арена готова к бою</div>
                 </div>
-                <div class="boost-wrap panel">
-                    <div class="subtle">Boost Charge</div>
-                    <div class="meter"><div class="meter-fill" id="boostMeter"></div></div>
-                    <div class="subtle" id="boostText" style="margin-top:8px;">Tap Shift for a burst on straights</div>
+                <div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <span id="modeChip" class="accent-chip">Локальная 1v1</span>
+                    <span id="roomChip" class="accent-chip">Без комнаты</span>
+                    <span id="voiceChip" class="accent-chip">Голос выкл</span>
+                </div>
+            </div>
+
+            <div class="hud-block panel">
+                <div class="hud-title">Таймер</div>
+                <div class="hud-hero">
+                    <div id="timerValue" class="hud-main">02:00</div>
+                    <div id="timerMeta" class="hud-sub">До конца раунда</div>
+                </div>
+                <div id="hudButtons" class="button-row" style="margin-top: 14px;">
+                    <button id="voiceButton" class="secondary-btn">Голос</button>
+                    <button id="pauseButton" class="secondary-btn">Пауза</button>
+                    <button id="leaveButton" class="danger-btn">Выйти</button>
                 </div>
             </div>
         </div>
-        <div class="leaderboard panel"><h2>Track Sheet</h2><div class="leaderboard-list" id="leaderboardList"></div></div>
-        <div class="controls">
-            <div class="control-card panel">
-                <span class="pill">WASD / Arrows</span>
-                <span class="pill">Shift / Space boost</span>
-                <span class="pill">Enter pause</span>
-                <div class="control-actions">
-                    <button class="hud-btn primary" id="pauseButton">Start</button>
-                    <button class="hud-btn" id="restartQuickButton">Restart</button>
-                </div>
+
+        <div id="roomRibbon" class="room-ribbon panel hidden">
+            <div class="hud-title">Комната</div>
+            <div id="roomRibbonMain" class="hud-main" style="font-size: 22px;">----</div>
+            <div id="roomRibbonMeta" class="hud-sub" style="margin-top: 8px;">Создай приватную комнату или жми Quick Match</div>
+            <div style="margin-top: 12px;" class="button-row">
+                <button id="copyCodeButton" class="secondary-btn">Код</button>
+                <button id="readyButton" class="primary-btn">Ready</button>
+                <button id="startMatchButton" class="primary-btn">Старт</button>
             </div>
         </div>
-        <div class="center-layer" id="startScreen">
-            <div class="center-card start-card panel">
-                <h1>Arena Rush 3D</h1>
-                <p>Короткая соревновательная 3D-гонка против трёх AI-пилотов. Использует Naji Mini App SDK для профиля, хранения рекорда, кнопки назад и уведомлений.</p>
-                <div class="actions"><button id="startButton">Start Race</button><button class="secondary" id="closeButton">Close Mini App</button></div>
-                <div class="shop-panel">
-                    <div class="shop-head">
-                        <div>
-                            <div class="subtle">Skin garage</div>
-                            <div style="font-size:18px;font-weight:700;">Solana Devnet cosmetics</div>
+
+        <div id="fighterHud" class="fighter-hud hidden"></div>
+
+        <div id="menuScreen" class="screen-layer">
+            <div class="screen-card panel smash-menu-card">
+                <div class="screen-eyebrow">Mini App Ultimate Edition</div>
+                <div class="screen-title">Super <em>Smash</em> 3D</div>
+                <p class="screen-copy">
+                    Собери свой сетап, выбери арену и выходи в локальный или онлайн-матч. Здесь есть реальные комнаты,
+                    голосовой чат через Mini App SDK и покупка редких скинов за Solana devnet прямо из игры.
+                </p>
+
+                <div class="menu-panel-grid">
+                    <div class="menu-panel">
+                        <div class="settings-row">
+                            <div class="settings-block">
+                                <label for="skinP1Select">Скин игрока 1</label>
+                                <select id="skinP1Select"></select>
+                                <button id="skinP1BuyButton" class="secondary-btn menu-small-btn">Купить выбранный</button>
+                            </div>
+                            <div class="settings-block">
+                                <label for="mapSelect">Карта арены</label>
+                                <select id="mapSelect"></select>
+                                <div id="mapMeta" class="menu-meta-text">Классическая арена с безопасным центром и drop-through платформами.</div>
+                            </div>
+                            <div class="settings-block">
+                                <label for="skinP2Select">Скин игрока 2</label>
+                                <select id="skinP2Select"></select>
+                                <button id="skinP2BuyButton" class="secondary-btn menu-small-btn">Купить выбранный</button>
+                            </div>
                         </div>
-                        <div class="skin-badge" id="sparkBalance">Devnet • Solana checkout</div>
+
+                        <div class="menu-account-row">
+                            <div class="feature menu-account-card">
+                                <strong id="playerNameLabel">Игрок</strong>
+                                <span id="playerMetaLabel">Подключение к Mini App SDK…</span>
+                            </div>
+                            <div class="feature menu-account-card">
+                                <strong>Управление</strong>
+                                <span id="menuControlsMeta">P1: A/D движение, W вверх, S вниз, Space прыжок, F атака, G special. P2: стрелки, Right Shift прыжок, Enter атака, Slash special.</span>
+                            </div>
+                        </div>
+
+                        <div class="feature store-feature">
+                            <strong>Скины и инвентарь</strong>
+                            <span>Free скины доступны сразу. Premium скины покупаются через Solana devnet и остаются в инвентаре Mini App.</span>
+                            <div id="skinStoreList" class="skin-store-grid"></div>
+                        </div>
+
+                        <div class="btn-group menu-action-group">
+                            <button id="soloButton" class="primary-btn">Локальная игра</button>
+                            <button id="quickMatchButton" class="primary-btn online-btn">Онлайн + голосовой чат</button>
+                            <button id="createRoomButton" class="secondary-btn online-btn">Создать комнату</button>
+                            <button id="spectateButton" class="secondary-btn">Тренировка</button>
+                        </div>
+
+                        <div class="input-row menu-join-row">
+                            <input id="joinCodeInput" type="text" maxlength="12" placeholder="ROOM CODE" autocomplete="off" autocapitalize="characters" />
+                            <button id="joinRoomButton" class="secondary-btn">Войти в комнату</button>
+                        </div>
                     </div>
-                    <div class="shop-grid" id="skinShop"></div>
                 </div>
             </div>
         </div>
-        <div class="center-layer" id="finishScreen" style="display:none;">
-            <div class="center-card panel">
-                <h1 id="finishTitle">Heat Complete</h1>
-                <p id="finishSummary">Result summary</p>
-                <div class="actions"><button id="restartButton">Race Again</button><button class="secondary" id="shareButton">Copy Result</button></div>
+
+        <div id="lobbyScreen" class="screen-layer hidden">
+            <div class="screen-card panel">
+                <div class="screen-eyebrow">Лобби</div>
+                <h2 id="lobbyTitle" style="font-size: 38px;">Подготовка матча</h2>
+                <p id="lobbyCopy" class="screen-copy">Собираем игроков и ждём старта host-клиента.</p>
+
+                <div class="lobby-grid">
+                    <div class="lobby-section">
+                        <h3>Игроки</h3>
+                        <div id="lobbyPlayers" class="lobby-list"></div>
+                    </div>
+                    <div class="lobby-section">
+                        <h3>Статус комнаты</h3>
+                        <div class="stack">
+                            <div class="feature">
+                                <strong id="lobbyRoomCode">ROOM ----</strong>
+                                <span id="lobbyRoomMeta">Приватная комната готова для боя.</span>
+                            </div>
+                            <div class="feature">
+                                <strong>Управление</strong>
+                                <span>P1: A/D движение, W вверх, S вниз, Space прыжок, F атака, G special. P2: стрелки, Right Shift прыжок, Enter атака, Slash special. На мобильном доступны touch-кнопки.</span>
+                            </div>
+                            <div class="button-row">
+                                <button id="lobbyReadyButton" class="primary-btn">Готов</button>
+                                <button id="lobbyStartButton" class="primary-btn">Старт</button>
+                                <button id="lobbyLeaveButton" class="danger-btn">Выйти</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="touch-controls">
-            <div class="touch-side">
-                <div class="cluster">
-                    <button class="touch-btn" data-touch="left">◀</button>
-                    <button class="touch-btn" data-touch="up">▲</button>
-                    <button class="touch-btn" data-touch="down">▼</button>
-                    <button class="touch-btn" data-touch="right">▶</button>
-                </div>
-                <div class="touch-actions">
-                    <button class="touch-btn utility" id="touchPrimaryButton">GO</button>
-                    <button class="touch-btn utility" id="touchRestartButton">RESTART</button>
+
+        <div id="resultScreen" class="screen-layer hidden">
+            <div class="screen-card panel result-card">
+                <div class="screen-eyebrow">Конец матча</div>
+                <h2 id="resultTitle" style="font-size: 64px;">Победа</h2>
+                <p id="resultCopy" class="screen-copy">Матч завершён.</p>
+                <div id="resultBoard" class="result-list"></div>
+                <div class="button-row" style="margin-top: 18px;">
+                    <button id="rematchButton" class="primary-btn">Реванш</button>
+                    <button id="resultMenuButton" class="secondary-btn">В главное меню</button>
                 </div>
             </div>
-            <div class="touch-side">
-                <button class="touch-btn boost" data-touch="boost">BOOST</button>
+        </div>
+
+        <div id="pauseOverlay" class="screen-layer hidden">
+            <div class="screen-card panel" style="width: min(420px, calc(100vw - 24px));">
+                <div class="screen-eyebrow">Пауза</div>
+                <h2 style="font-size: 36px; margin-bottom: 10px;">Super Smash на паузе</h2>
+                <p class="screen-copy">Матч поставлен на паузу. Можно продолжить бой или выйти в меню.</p>
+                <div class="button-row" style="margin-top: 18px;">
+                    <button id="resumeButton" class="primary-btn">Продолжить</button>
+                    <button id="pauseExitButton" class="secondary-btn">Меню</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="touchControls" class="touch-controls hidden">
+            <div class="touch-cluster">
+                <div class="touch-slot"></div>
+                <button id="touchUp" class="touch-btn">▲</button>
+                <div class="touch-slot"></div>
+                <button id="touchLeft" class="touch-btn">◀</button>
+                <button id="touchDown" class="touch-btn">▼</button>
+                <button id="touchRight" class="touch-btn">▶</button>
+            </div>
+            <div class="touch-actions">
+                <button id="touchJump" class="touch-btn big primary">JUMP</button>
+                <button id="touchAttack" class="touch-btn big">HIT</button>
+                <button id="touchSpecial" class="touch-btn big special">SMASH</button>
             </div>
         </div>
     </div>
+
     <script src="./game.js"></script>
 </body>
 </html>
