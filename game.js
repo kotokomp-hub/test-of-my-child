@@ -690,6 +690,16 @@
     updateHud();
   }
 
+  function forceHideLobbyOverlaysForMatch() {
+    ui.menuScreen.classList.add("hidden");
+    ui.lobbyScreen.classList.add("hidden");
+    ui.resultScreen.classList.add("hidden");
+    ui.pauseOverlay.classList.add("hidden");
+    ui.hud.classList.remove("hidden");
+    ui.fighterHud.classList.remove("hidden");
+    ui.touchControls.classList.toggle("hidden", !MOBILE_QUERY.matches);
+  }
+
   function updateHud() {
     const room = state.currentRoom;
     const remainingMs = match.active ? Math.max(0, match.timeLimitMs - match.elapsedMs) : match.timeLimitMs;
@@ -752,7 +762,7 @@
     const roomCode = roomCodeOf(room);
     const mapName = MAP_LIBRARY[state.selectedMapId]?.name || "Арена";
     ui.lobbyTitle.textContent = state.mode === "quick" ? "Комната матчмейкинга готова" : roomCode ? `Комната ${roomCode}` : "Подготовка матча";
-    ui.lobbyCopy.textContent = state.currentQueue && !room ? "Ищем других игроков. Как только комната соберётся, матч запустится автоматически." : net.isHost ? "Ты хост. Дождись Ready от обоих игроков и запускай бой." : "Жди запуска от хоста и отмечайся Ready перед стартом.";
+    ui.lobbyCopy.textContent = state.currentQueue && !room ? "Ищем других игроков. Когда комната соберётся, хост запустит бой вручную." : net.isHost ? "Ты хост. Дождись Ready от обоих игроков и запускай бой." : "Жди запуска от хоста и отмечайся Ready перед стартом.";
     ui.lobbyRoomCode.textContent = roomCode ? `ROOM ${roomCode}` : "QUEUE";
     ui.lobbyRoomMeta.textContent = room
       ? `${players.length} бойца • арена ${mapName} • хост ${playerNameOf(players.find((player) => playerIdOf(player) === hostIdOf(room)) || players[0])}`
@@ -1663,6 +1673,8 @@
 
     state.isPaused = false;
     setPhase("match");
+    forceHideLobbyOverlaysForMatch();
+    requestAnimationFrame(forceHideLobbyOverlaysForMatch);
     renderFighterHud();
     updateHud();
     setStatus(match.practice ? "Тренировочная арена загружена. Пробуй джагглы, спешиалы и рикавери." : "Матч начался. Выбей соперника за пределы арены.", "success");
@@ -2411,15 +2423,6 @@
 
   function maybeScheduleRoomAutostart() {
     clearAutoStartTimer();
-    if (!state.currentRoom || !net.isHost || match.active || state.phase !== "lobby") return;
-    const players = roomPlayersOf(state.currentRoom);
-    if (players.length < 2 || players.some((player) => !isPlayerReady(player))) return;
-    net.autoStartTimer = setTimeout(() => {
-      net.autoStartTimer = null;
-      if (state.currentRoom && net.isHost && !match.active && state.phase === "lobby") {
-        void startHostedRoomMatch();
-      }
-    }, state.mode === "quick" ? 900 : 1500);
   }
 
   async function setReadyState(ready) {
@@ -2605,19 +2608,24 @@
       return;
     }
     const matchId = `room_${Date.now().toString(36)}`;
+    setStatus("Запускаю бой для всех игроков...", "info", 0);
+    const startDelivered = await sendRoomEvent("match_start", {
+      matchId,
+      roomId: roomIdOf(room),
+      timeLimitMs: PHYSICS.timeLimitMs,
+      roster,
+      mapId: state.selectedMapId
+    });
+    if (!startDelivered) {
+      setStatus("Не удалось отправить старт матча второму игроку. Попробуй ещё раз.", "danger", 5200);
+      return;
+    }
     beginMatch(roster, {
       authoritative: true,
       practice: false,
       roomId: roomIdOf(room),
       matchId,
       timeLimitMs: PHYSICS.timeLimitMs,
-      mapId: state.selectedMapId
-    });
-    await sendRoomEvent("match_start", {
-      matchId,
-      roomId: roomIdOf(room),
-      timeLimitMs: PHYSICS.timeLimitMs,
-      roster,
       mapId: state.selectedMapId
     });
     void sendRoomEvent("snapshot", exportSnapshot(), { transient: true });
@@ -2630,6 +2638,12 @@
     const room = nextState?.room || null;
     const queue = nextState?.queue || null;
     setCurrentRoomState(room, queue);
+    if (match.active && !match.ended) {
+      setPhase("match");
+      forceHideLobbyOverlaysForMatch();
+      updateHud();
+      return;
+    }
     if (queue && !room) {
       ui.lobbyCopy.textContent = "Quick Match собирает бойцов. Как только найдется соперник, ты сразу попадешь в комнату.";
       setPhase("lobby");
