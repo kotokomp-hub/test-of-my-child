@@ -159,8 +159,8 @@
     specialCooldown: 1.3,
     respawnDelay: 1.5,
     respawnInvuln: 1.8,
-    snapshotIntervalMs: 70,
-    inputIntervalMs: 50
+    snapshotIntervalMs: 110,
+    inputIntervalMs: 90
   };
 
   const MOVE_LIBRARY = {
@@ -418,6 +418,7 @@
     voiceState: null,
     voiceConnected: false,
     voiceMuted: false,
+    voiceConnecting: false,
     botUsername: null,
     autoVoiceRequested: false,
     localMode: "local",
@@ -456,7 +457,9 @@
     lastInputSentAt: 0,
     lastSnapshotSentAt: 0,
     autoStartTimer: null,
-    remoteInputs: new Map()
+    remoteInputs: new Map(),
+    pendingEventKeys: new Set(),
+    queuedTransientEvents: new Map()
   };
 
   const match = {
@@ -665,7 +668,7 @@
       ui.voiceStatus.style.background = "rgba(4, 24, 12, 0.72)";
       return;
     }
-    ui.voiceStatus.textContent = state.autoVoiceRequested ? "Голос: подключение..." : "Голос: офлайн";
+    ui.voiceStatus.textContent = state.voiceConnecting ? "Голос: подключение..." : "Голос: офлайн";
     ui.voiceStatus.style.color = "#ffd574";
     ui.voiceStatus.style.borderColor = "rgba(255, 213, 116, 0.24)";
     ui.voiceStatus.style.background = "rgba(36, 22, 0, 0.72)";
@@ -915,6 +918,10 @@
     state.voiceState = nextVoiceState || null;
     state.voiceConnected = Boolean(nextVoiceState?.connected);
     state.voiceMuted = Boolean(nextVoiceState?.muted);
+    if (state.voiceConnected) {
+      state.voiceConnecting = false;
+      state.autoVoiceRequested = false;
+    }
     renderVoiceStatus();
     updateHud();
   }
@@ -2341,14 +2348,57 @@
     }
   }
 
+  function getRoomEventQueueKey(eventName, roomId, targetPlayerId) {
+    return `${eventName}:${roomId}:${targetPlayerId || "*"}`;
+  }
+
   async function sendRoomEvent(eventName, payload = {}, options = {}) {
     if (!sdk?.multiplayer || !state.currentRoom) return;
     const roomId = options.roomId || roomIdOf(state.currentRoom);
     if (!roomId) return;
+    const targetPlayerId = options.targetPlayerId || null;
+    const isTransient = options.transient ?? (eventName === "snapshot" || eventName === "input");
+    const queueKey = getRoomEventQueueKey(eventName, roomId, targetPlayerId);
+
+    if (isTransient && net.pendingEventKeys.has(queueKey)) {
+      net.queuedTransientEvents.set(queueKey, {
+        eventName,
+        payload,
+        options: {
+          ...options,
+          roomId,
+          targetPlayerId,
+          transient: true
+        }
+      });
+      return false;
+    }
+
+    if (isTransient) {
+      net.pendingEventKeys.add(queueKey);
+    }
+
     try {
-      await sdk.multiplayer.send(eventName, payload, { room_id: roomId, target_player_id: options.targetPlayerId || undefined });
+      await sdk.multiplayer.send(eventName, payload, {
+        room_id: roomId,
+        target_player_id: targetPlayerId || undefined
+      });
+      return true;
     } catch (error) {
-      console.warn("[SuperSmash3D] Failed to send room event:", eventName, error);
+      const errorMessage = String(error?.message || "");
+      if (!isTransient || !/(timed out|rate limit)/i.test(errorMessage)) {
+        console.warn("[SuperSmash3D] Failed to send room event:", eventName, error);
+      }
+      return false;
+    } finally {
+      if (isTransient) {
+        net.pendingEventKeys.delete(queueKey);
+        const queuedEvent = net.queuedTransientEvents.get(queueKey);
+        if (queuedEvent) {
+          net.queuedTransientEvents.delete(queueKey);
+          void sendRoomEvent(queuedEvent.eventName, queuedEvent.payload, queuedEvent.options);
+        }
+      }
     }
   }
 
@@ -2397,6 +2447,7 @@
   async function leaveCurrentRoom(options = {}) {
     clearAutoStartTimer();
     state.autoVoiceRequested = false;
+    state.voiceConnecting = false;
     if (state.voiceConnected && sdk?.voice) {
       try {
         const voiceState = await sdk.voice.leave();
@@ -2435,6 +2486,7 @@
     state.mode = "room";
     state.localMode = "online";
     state.autoVoiceRequested = true;
+    state.voiceConnecting = false;
     try {
       setStatus("Создаю приватную комнату...", "info", 0);
       const nextState = await sdk.multiplayer.createRoom({
@@ -2450,6 +2502,9 @@
       setStatus("Приватная комната создана. Поделись кодом и зови соперника.", "success");
       void setReadyState(true);
     } catch (error) {
+      state.autoVoiceRequested = false;
+      state.voiceConnecting = false;
+      renderVoiceStatus();
       console.warn("[SuperSmash3D] Failed to create room:", error);
       setStatus(error?.message || "Не удалось создать комнату прямо сейчас.", "danger", 5200);
     }
@@ -2470,6 +2525,7 @@
     state.mode = "room";
     state.localMode = "online";
     state.autoVoiceRequested = true;
+    state.voiceConnecting = false;
     try {
       setStatus(`Вхожу в комнату ${roomCode}...`, "info", 0);
       const nextState = await sdk.multiplayer.joinRoom({
@@ -2481,6 +2537,9 @@
       setStatus(`Ты вошел в комнату ${roomCode}.`, "success");
       void setReadyState(true);
     } catch (error) {
+      state.autoVoiceRequested = false;
+      state.voiceConnecting = false;
+      renderVoiceStatus();
       console.warn("[SuperSmash3D] Failed to join room:", error);
       setStatus(error?.message || "Комната не найдена или уже заполнена.", "danger", 5200);
     }
@@ -2496,6 +2555,7 @@
     state.mode = "quick";
     state.localMode = "online";
     state.autoVoiceRequested = true;
+    state.voiceConnecting = false;
     setPhase("lobby");
     renderLobby();
     try {
@@ -2509,6 +2569,9 @@
       handleMultiplayerStateChange(nextState);
       setStatus("Ищу соперника...", "info", 0);
     } catch (error) {
+      state.autoVoiceRequested = false;
+      state.voiceConnecting = false;
+      renderVoiceStatus();
       console.warn("[SuperSmash3D] Failed to join matchmaking:", error);
       setStatus(error?.message || "Quick Match сейчас недоступен.", "danger", 5200);
       setPhase("menu");
@@ -2557,7 +2620,7 @@
       roster,
       mapId: state.selectedMapId
     });
-    await sendRoomEvent("snapshot", exportSnapshot());
+    void sendRoomEvent("snapshot", exportSnapshot(), { transient: true });
   }
 
   function handleMultiplayerStateChange(nextState) {
@@ -2578,7 +2641,7 @@
     if (state.mode === "quick" && room && !state.localReady && sdk?.multiplayer) {
       void setReadyState(true);
     }
-    if (room && state.autoVoiceRequested && sdk?.voice && !state.voiceConnected) {
+    if (room && state.autoVoiceRequested && sdk?.voice && !state.voiceConnected && !state.voiceConnecting) {
       void toggleVoice();
     }
     renderLobby();
@@ -2634,10 +2697,13 @@
     }
     try {
       if (!state.voiceConnected) {
+        state.voiceConnecting = true;
+        renderVoiceStatus();
         const voiceState = await sdk.voice.join({
           room_id: roomIdOf(state.currentRoom),
           channel_id: "main"
         });
+        state.autoVoiceRequested = false;
         applyVoiceState(voiceState);
         setStatus("Голосовой чат подключен.", "success");
         return;
@@ -2649,11 +2715,16 @@
         return;
       }
       const voiceState = await sdk.voice.leave();
+      state.autoVoiceRequested = false;
       applyVoiceState(voiceState);
       setStatus("Голосовой чат отключен.", "info");
     } catch (error) {
+      state.autoVoiceRequested = false;
       console.warn("[SuperSmash3D] Failed to toggle voice:", error);
-      setStatus("Голосовой чат сейчас недоступен.", "danger");
+      setStatus(error?.message || "Голосовой чат сейчас недоступен.", "danger");
+    } finally {
+      state.voiceConnecting = false;
+      renderVoiceStatus();
     }
   }
 
