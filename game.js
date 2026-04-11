@@ -793,8 +793,9 @@
     ui.pauseButton.disabled = !match.active || state.mode === "quick" || state.mode === "room";
     ui.startMatchButton.disabled = !room || !isHost || players.length < 2 || players.some((player) => !isPlayerReady(player));
     ui.lobbyStartButton.disabled = ui.startMatchButton.disabled;
-    if (ui.inviteFriendButton) ui.inviteFriendButton.disabled = match.active || !room || !roomCode || !sdk?.contacts || !sdk?.api?.request;
-    if (ui.lobbyInviteButton) ui.lobbyInviteButton.disabled = match.active || !room || !roomCode || !sdk?.contacts || !sdk?.api?.request;
+    const canOpenInvitePicker = Boolean(sdk?.contacts?.inviteRoom || sdk?.contacts?.share || sdk?.contacts?.invite);
+    if (ui.inviteFriendButton) ui.inviteFriendButton.disabled = match.active || !room || !roomCode || !canOpenInvitePicker;
+    if (ui.lobbyInviteButton) ui.lobbyInviteButton.disabled = match.active || !room || !roomCode || !canOpenInvitePicker;
     ui.startMatchButton.title = startDisabledReason;
     ui.lobbyStartButton.title = startDisabledReason;
     ui.readyButton.textContent = state.localReady ? "Готов" : "Ready";
@@ -984,27 +985,12 @@
 
   async function loadInviteContacts() {
     if (state.inviteContactsLoaded || state.inviteContactsLoading) return;
-    if (!sdk?.contacts?.list) {
-      state.inviteContacts = [];
-      state.inviteContactsLoaded = true;
-      renderInvitePanel();
-      return;
-    }
     state.inviteContactsLoading = true;
     renderInvitePanel();
-    try {
-      const contacts = await sdk.contacts.list({ limit: 120 });
-      state.inviteContacts = (Array.isArray(contacts) ? contacts : [])
-        .filter((contact) => String(contact?.username || contact?.id || "").trim());
-      state.inviteContactsLoaded = true;
-    } catch (error) {
-      console.warn("[SuperSmash3D] Failed to load contacts for invite:", error);
-      state.inviteContacts = [];
-      setStatus(error?.message || "Не удалось загрузить контакты.", "danger", 4200);
-    } finally {
-      state.inviteContactsLoading = false;
-      renderInvitePanel();
-    }
+    state.inviteContacts = [];
+    state.inviteContactsLoaded = true;
+    state.inviteContactsLoading = false;
+    renderInvitePanel();
   }
 
   async function openInvitePanel() {
@@ -1016,10 +1002,39 @@
       setStatus("Сначала создай комнату, чтобы пригласить друга.", "danger", 4200);
       return;
     }
-    state.invitePanelOpen = true;
+    state.invitePanelOpen = false;
     setPhase("lobby");
     renderInvitePanel();
-    await loadInviteContacts();
+    const room = state.currentRoom;
+    const roomCode = roomCodeOf(room);
+    const invitePayload = {
+      bot_username: state.botUsername,
+      room_id: roomIdOf(room),
+      room_code: roomCode,
+      app_url: getCleanMiniAppUrlForInvite(),
+      title: "Super Smash 3D",
+      game: "super-smash-3d"
+    };
+    const inviteMethod = sdk?.contacts?.inviteRoom || sdk?.contacts?.share || sdk?.contacts?.invite;
+    if (!inviteMethod) {
+      const copied = await copyText(roomCode);
+      setStatus(copied ? `Код комнаты ${roomCode} скопирован.` : `Код комнаты: ${roomCode}`, "info", 5200);
+      return;
+    }
+    try {
+      setStatus("Выбери контакт в Najime, чтобы отправить приглашение.", "info", 0);
+      const result = await inviteMethod.call(sdk.contacts, invitePayload);
+      const username = result?.recipient?.username || result?.recipient_username || "";
+      setStatus(username ? `Приглашение отправлено @${username}.` : "Приглашение отправлено.", "success", 3800);
+    } catch (error) {
+      const message = String(error?.message || error || "");
+      if (/cancel/i.test(message) || /отмен/i.test(message)) {
+        setStatus("Приглашение отменено.", "info", 2600);
+        return;
+      }
+      console.warn("[SuperSmash3D] Failed to send invite:", error);
+      setStatus(message || "Не удалось отправить приглашение.", "danger", 5200);
+    }
   }
 
   function closeInvitePanel() {
