@@ -162,7 +162,9 @@
     snapshotIntervalMs: 50,
     inputIntervalMs: 25,
     inputKeepaliveMs: 100,
-    hudIntervalMs: 100
+    hudIntervalMs: 100,
+    predictionSnapDistance: 9.5,
+    predictionSoftDistance: 2.8
   };
 
   const MOVE_LIBRARY = {
@@ -456,6 +458,8 @@
     roomState: null,
     isHost: false,
     inputSignature: "",
+    localInputSeq: 0,
+    lastServerInputSeq: 0,
     lastInputSentAt: 0,
     lastSnapshotSentAt: 0,
     lastHudSyncAt: 0,
@@ -1012,6 +1016,7 @@
       lastAttackPressed: false,
       lastSpecialPressed: false,
       lastJumpPressed: false,
+      inputSeq: 0,
       input: createInputState(),
       snapshot: null
     };
@@ -1670,6 +1675,12 @@
     match.summary = [];
     match.winnerId = null;
     net.lastHudSyncAt = 0;
+    net.inputSignature = "";
+    net.localInputSeq = 0;
+    net.lastServerInputSeq = 0;
+    net.lastInputSentAt = 0;
+    net.lastSnapshotSentAt = 0;
+    net.remoteInputs.clear();
 
     roster.forEach((entry, index) => {
       const fighter = createFighter({
@@ -2258,12 +2269,14 @@
       jumpsUsed: fighter.jumpsUsed,
       respawnTimer: fighter.respawnTimer,
       invulnTimer: fighter.invulnTimer,
+      stunTimer: fighter.stunTimer,
       flashTimer: fighter.flashTimer,
       comboStep: fighter.comboStep,
       comboTimer: fighter.comboTimer,
       currentMoveKey: fighter.currentMoveKey,
       movePhase: fighter.movePhase,
-      moveTimer: fighter.moveTimer
+      moveTimer: fighter.moveTimer,
+      inputSeq: Number(fighter.inputSeq || 0)
     };
   }
 
@@ -2317,13 +2330,18 @@
       const serverVz = Number(entry.vz || 0);
       const serverRespawnTimer = Number(entry.respawnTimer || 0);
       const serverStocks = Number(entry.stocks ?? fighter.stocks);
+      const serverInputSeq = Number(entry.inputSeq || 0);
       fighter.damage = Number(entry.damage || 0);
       fighter.stocks = serverStocks;
       fighter.koCount = Number(entry.koCount || 0);
       let didSnapPrediction = false;
+      let stalePrediction = false;
       if (predictLocal) {
+        net.lastServerInputSeq = Math.max(net.lastServerInputSeq || 0, serverInputSeq);
         const correctionDistance = Math.hypot(serverX - fighter.x, serverY - fighter.y, serverZ - fighter.z);
-        const shouldSnap = correctionDistance > 5.5 || previousStocks !== serverStocks || serverRespawnTimer > 0;
+        const isStaleServerState = serverInputSeq > 0 && serverInputSeq < net.localInputSeq;
+        stalePrediction = isStaleServerState;
+        const shouldSnap = previousStocks !== serverStocks || serverRespawnTimer > 0 || correctionDistance > PHYSICS.predictionSnapDistance;
         if (shouldSnap) {
           didSnapPrediction = true;
           fighter.x = serverX;
@@ -2332,15 +2350,18 @@
           fighter.vx = serverVx;
           fighter.vy = serverVy;
           fighter.vz = serverVz;
-        } else {
-          const correction = correctionDistance > 1.6 ? 0.42 : 0.18;
+        } else if (!isStaleServerState) {
+          const correction = correctionDistance > PHYSICS.predictionSoftDistance ? 0.16 : 0.045;
           fighter.x += (serverX - fighter.x) * correction;
           fighter.y += (serverY - fighter.y) * correction;
           fighter.z += (serverZ - fighter.z) * correction;
-          fighter.vx = smooth(fighter.vx, serverVx, 0.28);
-          fighter.vy = smooth(fighter.vy, serverVy, 0.22);
-          fighter.vz = smooth(fighter.vz, serverVz, 0.28);
+          fighter.vx = smooth(fighter.vx, serverVx, 0.08);
+          fighter.vy = smooth(fighter.vy, serverVy, 0.06);
+          fighter.vz = smooth(fighter.vz, serverVz, 0.08);
+        } else {
+          fighter.inputSeq = Math.max(Number(fighter.inputSeq || 0), serverInputSeq);
         }
+        fighter.inputSeq = Math.max(Number(fighter.inputSeq || 0), serverInputSeq);
       } else {
         fighter.x = serverX;
         fighter.y = serverY;
@@ -2348,6 +2369,7 @@
         fighter.vx = serverVx;
         fighter.vy = serverVy;
         fighter.vz = serverVz;
+        fighter.inputSeq = serverInputSeq;
       }
       if (!predictLocal || didSnapPrediction) {
         fighter.facing = Number(entry.facing || 1);
@@ -2360,17 +2382,20 @@
       }
       fighter.respawnTimer = serverRespawnTimer;
       fighter.invulnTimer = Number(entry.invulnTimer || 0);
+      fighter.stunTimer = Number(entry.stunTimer || 0);
       fighter.flashTimer = Number(entry.flashTimer || 0);
-      fighter.comboStep = Number(entry.comboStep || 0);
-      fighter.comboTimer = Number(entry.comboTimer || 0);
-      const keepPredictedMove = predictLocal && fighter.moveState && !entry.currentMoveKey && fighter.moveTimer > 0.02;
-      if (!keepPredictedMove) {
-        fighter.currentMoveKey = entry.currentMoveKey || null;
-        fighter.movePhase = entry.movePhase || null;
-        fighter.moveTimer = Number(entry.moveTimer || 0);
-        fighter.moveState = fighter.currentMoveKey
-          ? { key: fighter.currentMoveKey, phase: fighter.movePhase, phaseTime: fighter.moveTimer, targetIds: new Set(), activated: fighter.movePhase === "active" }
-          : null;
+      if (!predictLocal || didSnapPrediction || !stalePrediction) {
+        fighter.comboStep = Number(entry.comboStep || 0);
+        fighter.comboTimer = Number(entry.comboTimer || 0);
+        const keepPredictedMove = predictLocal && fighter.moveState && !entry.currentMoveKey && fighter.moveTimer > 0.02;
+        if (!keepPredictedMove) {
+          fighter.currentMoveKey = entry.currentMoveKey || null;
+          fighter.movePhase = entry.movePhase || null;
+          fighter.moveTimer = Number(entry.moveTimer || 0);
+          fighter.moveState = fighter.currentMoveKey
+            ? { key: fighter.currentMoveKey, phase: fighter.movePhase, phaseTime: fighter.moveTimer, targetIds: new Set(), activated: fighter.movePhase === "active" }
+            : null;
+        }
       }
     });
 
@@ -2442,13 +2467,19 @@
         return;
       }
 
+      const remoteInputState = !fighter.isBot && !fighter.controlSlot && fighter.playerId !== state.localPlayerId
+        ? net.remoteInputs.get(fighter.playerId)
+        : null;
       const input = fighter.isBot
         ? computeBotInput(fighter)
         : fighter.controlSlot
           ? getMergedInput(fighter.controlSlot)
           : fighter.playerId === state.localPlayerId
             ? getMergedInput("p1")
-            : net.remoteInputs.get(fighter.playerId) || createInputState();
+            : remoteInputState?.input || createInputState();
+      if (remoteInputState) {
+        fighter.inputSeq = Math.max(Number(fighter.inputSeq || 0), Number(remoteInputState.seq || 0));
+      }
       fighter.input = input;
       const moveX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
       const moveZ = (input.down ? 1 : 0) - (input.up ? 1 : 0);
@@ -2578,6 +2609,35 @@
       }
       return false;
     }
+  }
+
+  function sendLocalInputNow(force = false) {
+    if (!state.currentRoom || !match.active || match.ended || match.authoritative) return false;
+    const nowMs = performance.now();
+    const input = getMergedInput("p1");
+    const signature = serializeInput(input);
+    const changed = signature !== net.inputSignature;
+    const elapsedMs = nowMs - net.lastInputSentAt;
+
+    if (force) {
+      if (!changed && elapsedMs < PHYSICS.inputIntervalMs) return false;
+    } else {
+      if (elapsedMs < PHYSICS.inputIntervalMs) return false;
+      if (!changed && elapsedMs < PHYSICS.inputKeepaliveMs) return false;
+    }
+
+    net.inputSignature = signature;
+    net.lastInputSentAt = nowMs;
+    net.localInputSeq += 1;
+    const localFighter = match.fighters.get(state.localPlayerId);
+    if (localFighter) {
+      localFighter.inputSeq = net.localInputSeq;
+    }
+    void sendRoomEvent("input", {
+      input,
+      seq: net.localInputSeq
+    });
+    return true;
   }
 
   function clearAutoStartTimer() {
@@ -2855,7 +2915,11 @@
 
     if (eventName === "input") {
       if (!net.isHost || !senderId || senderId === state.localPlayerId) return;
-      net.remoteInputs.set(senderId, { ...createInputState(), ...(payload.input || {}) });
+      net.remoteInputs.set(senderId, {
+        input: { ...createInputState(), ...(payload.input || {}) },
+        seq: Number(payload.seq || payload.inputSeq || 0),
+        receivedAt: performance.now()
+      });
       return;
     }
 
@@ -2978,16 +3042,19 @@
         return;
     }
     event.preventDefault();
+    sendLocalInputNow(true);
   }
 
   function bindTouchControl(element, key, controlSlot = "p1") {
     if (!element) return;
     const activate = (event) => {
       state.inputSources[controlSlot].touch[key] = true;
+      if (controlSlot === "p1") sendLocalInputNow(true);
       event.preventDefault();
     };
     const release = (event) => {
       state.inputSources[controlSlot].touch[key] = false;
+      if (controlSlot === "p1") sendLocalInputNow(true);
       event.preventDefault();
     };
     element.addEventListener("pointerdown", activate);
@@ -3245,13 +3312,7 @@
         void sendRoomEvent("snapshot", exportSnapshot());
       }
       if (!match.authoritative && nowMs - net.lastInputSentAt >= PHYSICS.inputIntervalMs) {
-        const input = getMergedInput("p1");
-        const signature = serializeInput(input);
-        if (signature !== net.inputSignature || nowMs - net.lastInputSentAt >= PHYSICS.inputKeepaliveMs) {
-          net.inputSignature = signature;
-          net.lastInputSentAt = nowMs;
-          void sendRoomEvent("input", { input });
-        }
+        sendLocalInputNow(false);
       }
     }
   }
