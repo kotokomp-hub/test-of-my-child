@@ -2675,26 +2675,11 @@
 
   async function leaveCurrentRoom(options = {}) {
     clearAutoStartTimer();
+    const roomToLeave = state.currentRoom;
+    const queueToLeave = state.currentQueue;
+    const shouldLeaveVoice = state.voiceConnected && sdk?.voice;
     state.autoVoiceRequested = false;
     state.voiceConnecting = false;
-    if (state.voiceConnected && sdk?.voice) {
-      try {
-        const voiceState = await sdk.voice.leave();
-        applyVoiceState(voiceState);
-      } catch {}
-    }
-    if (sdk?.multiplayer) {
-      try {
-        if (state.currentQueue) {
-          await sdk.multiplayer.leaveMatchmaking({ queue_key: state.currentQueue.queueKey || state.currentQueue.queue_key || "super-smash-3d" });
-        }
-      } catch {}
-      try {
-        if (state.currentRoom) {
-          await sdk.multiplayer.leaveRoom({ room_id: roomIdOf(state.currentRoom) });
-        }
-      } catch {}
-    }
     net.remoteInputs.clear();
     setCurrentRoomState(null, null);
     clearMatchWorld();
@@ -2702,6 +2687,33 @@
       state.mode = "solo";
       setPhase("menu");
       setStatus("You left the multiplayer arena.", "info");
+    }
+
+    const cleanupServerRoom = async () => {
+      if (shouldLeaveVoice) {
+        try {
+          const voiceState = await sdk.voice.leave();
+          applyVoiceState(voiceState);
+        } catch {}
+      }
+      if (sdk?.multiplayer) {
+        try {
+          if (queueToLeave) {
+            await sdk.multiplayer.leaveMatchmaking({ queue_key: queueToLeave.queueKey || queueToLeave.queue_key || "super-smash-3d" });
+          }
+        } catch {}
+        try {
+          if (roomToLeave) {
+            await sdk.multiplayer.leaveRoom({ room_id: roomIdOf(roomToLeave) });
+          }
+        } catch {}
+      }
+    };
+
+    if (options.background) {
+      void cleanupServerRoom();
+    } else {
+      await cleanupServerRoom();
     }
   }
 
@@ -2711,7 +2723,7 @@
       setStatus(unavailableReason, "danger", 5200);
       return;
     }
-    await leaveCurrentRoom({ quiet: true });
+    await leaveCurrentRoom({ quiet: true, background: true });
     state.mode = "room";
     state.localMode = "online";
     state.autoVoiceRequested = true;
@@ -2759,7 +2771,7 @@
       setStatus(unavailableReason, "danger", 5200);
       return;
     }
-    await leaveCurrentRoom({ quiet: true });
+    await leaveCurrentRoom({ quiet: true, background: true });
     state.mode = "room";
     state.localMode = "online";
     state.autoVoiceRequested = true;
@@ -2798,7 +2810,7 @@
       setStatus(unavailableReason, "danger", 5200);
       return;
     }
-    await leaveCurrentRoom({ quiet: true });
+    await leaveCurrentRoom({ quiet: true, background: true });
     state.mode = "quick";
     state.localMode = "online";
     state.autoVoiceRequested = true;
