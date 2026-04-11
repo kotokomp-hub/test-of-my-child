@@ -159,8 +159,8 @@
     specialCooldown: 1.3,
     respawnDelay: 1.5,
     respawnInvuln: 1.8,
-    snapshotIntervalMs: 110,
-    inputIntervalMs: 90
+    snapshotIntervalMs: 33,
+    inputIntervalMs: 33
   };
 
   const MOVE_LIBRARY = {
@@ -457,9 +457,7 @@
     lastInputSentAt: 0,
     lastSnapshotSentAt: 0,
     autoStartTimer: null,
-    remoteInputs: new Map(),
-    pendingEventKeys: new Set(),
-    queuedTransientEvents: new Map()
+    remoteInputs: new Map()
   };
 
   const match = {
@@ -1164,10 +1162,14 @@
     const visual = ensureFighterVisual(fighter);
     const move = getMoveConfig(fighter.currentMoveKey);
     const targetY = fighter.respawnTimer > 0 ? -80 : fighter.y;
-    visual.group.position.x = smooth(visual.group.position.x, fighter.x, dt * 14);
-    visual.group.position.y = smooth(visual.group.position.y, targetY, dt * 16);
-    visual.group.position.z = smooth(visual.group.position.z, fighter.z, dt * 14);
-    visual.group.rotation.y = smooth(visual.group.rotation.y, fighter.facing > 0 ? 0 : Math.PI, dt * 12);
+    const networkMatch = Boolean(state.currentRoom && match.active);
+    const positionFollow = networkMatch ? 34 : 14;
+    const verticalFollow = networkMatch ? 38 : 16;
+    const rotationFollow = networkMatch ? 28 : 12;
+    visual.group.position.x = smooth(visual.group.position.x, fighter.x, dt * positionFollow);
+    visual.group.position.y = smooth(visual.group.position.y, targetY, dt * verticalFollow);
+    visual.group.position.z = smooth(visual.group.position.z, fighter.z, dt * positionFollow);
+    visual.group.rotation.y = smooth(visual.group.rotation.y, fighter.facing > 0 ? 0 : Math.PI, dt * rotationFollow);
     const moveAmp = clamp((Math.abs(fighter.vx) + Math.abs(fighter.vz)) * 0.012, 0, 0.12);
     const attackStretch = move && fighter.movePhase === "active" ? 0.12 : move && fighter.movePhase === "startup" ? 0.05 : 0;
     visual.body.scale.set(1 - moveAmp - attackStretch * 0.2, 1 + moveAmp + attackStretch, 1 - moveAmp - attackStretch * 0.12);
@@ -2360,41 +2362,31 @@
     }
   }
 
-  function getRoomEventQueueKey(eventName, roomId, targetPlayerId) {
-    return `${eventName}:${roomId}:${targetPlayerId || "*"}`;
-  }
-
   async function sendRoomEvent(eventName, payload = {}, options = {}) {
     if (!sdk?.multiplayer || !state.currentRoom) return;
     const roomId = options.roomId || roomIdOf(state.currentRoom);
     if (!roomId) return;
     const targetPlayerId = options.targetPlayerId || null;
     const isTransient = options.transient ?? (eventName === "snapshot" || eventName === "input");
-    const queueKey = getRoomEventQueueKey(eventName, roomId, targetPlayerId);
-
-    if (isTransient && net.pendingEventKeys.has(queueKey)) {
-      net.queuedTransientEvents.set(queueKey, {
-        eventName,
-        payload,
-        options: {
-          ...options,
-          roomId,
-          targetPlayerId,
-          transient: true
-        }
-      });
-      return false;
-    }
-
-    if (isTransient) {
-      net.pendingEventKeys.add(queueKey);
-    }
 
     try {
-      await sdk.multiplayer.send(eventName, payload, {
+      const sendOptions = {
         room_id: roomId,
-        target_player_id: targetPlayerId || undefined
-      });
+        target_player_id: targetPlayerId || undefined,
+        transient: isTransient || undefined,
+        noAck: isTransient || undefined
+      };
+      if (isTransient) {
+        void sdk.multiplayer.send(eventName, payload, sendOptions).catch((error) => {
+          const errorMessage = String(error?.message || "");
+          if (!/(timed out|rate limit)/i.test(errorMessage)) {
+            console.warn("[SuperSmash3D] Failed to send fast room event:", eventName, error);
+          }
+        });
+        return true;
+      }
+
+      await sdk.multiplayer.send(eventName, payload, sendOptions);
       return true;
     } catch (error) {
       const errorMessage = String(error?.message || "");
@@ -2402,15 +2394,6 @@
         console.warn("[SuperSmash3D] Failed to send room event:", eventName, error);
       }
       return false;
-    } finally {
-      if (isTransient) {
-        net.pendingEventKeys.delete(queueKey);
-        const queuedEvent = net.queuedTransientEvents.get(queueKey);
-        if (queuedEvent) {
-          net.queuedTransientEvents.delete(queueKey);
-          void sendRoomEvent(queuedEvent.eventName, queuedEvent.payload, queuedEvent.options);
-        }
-      }
     }
   }
 
