@@ -159,8 +159,10 @@
     specialCooldown: 1.3,
     respawnDelay: 1.5,
     respawnInvuln: 1.8,
-    snapshotIntervalMs: 33,
-    inputIntervalMs: 16
+    snapshotIntervalMs: 50,
+    inputIntervalMs: 25,
+    inputKeepaliveMs: 100,
+    hudIntervalMs: 100
   };
 
   const MOVE_LIBRARY = {
@@ -456,6 +458,7 @@
     inputSignature: "",
     lastInputSentAt: 0,
     lastSnapshotSentAt: 0,
+    lastHudSyncAt: 0,
     autoStartTimer: null,
     remoteInputs: new Map()
   };
@@ -696,6 +699,14 @@
     ui.hud.classList.remove("hidden");
     ui.fighterHud.classList.remove("hidden");
     ui.touchControls.classList.toggle("hidden", !MOBILE_QUERY.matches);
+  }
+
+  function syncMatchHud(force = false) {
+    const nowMs = performance.now();
+    if (!force && nowMs - net.lastHudSyncAt < PHYSICS.hudIntervalMs) return;
+    net.lastHudSyncAt = nowMs;
+    renderFighterHud();
+    updateHud();
   }
 
   function updateHud() {
@@ -1658,6 +1669,7 @@
     match.timeLimitMs = Number.isFinite(options.timeLimitMs) ? options.timeLimitMs : PHYSICS.timeLimitMs;
     match.summary = [];
     match.winnerId = null;
+    net.lastHudSyncAt = 0;
 
     roster.forEach((entry, index) => {
       const fighter = createFighter({
@@ -2188,8 +2200,7 @@
     if (!localFighter) return;
     match.elapsedMs += dt * 1000;
     stepPredictedLocalFighter(localFighter, dt);
-    renderFighterHud();
-    updateHud();
+    syncMatchHud();
   }
 
   function buildMatchSummary() {
@@ -2382,8 +2393,7 @@
       finishMatch({ summary: match.summary, winnerId: match.winnerId });
       return;
     }
-    renderFighterHud();
-    updateHud();
+    syncMatchHud();
   }
 
   function exportSnapshot() {
@@ -2507,8 +2517,7 @@
       handleRingOut(fighter);
     });
 
-    renderFighterHud();
-    updateHud();
+    syncMatchHud();
 
     const living = Array.from(match.fighters.values()).filter((fighter) => fighter.stocks > 0);
     if (!match.practice && living.length <= 1) {
@@ -3220,7 +3229,7 @@
       if (!match.authoritative && nowMs - net.lastInputSentAt >= PHYSICS.inputIntervalMs) {
         const input = getMergedInput("p1");
         const signature = serializeInput(input);
-        if (signature !== net.inputSignature || nowMs - net.lastInputSentAt >= PHYSICS.inputIntervalMs * 3) {
+        if (signature !== net.inputSignature || nowMs - net.lastInputSentAt >= PHYSICS.inputKeepaliveMs) {
           net.inputSignature = signature;
           net.lastInputSentAt = nowMs;
           void sendRoomEvent("input", { input });
