@@ -74,6 +74,13 @@
     touchSpecial: $("touchSpecial")
   };
 
+  const INVITE_COPY = {
+    title: window.NAJI_SMASH_INVITE_TITLE || "Super Smash 3D",
+    game: window.NAJI_SMASH_INVITE_GAME || "super-smash-3d",
+    text: window.NAJI_SMASH_INVITE_TEXT || "{sender} зовёт тебя в Super Smash 3D.\nКомната: {room_code}",
+    buttonText: window.NAJI_SMASH_INVITE_BUTTON_TEXT || "Присоединиться"
+  };
+
   const COLOR_THEMES = [
     { key: "cyan", body: 0x71f6ff, accent: 0xffffff, glow: 0x71f6ff, css: "#71f6ff" },
     { key: "gold", body: 0xffd574, accent: 0xfff4dc, glow: 0xffd574, css: "#ffd574" },
@@ -983,6 +990,23 @@
     }
   }
 
+  function buildRoomInvitePayload(room) {
+    const roomCode = roomCodeOf(room);
+    return {
+      bot_username: state.botUsername,
+      room_id: roomIdOf(room),
+      room_code: roomCode,
+      app_url: getCleanMiniAppUrlForInvite(),
+      title: INVITE_COPY.title,
+      game: INVITE_COPY.game,
+      text: INVITE_COPY.text,
+      invite_text: INVITE_COPY.text,
+      message_text: INVITE_COPY.text,
+      button_text: INVITE_COPY.buttonText,
+      buttonText: INVITE_COPY.buttonText
+    };
+  }
+
   async function loadInviteContacts() {
     if (state.inviteContactsLoaded || state.inviteContactsLoading) return;
     state.inviteContactsLoading = true;
@@ -1007,16 +1031,7 @@
     renderInvitePanel();
     const room = state.currentRoom;
     const roomCode = roomCodeOf(room);
-    const invitePayload = {
-      bot_username: state.botUsername,
-      room_id: roomIdOf(room),
-      room_code: roomCode,
-      app_url: getCleanMiniAppUrlForInvite(),
-      title: "Super Smash 3D",
-      game: "super-smash-3d",
-      text: "{sender} зовёт тебя в Super Smash 3D.\nКомната: {room_code}",
-      button_text: "Присоединиться"
-    };
+    const invitePayload = buildRoomInvitePayload(room);
     const inviteMethod = sdk?.contacts?.inviteRoom || sdk?.contacts?.share || sdk?.contacts?.invite;
     if (!inviteMethod) {
       const copied = await copyText(roomCode);
@@ -1026,6 +1041,11 @@
     try {
       setStatus("Выбери контакт в Najime, чтобы отправить приглашение.", "info", 0);
       const result = await inviteMethod.call(sdk.contacts, invitePayload);
+      console.debug("[SuperSmash3D] Invite sent:", {
+        customTextApplied: result?.customTextApplied,
+        messageText: result?.messageText,
+        buttonText: result?.buttonText
+      });
       const username = result?.recipient?.username || result?.recipient_username || "";
       setStatus(username ? `Приглашение отправлено @${username}.` : "Приглашение отправлено.", "success", 3800);
     } catch (error) {
@@ -1067,15 +1087,10 @@
       await sdk.api.request("/api/miniapp/room-invite", {
         method: "POST",
         body: {
-          bot_username: state.botUsername,
+          ...buildRoomInvitePayload(room),
           recipient_username: recipient,
           room_id: roomId,
-          room_code: roomCode,
-          app_url: getCleanMiniAppUrlForInvite(),
-          title: "Super Smash 3D",
-          game: "super-smash-3d",
-          text: "{sender} зовёт тебя поиграть в попе пальчиком.\nКомната: {room_code}",
-          button_text: "Присоединиться"
+          room_code: roomCode
         }
       });
       setStatus(`Приглашение отправлено @${recipient}.`, "success", 3600);
