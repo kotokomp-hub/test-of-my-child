@@ -160,7 +160,7 @@
     respawnDelay: 1.5,
     respawnInvuln: 1.8,
     snapshotIntervalMs: 33,
-    inputIntervalMs: 33
+    inputIntervalMs: 16
   };
 
   const MOVE_LIBRARY = {
@@ -1994,6 +1994,37 @@
     }
   }
 
+  function advancePredictedMoveState(fighter, dt) {
+    if (!fighter.moveState) return;
+    const moveState = fighter.moveState;
+    const move = getMoveConfig(moveState.key);
+    if (!move) {
+      clearMoveState(fighter);
+      return;
+    }
+
+    fighter.moveTimer = Math.max(0, fighter.moveTimer - dt);
+    moveState.phaseTime -= dt;
+
+    if (moveState.phase === "startup" && moveState.phaseTime <= 0) {
+      moveState.phase = "active";
+      moveState.phaseTime = move.active;
+      moveState.activated = true;
+      fighter.movePhase = "active";
+      applyMoveImpulse(fighter, move);
+    }
+
+    if (moveState.phase === "active" && moveState.phaseTime <= 0) {
+      moveState.phase = "recovery";
+      moveState.phaseTime = move.recovery;
+      fighter.movePhase = "recovery";
+    }
+
+    if (moveState.phase === "recovery" && moveState.phaseTime <= 0) {
+      clearMoveState(fighter);
+    }
+  }
+
   function landOnPlatform(fighter, previousY) {
     const halfHeight = PHYSICS.fighterHeight * 0.5;
     for (const platform of currentStage.platforms) {
@@ -2056,6 +2087,109 @@
       fighter.y = -60;
       fighter.z = 0;
     }
+  }
+
+  function stepPredictedLocalFighter(fighter, dt) {
+    if (!fighter || fighter.stocks <= 0) return;
+    const previousY = fighter.y;
+    const wasRespawning = fighter.respawnTimer > 0;
+    fighter.attackCooldown = Math.max(0, fighter.attackCooldown - dt);
+    fighter.specialCooldown = Math.max(0, fighter.specialCooldown - dt);
+    fighter.respawnTimer = Math.max(0, fighter.respawnTimer - dt);
+    fighter.invulnTimer = Math.max(0, fighter.invulnTimer - dt);
+    fighter.stunTimer = Math.max(0, fighter.stunTimer - dt);
+    fighter.flashTimer = Math.max(0, fighter.flashTimer - dt);
+    fighter.comboTimer = Math.max(0, fighter.comboTimer - dt);
+    fighter.attackBuffer = Math.max(0, fighter.attackBuffer - dt);
+    fighter.specialBuffer = Math.max(0, fighter.specialBuffer - dt);
+    if (fighter.comboTimer <= 0.001 && !fighter.moveState) {
+      fighter.comboStep = 0;
+    }
+
+    if (wasRespawning) {
+      if (fighter.respawnTimer <= 0) {
+        resetFighterForSpawn(fighter, fighter.spawnIndex);
+      }
+      return;
+    }
+
+    const input = getMergedInput("p1");
+    fighter.input = input;
+    const moveX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const moveZ = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+    const hasMove = moveX !== 0 || moveZ !== 0;
+    updateFighterAim(fighter, moveX, moveZ);
+
+    const targetSpeed = fighter.grounded ? PHYSICS.moveSpeed : PHYSICS.airSpeed;
+    const accel = fighter.grounded ? PHYSICS.groundAccel : PHYSICS.airAccel;
+    const drag = fighter.grounded ? PHYSICS.friction : PHYSICS.friction * 0.4;
+    const currentMove = getMoveConfig(fighter.currentMoveKey);
+    const controlFactor = currentMove
+      ? fighter.movePhase === "startup"
+        ? currentMove.control ?? 0.25
+        : fighter.movePhase === "active"
+          ? Math.max(0.04, (currentMove.control ?? 0.25) * 0.6)
+          : Math.max(0.08, (currentMove.control ?? 0.25) * 0.8)
+      : 1;
+    if (fighter.stunTimer <= 0) {
+      fighter.vx = hasMove ? smooth(fighter.vx, moveX * targetSpeed * controlFactor, dt * accel) : smooth(fighter.vx, 0, dt * drag);
+      fighter.vz = hasMove ? smooth(fighter.vz, moveZ * targetSpeed * controlFactor, dt * accel) : smooth(fighter.vz, 0, dt * drag);
+    }
+
+    if (input.jump && !fighter.lastJumpPressed) {
+      if (fighter.grounded) {
+        fighter.vy = PHYSICS.jumpSpeed;
+        fighter.grounded = false;
+        fighter.jumpsUsed = 1;
+      } else if (fighter.jumpsUsed < 2) {
+        fighter.vy = PHYSICS.doubleJumpSpeed;
+        fighter.jumpsUsed += 1;
+      }
+    }
+    fighter.lastJumpPressed = Boolean(input.jump);
+
+    if (input.attack && !fighter.lastAttackPressed) {
+      fighter.attackBuffer = 0.22;
+    }
+    fighter.lastAttackPressed = Boolean(input.attack);
+
+    if (input.special && !fighter.lastSpecialPressed) {
+      fighter.specialBuffer = 0.22;
+    }
+    fighter.lastSpecialPressed = Boolean(input.special);
+
+    if (!fighter.moveState && fighter.stunTimer <= 0) {
+      if (fighter.specialBuffer > 0.01) {
+        if (startMove(fighter, selectSpecialMove(fighter, input))) {
+          fighter.specialBuffer = 0;
+        }
+      } else if (fighter.attackBuffer > 0.01) {
+        if (startMove(fighter, selectAttackMove(fighter, input))) {
+          fighter.attackBuffer = 0;
+        }
+      }
+    }
+
+    advancePredictedMoveState(fighter, dt);
+
+    fighter.vy = Math.max(PHYSICS.maxFall, fighter.vy - PHYSICS.gravity * dt);
+    fighter.x += fighter.vx * dt;
+    fighter.y += fighter.vy * dt;
+    fighter.z += fighter.vz * dt;
+
+    fighter.grounded = false;
+    landOnPlatform(fighter, previousY);
+    handleRingOut(fighter);
+  }
+
+  function stepClientPredictionMatch(dt) {
+    if (!match.active || match.ended || state.isPaused || match.authoritative) return;
+    const localFighter = match.fighters.get(state.localPlayerId);
+    if (!localFighter) return;
+    match.elapsedMs += dt * 1000;
+    stepPredictedLocalFighter(localFighter, dt);
+    renderFighterHud();
+    updateHud();
   }
 
   function buildMatchSummary() {
@@ -2162,31 +2296,71 @@
       fighter.themeIndex = entry.themeIndex ?? fighter.themeIndex;
       fighter.skinKey = entry.skinKey || fighter.skinKey;
       fighter.theme = getSkinConfig(fighter.skinKey, fighter.themeIndex);
+      const predictLocal = !match.authoritative && playerId === state.localPlayerId;
+      const previousStocks = fighter.stocks;
+      const serverX = Number(entry.x || 0);
+      const serverY = Number(entry.y || 0);
+      const serverZ = Number(entry.z || 0);
+      const serverVx = Number(entry.vx || 0);
+      const serverVy = Number(entry.vy || 0);
+      const serverVz = Number(entry.vz || 0);
+      const serverRespawnTimer = Number(entry.respawnTimer || 0);
+      const serverStocks = Number(entry.stocks ?? fighter.stocks);
       fighter.damage = Number(entry.damage || 0);
-      fighter.stocks = Number(entry.stocks ?? fighter.stocks);
+      fighter.stocks = serverStocks;
       fighter.koCount = Number(entry.koCount || 0);
-      fighter.x = Number(entry.x || 0);
-      fighter.y = Number(entry.y || 0);
-      fighter.z = Number(entry.z || 0);
-      fighter.vx = Number(entry.vx || 0);
-      fighter.vy = Number(entry.vy || 0);
-      fighter.vz = Number(entry.vz || 0);
-      fighter.facing = Number(entry.facing || 1);
-      fighter.aimX = Number.isFinite(Number(entry.aimX)) ? Number(entry.aimX) : fighter.facing;
-      fighter.aimZ = Number.isFinite(Number(entry.aimZ)) ? Number(entry.aimZ) : 0;
-      fighter.grounded = Boolean(entry.grounded);
-      fighter.jumpsUsed = Number(entry.jumpsUsed || 0);
-      fighter.respawnTimer = Number(entry.respawnTimer || 0);
+      let didSnapPrediction = false;
+      if (predictLocal) {
+        const correctionDistance = Math.hypot(serverX - fighter.x, serverY - fighter.y, serverZ - fighter.z);
+        const shouldSnap = correctionDistance > 5.5 || previousStocks !== serverStocks || serverRespawnTimer > 0;
+        if (shouldSnap) {
+          didSnapPrediction = true;
+          fighter.x = serverX;
+          fighter.y = serverY;
+          fighter.z = serverZ;
+          fighter.vx = serverVx;
+          fighter.vy = serverVy;
+          fighter.vz = serverVz;
+        } else {
+          const correction = correctionDistance > 1.6 ? 0.42 : 0.18;
+          fighter.x += (serverX - fighter.x) * correction;
+          fighter.y += (serverY - fighter.y) * correction;
+          fighter.z += (serverZ - fighter.z) * correction;
+          fighter.vx = smooth(fighter.vx, serverVx, 0.28);
+          fighter.vy = smooth(fighter.vy, serverVy, 0.22);
+          fighter.vz = smooth(fighter.vz, serverVz, 0.28);
+        }
+      } else {
+        fighter.x = serverX;
+        fighter.y = serverY;
+        fighter.z = serverZ;
+        fighter.vx = serverVx;
+        fighter.vy = serverVy;
+        fighter.vz = serverVz;
+      }
+      if (!predictLocal || didSnapPrediction) {
+        fighter.facing = Number(entry.facing || 1);
+        fighter.aimX = Number.isFinite(Number(entry.aimX)) ? Number(entry.aimX) : fighter.facing;
+        fighter.aimZ = Number.isFinite(Number(entry.aimZ)) ? Number(entry.aimZ) : 0;
+      }
+      if (!predictLocal || didSnapPrediction) {
+        fighter.grounded = Boolean(entry.grounded);
+        fighter.jumpsUsed = Number(entry.jumpsUsed || 0);
+      }
+      fighter.respawnTimer = serverRespawnTimer;
       fighter.invulnTimer = Number(entry.invulnTimer || 0);
       fighter.flashTimer = Number(entry.flashTimer || 0);
       fighter.comboStep = Number(entry.comboStep || 0);
       fighter.comboTimer = Number(entry.comboTimer || 0);
-      fighter.currentMoveKey = entry.currentMoveKey || null;
-      fighter.movePhase = entry.movePhase || null;
-      fighter.moveTimer = Number(entry.moveTimer || 0);
-      fighter.moveState = fighter.currentMoveKey
-        ? { key: fighter.currentMoveKey, phase: fighter.movePhase, phaseTime: fighter.moveTimer, targetIds: new Set(), activated: fighter.movePhase === "active" }
-        : null;
+      const keepPredictedMove = predictLocal && fighter.moveState && !entry.currentMoveKey && fighter.moveTimer > 0.02;
+      if (!keepPredictedMove) {
+        fighter.currentMoveKey = entry.currentMoveKey || null;
+        fighter.movePhase = entry.movePhase || null;
+        fighter.moveTimer = Number(entry.moveTimer || 0);
+        fighter.moveState = fighter.currentMoveKey
+          ? { key: fighter.currentMoveKey, phase: fighter.movePhase, phaseTime: fighter.moveTimer, targetIds: new Set(), activated: fighter.movePhase === "active" }
+          : null;
+      }
     });
 
     Array.from(match.fighters.keys()).forEach((playerId) => {
@@ -3067,6 +3241,8 @@
     while (accumulator >= FIXED_STEP) {
       if (match.authoritative) {
         stepAuthoritativeMatch(FIXED_STEP);
+      } else if (state.currentRoom && match.active) {
+        stepClientPredictionMatch(FIXED_STEP);
       }
       accumulator -= FIXED_STEP;
     }
