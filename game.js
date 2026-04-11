@@ -1013,7 +1013,9 @@
       room_code: roomCode,
       app_url: getCleanMiniAppUrlForInvite(),
       title: "Super Smash 3D",
-      game: "super-smash-3d"
+      game: "super-smash-3d",
+      text: "{sender} зовёт тебя в Super Smash 3D.\nКомната: {room_code}",
+      button_text: "Присоединиться"
     };
     const inviteMethod = sdk?.contacts?.inviteRoom || sdk?.contacts?.share || sdk?.contacts?.invite;
     if (!inviteMethod) {
@@ -1071,7 +1073,9 @@
           room_code: roomCode,
           app_url: getCleanMiniAppUrlForInvite(),
           title: "Super Smash 3D",
-          game: "super-smash-3d"
+          game: "super-smash-3d",
+          text: "{sender} зовёт тебя поиграть в попе пальчиком.\nКомната: {room_code}",
+          button_text: "Присоединиться"
         }
       });
       setStatus(`Приглашение отправлено @${recipient}.`, "success", 3600);
