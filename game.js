@@ -39,6 +39,7 @@
     leaveButton: $("leaveButton"),
     voiceButton: $("voiceButton"),
     copyCodeButton: $("copyCodeButton"),
+    inviteFriendButton: $("inviteFriendButton"),
     readyButton: $("readyButton"),
     startMatchButton: $("startMatchButton"),
     roomRibbonMain: $("roomRibbonMain"),
@@ -50,7 +51,12 @@
     lobbyRoomMeta: $("lobbyRoomMeta"),
     lobbyReadyButton: $("lobbyReadyButton"),
     lobbyStartButton: $("lobbyStartButton"),
+    lobbyInviteButton: $("lobbyInviteButton"),
     lobbyLeaveButton: $("lobbyLeaveButton"),
+    invitePanel: $("invitePanel"),
+    inviteContactSelect: $("inviteContactSelect"),
+    sendInviteButton: $("sendInviteButton"),
+    closeInvitePanelButton: $("closeInvitePanelButton"),
     resultTitle: $("resultTitle"),
     resultCopy: $("resultCopy"),
     resultBoard: $("resultBoard"),
@@ -159,10 +165,10 @@
     specialCooldown: 1.3,
     respawnDelay: 1.5,
     respawnInvuln: 1.8,
-    snapshotIntervalMs: 50,
-    inputIntervalMs: 25,
-    inputKeepaliveMs: 100,
-    hudIntervalMs: 100,
+    snapshotIntervalMs: 33,
+    inputIntervalMs: 16,
+    inputKeepaliveMs: 66,
+    hudIntervalMs: 80,
     predictionSnapDistance: 9.5,
     predictionSoftDistance: 2.8
   };
@@ -406,6 +412,25 @@
     special: false
   });
 
+  const encodeInputMask = (input = {}) => INPUT_KEYS.reduce((mask, key, index) => (
+    input[key] ? mask | (1 << index) : mask
+  ), 0);
+
+  const decodeInputMask = (maskValue) => {
+    const mask = Number(maskValue || 0);
+    const input = createInputState();
+    INPUT_KEYS.forEach((key, index) => {
+      input[key] = Boolean(mask & (1 << index));
+    });
+    return input;
+  };
+
+  const netNumber = (value, precision = 100) => {
+    const numeric = Number(value || 0);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.round(numeric * precision) / precision;
+  };
+
   const state = {
     phase: "menu",
     mode: "solo",
@@ -425,6 +450,11 @@
     voiceConnecting: false,
     botUsername: null,
     autoVoiceRequested: false,
+    invitePanelOpen: false,
+    inviteContactsLoaded: false,
+    inviteContactsLoading: false,
+    inviteContacts: [],
+    inviteJoinInProgress: false,
     localMode: "local",
     selectedMapId: "battlefield",
     selectedSkins: {
@@ -614,6 +644,13 @@
     state.selectedSkins[slot] = fallback;
     return fallback;
   };
+  const buildRoomPlayerState = (ready = true) => ({
+    ready: Boolean(ready),
+    skinKey: normalizeSelectedSkin("p1"),
+    mapId: state.selectedMapId,
+    mode: state.mode,
+    playerName: state.localPlayerName
+  });
   const getMoveConfig = (moveKey) => MOVE_LIBRARY[moveKey] || null;
   const formatCooldown = (value) => value > 0.05 ? `${value.toFixed(1)}s` : "готово";
   const getFighterMoveStatus = (fighter) => {
@@ -756,6 +793,8 @@
     ui.pauseButton.disabled = !match.active || state.mode === "quick" || state.mode === "room";
     ui.startMatchButton.disabled = !room || !isHost || players.length < 2 || players.some((player) => !isPlayerReady(player));
     ui.lobbyStartButton.disabled = ui.startMatchButton.disabled;
+    if (ui.inviteFriendButton) ui.inviteFriendButton.disabled = match.active || !room || !roomCode || !sdk?.contacts || !sdk?.api?.request;
+    if (ui.lobbyInviteButton) ui.lobbyInviteButton.disabled = match.active || !room || !roomCode || !sdk?.contacts || !sdk?.api?.request;
     ui.startMatchButton.title = startDisabledReason;
     ui.lobbyStartButton.title = startDisabledReason;
     ui.readyButton.textContent = state.localReady ? "Готов" : "Ready";
@@ -769,6 +808,39 @@
     renderVoiceStatus();
   }
 
+  function renderInvitePanel() {
+    if (!ui.invitePanel || !ui.inviteContactSelect) return;
+    ui.invitePanel.classList.toggle("hidden", !state.invitePanelOpen);
+    if (!state.invitePanelOpen) return;
+
+    ui.inviteContactSelect.innerHTML = "";
+    if (state.inviteContactsLoading) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Загружаю контакты...";
+      ui.inviteContactSelect.appendChild(option);
+      return;
+    }
+
+    const contacts = Array.isArray(state.inviteContacts) ? state.inviteContacts : [];
+    if (!contacts.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Нет доступных контактов";
+      ui.inviteContactSelect.appendChild(option);
+      return;
+    }
+
+    contacts.forEach((contact) => {
+      const username = String(contact?.username || contact?.id || "").trim();
+      if (!username) return;
+      const option = document.createElement("option");
+      option.value = username;
+      option.textContent = `${contact?.name || username} (@${username})`;
+      ui.inviteContactSelect.appendChild(option);
+    });
+  }
+
   function renderLobby() {
     const room = state.currentRoom;
     const players = roomPlayersOf(room);
@@ -780,6 +852,7 @@
     ui.lobbyRoomMeta.textContent = room
       ? `${players.length} бойца • арена ${mapName} • хост ${playerNameOf(players.find((player) => playerIdOf(player) === hostIdOf(room)) || players[0])}`
       : "Ждем комнату от матчмейкинга";
+    renderInvitePanel();
     ui.lobbyPlayers.innerHTML = "";
     if (!players.length) {
       const row = document.createElement("div");
@@ -896,6 +969,223 @@
       return true;
     } catch {}
     return false;
+  }
+
+  function getCleanMiniAppUrlForInvite() {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("__naji_parent_origin");
+      url.searchParams.delete("naji_room_invite");
+      return url.toString();
+    } catch {
+      return window.location.href;
+    }
+  }
+
+  async function loadInviteContacts() {
+    if (state.inviteContactsLoaded || state.inviteContactsLoading) return;
+    if (!sdk?.contacts?.list) {
+      state.inviteContacts = [];
+      state.inviteContactsLoaded = true;
+      renderInvitePanel();
+      return;
+    }
+    state.inviteContactsLoading = true;
+    renderInvitePanel();
+    try {
+      const contacts = await sdk.contacts.list({ limit: 120 });
+      state.inviteContacts = (Array.isArray(contacts) ? contacts : [])
+        .filter((contact) => String(contact?.username || contact?.id || "").trim());
+      state.inviteContactsLoaded = true;
+    } catch (error) {
+      console.warn("[SuperSmash3D] Failed to load contacts for invite:", error);
+      state.inviteContacts = [];
+      setStatus(error?.message || "Не удалось загрузить контакты.", "danger", 4200);
+    } finally {
+      state.inviteContactsLoading = false;
+      renderInvitePanel();
+    }
+  }
+
+  async function openInvitePanel() {
+    if (match.active && !match.ended) {
+      setStatus("Приглашать удобнее из лобби: заверши раунд или вернись в комнату.", "info", 4200);
+      return;
+    }
+    if (!state.currentRoom || !roomCodeOf(state.currentRoom)) {
+      setStatus("Сначала создай комнату, чтобы пригласить друга.", "danger", 4200);
+      return;
+    }
+    state.invitePanelOpen = true;
+    setPhase("lobby");
+    renderInvitePanel();
+    await loadInviteContacts();
+  }
+
+  function closeInvitePanel() {
+    state.invitePanelOpen = false;
+    renderInvitePanel();
+  }
+
+  async function sendInviteToSelectedContact() {
+    const room = state.currentRoom;
+    const recipient = String(ui.inviteContactSelect?.value || "").trim();
+    const roomId = roomIdOf(room);
+    const roomCode = roomCodeOf(room);
+    if (!room || !roomCode) {
+      setStatus("Комната еще не готова для приглашений.", "danger", 4200);
+      return;
+    }
+    if (!recipient) {
+      setStatus("Выбери контакт для приглашения.", "danger", 3200);
+      return;
+    }
+    if (!sdk?.api?.request || !state.botUsername) {
+      setStatus("Приглашения доступны только внутри Mini App.", "danger", 4200);
+      return;
+    }
+    try {
+      if (ui.sendInviteButton) ui.sendInviteButton.disabled = true;
+      setStatus(`Отправляю приглашение @${recipient}...`, "info", 0);
+      await sdk.api.request("/api/miniapp/room-invite", {
+        method: "POST",
+        body: {
+          bot_username: state.botUsername,
+          recipient_username: recipient,
+          room_id: roomId,
+          room_code: roomCode,
+          app_url: getCleanMiniAppUrlForInvite(),
+          title: "Super Smash 3D",
+          game: "super-smash-3d"
+        }
+      });
+      setStatus(`Приглашение отправлено @${recipient}.`, "success", 3600);
+      closeInvitePanel();
+    } catch (error) {
+      console.warn("[SuperSmash3D] Failed to send invite:", error);
+      setStatus(error?.message || "Не удалось отправить приглашение.", "danger", 5200);
+    } finally {
+      if (ui.sendInviteButton) ui.sendInviteButton.disabled = false;
+    }
+  }
+
+  function decodeBase64UrlJson(value) {
+    try {
+      const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+      const binary = atob(padded);
+      const jsonText = decodeURIComponent(Array.from(binary, (char) => (
+        `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`
+      )).join(""));
+      return JSON.parse(jsonText);
+    } catch {
+      return null;
+    }
+  }
+
+  function parseInvitePayload(rawValue) {
+    if (!rawValue) return null;
+    if (typeof rawValue === "object") {
+      const nested = rawValue.startParams || rawValue.launchParams || rawValue.start_param || rawValue.invite || null;
+      const payload = nested && nested !== rawValue ? parseInvitePayload(nested) : rawValue;
+      const roomId = payload.roomId || payload.room_id || null;
+      const roomCode = payload.roomCode || payload.room_code || null;
+      if (!roomId && !roomCode) return null;
+      return {
+        type: payload.type || "miniapp_room_invite",
+        game: payload.game || "super-smash-3d",
+        title: payload.title || "Super Smash 3D",
+        botUsername: payload.botUsername || payload.bot_username || null,
+        roomId,
+        roomCode: roomCode ? String(roomCode).trim().toUpperCase() : null,
+        hostName: payload.hostName || payload.host_name || payload.host_username || null
+      };
+    }
+    if (typeof rawValue === "string") {
+      const trimmed = rawValue.trim();
+      if (!trimmed) return null;
+      try {
+        return parseInvitePayload(JSON.parse(trimmed));
+      } catch {}
+      return parseInvitePayload(decodeBase64UrlJson(trimmed));
+    }
+    return null;
+  }
+
+  function extractLaunchRoomInvite(initData = {}) {
+    let urlInvite = null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      urlInvite = params.get("naji_room_invite") || params.get("room_invite") || null;
+    } catch {}
+    const candidates = [
+      initData?.startParams,
+      initData?.launchParams,
+      sdk?.startParams,
+      urlInvite
+    ];
+    for (const candidate of candidates) {
+      const invite = parseInvitePayload(candidate);
+      if (invite && (!invite.game || invite.game === "super-smash-3d")) {
+        return invite;
+      }
+    }
+    return null;
+  }
+
+  async function joinRoomInvite(invite) {
+    if (!invite || state.inviteJoinInProgress) return;
+    const unavailableReason = getMiniAppRealtimeUnavailableReason();
+    if (unavailableReason) {
+      setStatus(unavailableReason, "danger", 5200);
+      return;
+    }
+    const inviteBot = String(invite.botUsername || "").trim().toLowerCase();
+    if (inviteBot && state.botUsername && inviteBot !== state.botUsername) {
+      setStatus("Это приглашение относится к другому Mini App.", "danger", 5200);
+      return;
+    }
+    const currentRoom = state.currentRoom;
+    if (
+      currentRoom
+      && ((invite.roomId && roomIdOf(currentRoom) === invite.roomId) || (invite.roomCode && roomCodeOf(currentRoom) === invite.roomCode))
+    ) {
+      state.mode = "room";
+      state.localMode = "online";
+      setPhase("lobby");
+      renderLobby();
+      return;
+    }
+
+    state.inviteJoinInProgress = true;
+    try {
+      await leaveCurrentRoom({ quiet: true, background: true });
+      state.mode = "room";
+      state.localMode = "online";
+      state.autoVoiceRequested = true;
+      state.voiceConnecting = false;
+      setStatus(`Вхожу по приглашению${invite.roomCode ? ` в ${invite.roomCode}` : ""}...`, "info", 0);
+      const nextState = await sdk.multiplayer.joinRoom({
+        room_id: invite.roomId || undefined,
+        room_code: invite.roomCode || undefined,
+        max_players: 2,
+        state: buildRoomPlayerState(true)
+      });
+      if (!nextState?.room) {
+        throw new Error("Сервер не вернул состояние комнаты.");
+      }
+      handleMultiplayerStateChange(nextState);
+      setPhase("lobby");
+      setStatus(`Ты вошел в комнату ${roomCodeOf(nextState.room) || invite.roomCode || ""}.`, "success", 4200);
+    } catch (error) {
+      state.autoVoiceRequested = false;
+      state.voiceConnecting = false;
+      console.warn("[SuperSmash3D] Failed to join invite room:", error);
+      setStatus(error?.message || "Не удалось войти в комнату по приглашению.", "danger", 5600);
+    } finally {
+      state.inviteJoinInProgress = false;
+      renderVoiceStatus();
+    }
   }
 
   function normalizeOrientation(orientation) {
@@ -2280,11 +2570,95 @@
     };
   }
 
-  function applyRemoteSnapshot(snapshot = {}) {
-    if (!snapshot || !Array.isArray(snapshot.fighters)) return;
+  function serializeFighterCompact(fighter) {
+    return [
+      fighter.playerId,
+      fighter.name,
+      Number(fighter.themeIndex || 0),
+      fighter.skinKey,
+      netNumber(fighter.damage, 10),
+      Number(fighter.stocks || 0),
+      Number(fighter.koCount || 0),
+      netNumber(fighter.x),
+      netNumber(fighter.y),
+      netNumber(fighter.z),
+      netNumber(fighter.vx),
+      netNumber(fighter.vy),
+      netNumber(fighter.vz),
+      Number(fighter.facing || 1),
+      netNumber(fighter.aimX),
+      netNumber(fighter.aimZ),
+      fighter.grounded ? 1 : 0,
+      Number(fighter.jumpsUsed || 0),
+      netNumber(fighter.respawnTimer),
+      netNumber(fighter.invulnTimer),
+      netNumber(fighter.stunTimer),
+      netNumber(fighter.flashTimer),
+      Number(fighter.comboStep || 0),
+      netNumber(fighter.comboTimer),
+      fighter.currentMoveKey || "",
+      fighter.movePhase || "",
+      netNumber(fighter.moveTimer),
+      Number(fighter.inputSeq || 0)
+    ];
+  }
 
-    if (!match.matchId || snapshot.matchId !== match.matchId) {
-      const roster = snapshot.fighters.map((fighter, index) => ({
+  function normalizeSnapshotFighter(entry = {}, index = 0) {
+    if (!Array.isArray(entry)) return entry || {};
+    return {
+      playerId: entry[0],
+      name: entry[1],
+      themeIndex: entry[2] ?? index,
+      skinKey: entry[3],
+      damage: entry[4],
+      stocks: entry[5],
+      koCount: entry[6],
+      x: entry[7],
+      y: entry[8],
+      z: entry[9],
+      vx: entry[10],
+      vy: entry[11],
+      vz: entry[12],
+      facing: entry[13],
+      aimX: entry[14],
+      aimZ: entry[15],
+      grounded: Boolean(entry[16]),
+      jumpsUsed: entry[17],
+      respawnTimer: entry[18],
+      invulnTimer: entry[19],
+      stunTimer: entry[20],
+      flashTimer: entry[21],
+      comboStep: entry[22],
+      comboTimer: entry[23],
+      currentMoveKey: entry[24],
+      movePhase: entry[25],
+      moveTimer: entry[26],
+      inputSeq: entry[27]
+    };
+  }
+
+  function getSnapshotFighters(snapshot = {}) {
+    const fighters = Array.isArray(snapshot.fighters)
+      ? snapshot.fighters
+      : Array.isArray(snapshot.f)
+        ? snapshot.f
+        : [];
+    return fighters.map(normalizeSnapshotFighter);
+  }
+
+  function applyRemoteSnapshot(snapshot = {}) {
+    const snapshotFighters = getSnapshotFighters(snapshot);
+    if (!snapshot || !snapshotFighters.length) return;
+    const snapshotMatchId = snapshot.matchId || snapshot.m;
+    const snapshotRoomId = snapshot.roomId || snapshot.r;
+    const snapshotElapsedMs = Number(snapshot.elapsedMs ?? snapshot.e ?? 0);
+    const snapshotTimeLimitMs = Number(snapshot.timeLimitMs ?? snapshot.t ?? PHYSICS.timeLimitMs);
+    const snapshotEnded = Boolean(snapshot.ended ?? snapshot.n);
+    const snapshotSummary = Array.isArray(snapshot.summary) ? snapshot.summary : Array.isArray(snapshot.u) ? snapshot.u : null;
+    const snapshotWinnerId = snapshot.winnerId || snapshot.w || null;
+
+    if (!match.matchId || snapshotMatchId !== match.matchId) {
+      const roster = snapshotFighters.map((fighter, index) => ({
         playerId: fighter.playerId,
         name: fighter.name,
         themeIndex: fighter.themeIndex ?? index,
@@ -2293,14 +2667,14 @@
       beginMatch(roster, {
         authoritative: false,
         practice: false,
-        timeLimitMs: Number.isFinite(snapshot.timeLimitMs) ? snapshot.timeLimitMs : PHYSICS.timeLimitMs,
-        roomId: snapshot.roomId || state.currentRoom?.roomId || null,
-        matchId: snapshot.matchId || `remote_${Date.now().toString(36)}`
+        timeLimitMs: Number.isFinite(snapshotTimeLimitMs) ? snapshotTimeLimitMs : PHYSICS.timeLimitMs,
+        roomId: snapshotRoomId || state.currentRoom?.roomId || null,
+        matchId: snapshotMatchId || `remote_${Date.now().toString(36)}`
       });
     }
 
     const activeIds = new Set();
-    snapshot.fighters.forEach((entry, index) => {
+    snapshotFighters.forEach((entry, index) => {
       const playerId = String(entry.playerId || "");
       if (!playerId) return;
       activeIds.add(playerId);
@@ -2408,12 +2782,12 @@
       }
     });
 
-    match.elapsedMs = Number(snapshot.elapsedMs || 0);
-    match.timeLimitMs = Number.isFinite(snapshot.timeLimitMs) ? snapshot.timeLimitMs : match.timeLimitMs;
-    match.active = !Boolean(snapshot.ended);
-    match.ended = Boolean(snapshot.ended);
-    match.summary = Array.isArray(snapshot.summary) ? snapshot.summary : match.summary;
-    match.winnerId = snapshot.winnerId || match.winnerId;
+    match.elapsedMs = snapshotElapsedMs;
+    match.timeLimitMs = Number.isFinite(snapshotTimeLimitMs) ? snapshotTimeLimitMs : match.timeLimitMs;
+    match.active = !snapshotEnded;
+    match.ended = snapshotEnded;
+    match.summary = snapshotSummary || match.summary;
+    match.winnerId = snapshotWinnerId || match.winnerId;
     if (match.ended && match.summary?.length) {
       finishMatch({ summary: match.summary, winnerId: match.winnerId });
       return;
@@ -2422,16 +2796,17 @@
   }
 
   function exportSnapshot() {
-    return {
-      roomId: match.roomId,
-      matchId: match.matchId,
-      elapsedMs: Math.round(match.elapsedMs),
-      timeLimitMs: match.timeLimitMs,
-      fighters: Array.from(match.fighters.values()).map(serializeFighter),
-      ended: match.ended,
-      summary: match.summary,
-      winnerId: match.winnerId
+    const snapshot = {
+      r: match.roomId,
+      m: match.matchId,
+      e: Math.round(match.elapsedMs),
+      t: match.timeLimitMs,
+      f: Array.from(match.fighters.values()).map(serializeFighterCompact),
+      n: match.ended ? 1 : 0,
+      w: match.winnerId || ""
     };
+    if (match.ended) snapshot.u = match.summary;
+    return snapshot;
   }
 
   function stepAuthoritativeMatch(dt) {
@@ -2634,8 +3009,8 @@
       localFighter.inputSeq = net.localInputSeq;
     }
     void sendRoomEvent("input", {
-      input,
-      seq: net.localInputSeq
+      m: encodeInputMask(input),
+      s: net.localInputSeq
     });
     return true;
   }
@@ -2660,11 +3035,7 @@
     if (!state.currentRoom) return;
     try {
       const nextState = await sdk.multiplayer.updateState({
-        ready: Boolean(ready),
-        skinKey: normalizeSelectedSkin("p1"),
-        mapId: state.selectedMapId,
-        mode: state.mode,
-        playerName: state.localPlayerName
+        ...buildRoomPlayerState(ready)
       }, { room_id: roomIdOf(state.currentRoom) });
       handleMultiplayerStateChange(nextState);
     } catch (error) {
@@ -2680,6 +3051,7 @@
     const shouldLeaveVoice = state.voiceConnected && sdk?.voice;
     state.autoVoiceRequested = false;
     state.voiceConnecting = false;
+    state.invitePanelOpen = false;
     net.remoteInputs.clear();
     setCurrentRoomState(null, null);
     clearMatchWorld();
@@ -2736,13 +3108,7 @@
         title: "Super Smash 3D",
         min_players: 2,
         max_players: 2,
-        state: {
-          ready: true,
-          skinKey: normalizeSelectedSkin("p1"),
-          mapId: state.selectedMapId,
-          mode: "room",
-          playerName: state.localPlayerName
-        },
+        state: buildRoomPlayerState(true),
         metadata: { game: "super-smash-3d", mapId: state.selectedMapId }
       });
       if (!nextState?.room) {
@@ -2781,13 +3147,7 @@
       const nextState = await sdk.multiplayer.joinRoom({
         room_code: roomCode,
         max_players: 2,
-        state: {
-          ready: true,
-          skinKey: normalizeSelectedSkin("p1"),
-          mapId: state.selectedMapId,
-          mode: "room",
-          playerName: state.localPlayerName
-        }
+        state: buildRoomPlayerState(true)
       });
       if (!nextState?.room) {
         throw new Error("Сервер не вернул состояние комнаты.");
@@ -2927,9 +3287,15 @@
 
     if (eventName === "input") {
       if (!net.isHost || !senderId || senderId === state.localPlayerId) return;
+      const compactMask = payload.m ?? payload.mask ?? null;
+      const nextInput = payload.input
+        ? { ...createInputState(), ...payload.input }
+        : compactMask !== null
+          ? decodeInputMask(compactMask)
+          : createInputState();
       net.remoteInputs.set(senderId, {
-        input: { ...createInputState(), ...(payload.input || {}) },
-        seq: Number(payload.seq || payload.inputSeq || 0),
+        input: nextInput,
+        seq: Number(payload.s ?? payload.seq ?? payload.inputSeq ?? 0),
         receivedAt: performance.now()
       });
       return;
@@ -3166,6 +3532,24 @@
     ui.lobbyStartButton.addEventListener("click", () => {
       void startHostedRoomMatch();
     });
+    if (ui.inviteFriendButton) {
+      ui.inviteFriendButton.addEventListener("click", () => {
+        void openInvitePanel();
+      });
+    }
+    if (ui.lobbyInviteButton) {
+      ui.lobbyInviteButton.addEventListener("click", () => {
+        void openInvitePanel();
+      });
+    }
+    if (ui.sendInviteButton) {
+      ui.sendInviteButton.addEventListener("click", () => {
+        void sendInviteToSelectedContact();
+      });
+    }
+    if (ui.closeInvitePanelButton) {
+      ui.closeInvitePanelButton.addEventListener("click", closeInvitePanel);
+    }
     ui.copyCodeButton.addEventListener("click", async () => {
       const roomCode = roomCodeOf(state.currentRoom);
       if (await copyText(roomCode)) {
@@ -3402,6 +3786,10 @@
       sdk.multiplayer?.onMatchFound((nextState) => handleMultiplayerStateChange(nextState));
       sdk.multiplayer?.onEvent((event) => handleRoomEvent(event));
       sdk.voice?.onChange((nextState) => applyVoiceState(nextState));
+      sdk.on?.("launchParamsChanged", (payload) => {
+        const invite = extractLaunchRoomInvite({ startParams: payload?.startParams || payload?.launchParams || payload });
+        if (invite) void joinRoomInvite(invite);
+      });
       sdk.on?.("miniappPaymentCompleted", (eventPayload) => {
         if (eventPayload?.itemType === "skin" && eventPayload?.itemKey && SKIN_LIBRARY[eventPayload.itemKey]) {
           state.ownedSkins.add(eventPayload.itemKey);
@@ -3412,6 +3800,10 @@
       sdk.backButton?.onClick(() => {
         void handleBackAction();
       });
+      const launchInvite = extractLaunchRoomInvite(initData);
+      if (launchInvite) {
+        void joinRoomInvite(launchInvite);
+      }
       await sdk.orientation?.refresh?.();
       await sdk.multiplayer?.getState?.();
       await sdk.voice?.getState?.();
