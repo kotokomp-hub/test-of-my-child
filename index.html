@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Smash 3D</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.1/three.min.js"></script>
-    <script src="https://rawcdn.githack.com/najicreator/NMASDK/refs/heads/main/nmasdk.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
+    <script src="/naji-miniapp-sdk.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
 
@@ -115,7 +115,7 @@
             flex-wrap: wrap;
         }
 
-        button, input {
+        button, input, select {
             font: inherit;
         }
 
@@ -481,6 +481,31 @@
 
         input[type="text"]::placeholder {
             color: rgba(144, 168, 200, 0.72);
+        }
+
+        .invite-panel {
+            display: grid;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .invite-panel.hidden {
+            display: none;
+        }
+
+        .invite-panel select {
+            width: 100%;
+            min-width: 0;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(13, 21, 40, 0.92);
+            color: var(--text);
+            outline: none;
+        }
+
+        .invite-panel .button-row {
+            margin-top: 0;
         }
 
         .lobby-grid {
@@ -928,6 +953,7 @@
             <div id="roomRibbonMeta" class="hud-sub" style="margin-top: 8px;">Создай приватную комнату или жми Quick Match</div>
             <div style="margin-top: 12px;" class="button-row">
                 <button id="copyCodeButton" class="secondary-btn">Код</button>
+                <button id="inviteFriendButton" class="secondary-btn">Пригласить</button>
                 <button id="readyButton" class="primary-btn">Ready</button>
                 <button id="startMatchButton" class="primary-btn">Старт</button>
             </div>
@@ -1022,7 +1048,17 @@
                             <div class="button-row">
                                 <button id="lobbyReadyButton" class="primary-btn">Готов</button>
                                 <button id="lobbyStartButton" class="primary-btn">Старт</button>
+                                <button id="lobbyInviteButton" class="secondary-btn">Пригласить</button>
                                 <button id="lobbyLeaveButton" class="danger-btn">Выйти</button>
+                            </div>
+                            <div id="invitePanel" class="invite-panel hidden">
+                                <select id="inviteContactSelect" aria-label="Контакт для приглашения">
+                                    <option value="">Загрузка контактов...</option>
+                                </select>
+                                <div class="button-row">
+                                    <button id="sendInviteButton" class="primary-btn">Отправить приглашение</button>
+                                    <button id="closeInvitePanelButton" class="secondary-btn">Скрыть</button>
+                                </div>
                             </div>
                         </div>
                     </div>
