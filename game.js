@@ -2664,12 +2664,21 @@
         title: "Super Smash 3D",
         min_players: 2,
         max_players: 2,
+        state: {
+          ready: true,
+          skinKey: normalizeSelectedSkin("p1"),
+          mapId: state.selectedMapId,
+          mode: "room",
+          playerName: state.localPlayerName
+        },
         metadata: { game: "super-smash-3d", mapId: state.selectedMapId }
       });
+      if (!nextState?.room) {
+        throw new Error("Сервер не вернул состояние комнаты.");
+      }
       handleMultiplayerStateChange(nextState);
       setPhase("lobby");
       setStatus("Приватная комната создана. Поделись кодом и зови соперника.", "success");
-      void setReadyState(true);
     } catch (error) {
       state.autoVoiceRequested = false;
       state.voiceConnecting = false;
@@ -2699,12 +2708,21 @@
       setStatus(`Вхожу в комнату ${roomCode}...`, "info", 0);
       const nextState = await sdk.multiplayer.joinRoom({
         room_code: roomCode,
-        max_players: 2
+        max_players: 2,
+        state: {
+          ready: true,
+          skinKey: normalizeSelectedSkin("p1"),
+          mapId: state.selectedMapId,
+          mode: "room",
+          playerName: state.localPlayerName
+        }
       });
+      if (!nextState?.room) {
+        throw new Error("Сервер не вернул состояние комнаты.");
+      }
       handleMultiplayerStateChange(nextState);
       setPhase("lobby");
       setStatus(`Ты вошел в комнату ${roomCode}.`, "success");
-      void setReadyState(true);
     } catch (error) {
       state.autoVoiceRequested = false;
       state.voiceConnecting = false;
