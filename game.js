@@ -75,10 +75,10 @@
   };
 
   const INVITE_COPY = {
-    title: window.NAJI_SMASH_INVITE_TITLE || "Super Smash 3D",
-    game: window.NAJI_SMASH_INVITE_GAME || "super-smash-3d",
-    text: window.NAJI_SMASH_INVITE_TEXT || "{sender} зовёт тебя в Super Smash 3D.\nКомната: {room_code}",
-    buttonText: window.NAJI_SMASH_INVITE_BUTTON_TEXT || "Присоединиться"
+    title: "Super Smash 3D",
+    game:  "super-smash-3d",
+    text:  "{sender} зовёт тебя поиграть в попе пальчиком.\nКомната: {room_code}",
+    buttonText: "Присоединиться"
   };
 
   const COLOR_THEMES = [
