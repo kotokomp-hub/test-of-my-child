@@ -539,6 +539,9 @@
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.domElement.tabIndex = 0;
+  renderer.domElement.setAttribute("role", "application");
+  renderer.domElement.setAttribute("aria-label", "Super Smash 3D game viewport");
   ui.root.appendChild(renderer.domElement);
 
   const clock = new THREE.Clock();
@@ -563,6 +566,23 @@
   const hostIdOf = (room) => room?.hostId || room?.host_id || null;
   const roomPlayersOf = (room) => Array.isArray(room?.players) ? room.players : [];
   const playerIdOf = (player) => player?.playerId || player?.player_id || player?.username || null;
+
+  function focusGameViewport() {
+    try { window.focus(); } catch {}
+    try {
+      renderer.domElement.focus({ preventScroll: true });
+    } catch {
+      try { renderer.domElement.focus(); } catch {}
+    }
+  }
+
+  function resetKeyboardInput() {
+    state.inputSources.p1.keyboard = createInputState();
+    state.inputSources.p2.keyboard = createInputState();
+    if (state.mode === "room" || state.mode === "quick") {
+      sendLocalInputNow(true);
+    }
+  }
   const playerNameOf = (player) => player?.name || player?.username || "Боец";
   const isPlayerReady = (player) => Boolean(player?.state?.ready);
   const getTheme = (index) => COLOR_THEMES[((index % COLOR_THEMES.length) + COLOR_THEMES.length) % COLOR_THEMES.length];
@@ -3670,6 +3690,12 @@
     bindTouchControl(ui.touchJump, "jump");
     bindTouchControl(ui.touchAttack, "attack");
     bindTouchControl(ui.touchSpecial, "special");
+    ui.root.addEventListener("pointerdown", focusGameViewport, { passive: true });
+    renderer.domElement.addEventListener("pointerdown", focusGameViewport, { passive: true });
+    sdk?.on?.("focusRestored", () => {
+      resetKeyboardInput();
+      focusGameViewport();
+    });
     window.addEventListener("keydown", (event) => {
       if (event.code === "Escape") {
         event.preventDefault();
@@ -3679,6 +3705,10 @@
       updateKeyboardInput(event, true);
     });
     window.addEventListener("keyup", (event) => updateKeyboardInput(event, false));
+    window.addEventListener("blur", resetKeyboardInput);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) resetKeyboardInput();
+    });
     window.addEventListener("resize", () => applyOrientation(state.orientation));
   }
 
