@@ -146,6 +146,8 @@
     fire_monk: { key: "fire_monk", name: "Огненный Монах", body: 0xffaa00, accent: 0xffe1a3, glow: 0xffaa00, css: "#ffaa00", priceSol: 0, rarity: "free" },
     iron_robot: { key: "iron_robot", name: "Железный Робот", body: 0xaaaaaa, accent: 0xf8f8f8, glow: 0xc8d7ff, css: "#aaaaaa", priceSol: 0, rarity: "free" },
     blue_fighter: { key: "blue_fighter", name: "Синий Боец", body: 0x3333ff, accent: 0x9eb0ff, glow: 0x6666ff, css: "#3333ff", priceSol: 0, rarity: "free" },
+    neon_sprinter: { key: "neon_sprinter", name: "Неоновый Спринтер", body: 0x18a7b5, accent: 0xd8fbff, glow: 0x29f0ff, css: "#18a7b5", priceSol: 0.005, rarity: "premium" },
+    quantum_fox: { key: "quantum_fox", name: "Квантовый Лис", body: 0xff5f9e, accent: 0xfff1a8, glow: 0x00f5d4, css: "#ff5f9e", priceSol: 0.005, rarity: "premium" },
     cyber_alien: { key: "cyber_alien", name: "Кибер Пришелец", body: 0x33ff33, accent: 0xdfffe0, glow: 0x55ff99, css: "#33ff33", priceSol: 0.035, rarity: "premium" },
     void_mage: { key: "void_mage", name: "Маг Пустоты", body: 0xcc00ff, accent: 0xf2b4ff, glow: 0xcc00ff, css: "#cc00ff", priceSol: 0.045, rarity: "premium" },
     solar_knight: { key: "solar_knight", name: "Солнечный Рыцарь", body: 0xffd700, accent: 0xfff4b8, glow: 0xffd700, css: "#ffd700", priceSol: 0.055, rarity: "premium" },
@@ -500,6 +502,8 @@
     roomState: null,
     isHost: false,
     inputSignature: "",
+    inputBurstSignature: "",
+    inputBurstUntil: 0,
     localInputSeq: 0,
     lastServerInputSeq: 0,
     lastInputSentAt: 0,
@@ -1327,6 +1331,70 @@
     return INPUT_KEYS.map((key) => (input[key] ? "1" : "0")).join("");
   }
 
+  function applyRemoteInputEvent(senderId, payload = {}) {
+    if (!senderId) return;
+    const compactMask = payload.m ?? payload.mask ?? null;
+    const nextInput = payload.input
+      ? { ...createInputState(), ...payload.input }
+      : compactMask !== null
+        ? decodeInputMask(compactMask)
+        : createInputState();
+    const seq = Number(payload.s ?? payload.seq ?? payload.inputSeq ?? 0);
+    const nowMs = performance.now();
+    const previous = net.remoteInputs.get(senderId) || null;
+    if (previous?.seq && seq && seq < previous.seq) {
+      if (nextInput.jump || nextInput.attack || nextInput.special) {
+        const heldUntil = { ...(previous.heldUntil || {}) };
+        ["jump", "attack", "special"].forEach((key) => {
+          if (nextInput[key]) {
+            heldUntil[key] = Math.max(Number(heldUntil[key] || 0), nowMs + PHYSICS.remoteActionHoldMs);
+          }
+        });
+        net.remoteInputs.set(senderId, { ...previous, heldUntil, receivedAt: nowMs });
+      }
+      return;
+    }
+
+    const heldUntil = { ...(previous?.heldUntil || {}) };
+    ["jump", "attack", "special"].forEach((key) => {
+      if (nextInput[key]) {
+        heldUntil[key] = Math.max(Number(heldUntil[key] || 0), nowMs + PHYSICS.remoteActionHoldMs);
+      } else if (Number(heldUntil[key] || 0) <= nowMs) {
+        delete heldUntil[key];
+      }
+    });
+
+    net.remoteInputs.set(senderId, {
+      input: nextInput,
+      seq,
+      receivedAt: nowMs,
+      heldUntil
+    });
+  }
+
+  function getRemoteInputForHost(playerId) {
+    const entry = net.remoteInputs.get(playerId);
+    if (!entry) return null;
+    const nowMs = performance.now();
+    if (nowMs - entry.receivedAt > PHYSICS.remoteInputTimeoutMs) {
+      return {
+        input: createInputState(),
+        seq: entry.seq
+      };
+    }
+
+    const input = { ...createInputState(), ...(entry.input || {}) };
+    ["jump", "attack", "special"].forEach((key) => {
+      if (Number(entry.heldUntil?.[key] || 0) > nowMs) {
+        input[key] = true;
+      }
+    });
+    return {
+      input,
+      seq: entry.seq
+    };
+  }
+
   function createFighter(options = {}) {
     const playerId = String(options.playerId || `cpu_${Math.random().toString(36).slice(2, 8)}`);
     const skinConfig = getSkinConfig(options.skinKey, options.themeIndex || 0);
@@ -2037,6 +2105,8 @@
     match.winnerId = null;
     net.lastHudSyncAt = 0;
     net.inputSignature = "";
+    net.inputBurstSignature = "";
+    net.inputBurstUntil = 0;
     net.localInputSeq = 0;
     net.lastServerInputSeq = 0;
     net.lastInputSentAt = 0;
@@ -2722,6 +2792,168 @@
     return fighters.map(normalizeSnapshotFighter);
   }
 
+  function getSnapshotSequence(snapshot = {}) {
+    const seq = Number(snapshot.seq ?? snapshot.q ?? 0);
+    return Number.isFinite(seq) ? seq : 0;
+  }
+
+  function queueRemoteSnapshot(snapshot = {}, snapshotFighters = []) {
+    const receivedAt = performance.now();
+    const elapsedMs = Number(snapshot.elapsedMs ?? snapshot.e ?? 0);
+    if (!Number.isFinite(elapsedMs)) return false;
+
+    const seq = getSnapshotSequence(snapshot);
+    if (seq && seq <= net.lastSnapshotSeq - 10) {
+      return false;
+    }
+
+    const duplicate = net.snapshotBuffer.some((entry) => (
+      (seq && entry.seq === seq) || (!seq && Math.abs(entry.elapsedMs - elapsedMs) < 0.5)
+    ));
+    if (duplicate) return false;
+
+    const fighterMap = new Map();
+    snapshotFighters.forEach((fighter) => {
+      const playerId = String(fighter.playerId || "");
+      if (playerId) fighterMap.set(playerId, fighter);
+    });
+
+    net.snapshotBuffer.push({
+      seq,
+      receivedAt,
+      elapsedMs,
+      fighters: snapshotFighters,
+      fighterMap
+    });
+    net.snapshotBuffer.sort((left, right) => (
+      left.elapsedMs - right.elapsedMs || left.seq - right.seq || left.receivedAt - right.receivedAt
+    ));
+
+    if (seq) net.lastSnapshotSeq = Math.max(net.lastSnapshotSeq, seq);
+    const latest = net.snapshotBuffer[net.snapshotBuffer.length - 1];
+    const cutoffElapsed = latest.elapsedMs - PHYSICS.snapshotMaxBufferMs;
+    net.snapshotBuffer = net.snapshotBuffer
+      .filter((entry) => entry.elapsedMs >= cutoffElapsed)
+      .slice(-14);
+
+    const nextOffset = elapsedMs - receivedAt;
+    net.serverTimeOffsetMs = net.serverTimeOffsetMs === null
+      ? nextOffset
+      : smooth(net.serverTimeOffsetMs, nextOffset, 0.12);
+    net.lastSnapshotReceivedAt = receivedAt;
+    return true;
+  }
+
+  function applySnapshotDiscreteState(fighter, entry = {}) {
+    fighter.damage = Number(entry.damage || 0);
+    fighter.stocks = Number(entry.stocks ?? fighter.stocks);
+    fighter.koCount = Number(entry.koCount || 0);
+    fighter.facing = Number(entry.facing || fighter.facing || 1);
+    fighter.aimX = Number.isFinite(Number(entry.aimX)) ? Number(entry.aimX) : fighter.facing;
+    fighter.aimZ = Number.isFinite(Number(entry.aimZ)) ? Number(entry.aimZ) : 0;
+    fighter.grounded = Boolean(entry.grounded);
+    fighter.jumpsUsed = Number(entry.jumpsUsed || 0);
+    fighter.respawnTimer = Number(entry.respawnTimer || 0);
+    fighter.invulnTimer = Number(entry.invulnTimer || 0);
+    fighter.stunTimer = Number(entry.stunTimer || 0);
+    fighter.flashTimer = Number(entry.flashTimer || 0);
+    fighter.comboStep = Number(entry.comboStep || 0);
+    fighter.comboTimer = Number(entry.comboTimer || 0);
+    fighter.currentMoveKey = entry.currentMoveKey || null;
+    fighter.movePhase = entry.movePhase || null;
+    fighter.moveTimer = Number(entry.moveTimer || 0);
+    fighter.inputSeq = Number(entry.inputSeq || 0);
+    fighter.moveState = fighter.currentMoveKey
+      ? {
+          key: fighter.currentMoveKey,
+          phase: fighter.movePhase,
+          phaseTime: fighter.moveTimer,
+          targetIds: new Set(),
+          activated: fighter.movePhase === "active"
+        }
+      : null;
+  }
+
+  function applySnapshotTransform(fighter, entry = {}) {
+    fighter.x = Number(entry.x || 0);
+    fighter.y = Number(entry.y || 0);
+    fighter.z = Number(entry.z || 0);
+    fighter.vx = Number(entry.vx || 0);
+    fighter.vy = Number(entry.vy || 0);
+    fighter.vz = Number(entry.vz || 0);
+  }
+
+  function applyInterpolatedRemoteFighter(fighter, fromEntry, toEntry, alpha, extrapolateSeconds = 0) {
+    const source = toEntry || fromEntry;
+    if (!source) return;
+    const t = clamp(alpha, 0, 1);
+    const fromX = Number(fromEntry?.x || 0);
+    const fromY = Number(fromEntry?.y || 0);
+    const fromZ = Number(fromEntry?.z || 0);
+    const fromVx = Number(fromEntry?.vx || 0);
+    const fromVy = Number(fromEntry?.vy || 0);
+    const fromVz = Number(fromEntry?.vz || 0);
+    const toX = Number((toEntry || fromEntry)?.x || 0);
+    const toY = Number((toEntry || fromEntry)?.y || 0);
+    const toZ = Number((toEntry || fromEntry)?.z || 0);
+    const toVx = Number((toEntry || fromEntry)?.vx || 0);
+    const toVy = Number((toEntry || fromEntry)?.vy || 0);
+    const toVz = Number((toEntry || fromEntry)?.vz || 0);
+
+    fighter.x = lerp(fromX, toX, t) + toVx * extrapolateSeconds;
+    fighter.y = lerp(fromY, toY, t) + toVy * extrapolateSeconds;
+    fighter.z = lerp(fromZ, toZ, t) + toVz * extrapolateSeconds;
+    fighter.vx = lerp(fromVx, toVx, t);
+    fighter.vy = lerp(fromVy, toVy, t);
+    fighter.vz = lerp(fromVz, toVz, t);
+    applySnapshotDiscreteState(fighter, source);
+    fighter.netSnapshotReady = true;
+  }
+
+  function applyBufferedRemoteSnapshots(nowMs = performance.now()) {
+    if (match.authoritative || !match.active || match.ended || net.snapshotBuffer.length === 0) return;
+    const latest = net.snapshotBuffer[net.snapshotBuffer.length - 1];
+    const estimatedServerNow = net.serverTimeOffsetMs === null
+      ? latest.elapsedMs
+      : nowMs + net.serverTimeOffsetMs;
+    const targetElapsed = estimatedServerNow - PHYSICS.snapshotRenderDelayMs;
+
+    let fromSnapshot = net.snapshotBuffer[0];
+    let toSnapshot = null;
+    for (let index = 0; index < net.snapshotBuffer.length - 1; index += 1) {
+      const current = net.snapshotBuffer[index];
+      const next = net.snapshotBuffer[index + 1];
+      if (current.elapsedMs <= targetElapsed && targetElapsed <= next.elapsedMs) {
+        fromSnapshot = current;
+        toSnapshot = next;
+        break;
+      }
+      if (current.elapsedMs <= targetElapsed) {
+        fromSnapshot = current;
+      }
+    }
+
+    let alpha = 0;
+    let extrapolateSeconds = 0;
+    if (toSnapshot) {
+      const span = Math.max(1, toSnapshot.elapsedMs - fromSnapshot.elapsedMs);
+      alpha = clamp((targetElapsed - fromSnapshot.elapsedMs) / span, 0, 1);
+    } else {
+      const extrapolateMs = clamp(targetElapsed - fromSnapshot.elapsedMs, 0, PHYSICS.snapshotMaxExtrapolateMs);
+      extrapolateSeconds = extrapolateMs / 1000;
+    }
+
+    match.fighters.forEach((fighter, playerId) => {
+      if (playerId === state.localPlayerId) return;
+      const fromEntry = fromSnapshot.fighterMap.get(playerId);
+      const toEntry = toSnapshot?.fighterMap.get(playerId) || null;
+      if (!fromEntry) return;
+      applyInterpolatedRemoteFighter(fighter, fromEntry, toEntry, alpha, extrapolateSeconds);
+    });
+
+    match.elapsedMs = Math.max(match.elapsedMs, Math.min(estimatedServerNow, latest.elapsedMs + PHYSICS.snapshotMaxExtrapolateMs));
+  }
+
   function applyRemoteSnapshot(snapshot = {}) {
     const snapshotFighters = getSnapshotFighters(snapshot);
     if (!snapshot || !snapshotFighters.length) return;
@@ -2748,6 +2980,11 @@
         matchId: snapshotMatchId || `remote_${Date.now().toString(36)}`
       });
     }
+
+    const acceptedSnapshot = match.authoritative
+      ? true
+      : queueRemoteSnapshot(snapshot, snapshotFighters);
+    if (!acceptedSnapshot && !snapshotEnded) return;
 
     const activeIds = new Set();
     snapshotFighters.forEach((entry, index) => {
@@ -2781,6 +3018,7 @@
       const serverRespawnTimer = Number(entry.respawnTimer || 0);
       const serverStocks = Number(entry.stocks ?? fighter.stocks);
       const serverInputSeq = Number(entry.inputSeq || 0);
+      const interpolateRemote = !match.authoritative && playerId !== state.localPlayerId && !snapshotEnded;
       fighter.damage = Number(entry.damage || 0);
       fighter.stocks = serverStocks;
       fighter.koCount = Number(entry.koCount || 0);
@@ -2812,6 +3050,22 @@
           fighter.inputSeq = Math.max(Number(fighter.inputSeq || 0), serverInputSeq);
         }
         fighter.inputSeq = Math.max(Number(fighter.inputSeq || 0), serverInputSeq);
+      } else if (interpolateRemote) {
+        const correctionDistance = Math.hypot(serverX - fighter.x, serverY - fighter.y, serverZ - fighter.z);
+        const shouldHardSyncRemote = !fighter.netSnapshotReady
+          || previousStocks !== serverStocks
+          || serverRespawnTimer > 0
+          || correctionDistance > PHYSICS.predictionSnapDistance * 1.6;
+        if (shouldHardSyncRemote) {
+          fighter.x = serverX;
+          fighter.y = serverY;
+          fighter.z = serverZ;
+          fighter.vx = serverVx;
+          fighter.vy = serverVy;
+          fighter.vz = serverVz;
+          fighter.netSnapshotReady = true;
+        }
+        fighter.inputSeq = serverInputSeq;
       } else {
         fighter.x = serverX;
         fighter.y = serverY;
@@ -2820,6 +3074,7 @@
         fighter.vy = serverVy;
         fighter.vz = serverVz;
         fighter.inputSeq = serverInputSeq;
+        fighter.netSnapshotReady = true;
       }
       if (!predictLocal || didSnapPrediction) {
         fighter.facing = Number(entry.facing || 1);
@@ -2858,7 +3113,7 @@
       }
     });
 
-    match.elapsedMs = snapshotElapsedMs;
+    match.elapsedMs = match.authoritative ? snapshotElapsedMs : Math.max(match.elapsedMs, snapshotElapsedMs);
     match.timeLimitMs = Number.isFinite(snapshotTimeLimitMs) ? snapshotTimeLimitMs : match.timeLimitMs;
     match.active = !snapshotEnded;
     match.ended = snapshotEnded;
@@ -2872,9 +3127,11 @@
   }
 
   function exportSnapshot() {
+    net.snapshotSeq += 1;
     const snapshot = {
       r: match.roomId,
       m: match.matchId,
+      q: net.snapshotSeq,
       e: Math.round(match.elapsedMs),
       t: match.timeLimitMs,
       f: Array.from(match.fighters.values()).map(serializeFighterCompact),
@@ -2919,7 +3176,7 @@
       }
 
       const remoteInputState = !fighter.isBot && !fighter.controlSlot && fighter.playerId !== state.localPlayerId
-        ? net.remoteInputs.get(fighter.playerId)
+        ? getRemoteInputForHost(fighter.playerId)
         : null;
       const input = fighter.isBot
         ? computeBotInput(fighter)
@@ -3069,14 +3326,19 @@
     const signature = serializeInput(input);
     const changed = signature !== net.inputSignature;
     const elapsedMs = nowMs - net.lastInputSentAt;
+    const burstActive = !changed && signature === net.inputBurstSignature && nowMs < net.inputBurstUntil;
 
     if (force) {
       if (!changed && elapsedMs < PHYSICS.inputIntervalMs) return false;
     } else {
       if (elapsedMs < PHYSICS.inputIntervalMs) return false;
-      if (!changed && elapsedMs < PHYSICS.inputKeepaliveMs) return false;
+      if (!changed && !burstActive && elapsedMs < PHYSICS.inputKeepaliveMs) return false;
     }
 
+    if (changed) {
+      net.inputBurstSignature = signature;
+      net.inputBurstUntil = nowMs + PHYSICS.remoteActionHoldMs;
+    }
     net.inputSignature = signature;
     net.lastInputSentAt = nowMs;
     net.localInputSeq += 1;
@@ -3086,7 +3348,8 @@
     }
     void sendRoomEvent("input", {
       m: encodeInputMask(input),
-      s: net.localInputSeq
+      s: net.localInputSeq,
+      t: Math.round(nowMs)
     });
     return true;
   }
@@ -3363,17 +3626,7 @@
 
     if (eventName === "input") {
       if (!net.isHost || !senderId || senderId === state.localPlayerId) return;
-      const compactMask = payload.m ?? payload.mask ?? null;
-      const nextInput = payload.input
-        ? { ...createInputState(), ...payload.input }
-        : compactMask !== null
-          ? decodeInputMask(compactMask)
-          : createInputState();
-      net.remoteInputs.set(senderId, {
-        input: nextInput,
-        seq: Number(payload.s ?? payload.seq ?? payload.inputSeq ?? 0),
-        receivedAt: performance.now()
-      });
+      applyRemoteInputEvent(senderId, payload);
       return;
     }
 
@@ -3817,6 +4070,7 @@
       accumulator -= FIXED_STEP;
     }
     maybeSendRealtimeFrames(nowMs);
+    applyBufferedRemoteSnapshots(nowMs);
     match.fighters.forEach((fighter) => syncFighterVisual(fighter, delta));
     animateBackground(delta, nowSeconds);
     updateCamera(delta);
