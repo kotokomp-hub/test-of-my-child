@@ -1,1113 +1,534 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Smash 3D</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.149.0/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
-
-        :root {
-            --bg-top: #050913;
-            --bg-mid: #0c1830;
-            --bg-bottom: #112746;
-            --panel: rgba(9, 18, 34, 0.78);
-            --panel-strong: rgba(10, 19, 37, 0.9);
-            --panel-border: rgba(136, 208, 255, 0.16);
-            --text: #eef6ff;
-            --muted: #90a8c8;
-            --accent: #8ef5ff;
-            --accent-2: #ffd574;
-            --danger: #ff7d7d;
-            --success: #75f0b6;
-            --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
-        }
-
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-
-        html, body {
-            margin: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            font-family: "Space Grotesk", system-ui, sans-serif;
-            color: var(--text);
-            background:
-                radial-gradient(circle at 20% 15%, rgba(142, 245, 255, 0.14), transparent 26%),
-                radial-gradient(circle at 80% 20%, rgba(255, 213, 116, 0.12), transparent 24%),
-                radial-gradient(circle at 50% 100%, rgba(99, 132, 255, 0.18), transparent 32%),
-                linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 48%, var(--bg-bottom) 100%);
-        }
-
-        #game {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-        }
-
-        #overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 2;
-            pointer-events: none;
-        }
-
-        .panel {
-            background: var(--panel);
-            border: 1px solid var(--panel-border);
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(16px);
-            border-radius: 20px;
-        }
-
-        .hud {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            right: 16px;
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            align-items: flex-start;
-        }
-
-        .hud-block {
-            pointer-events: auto;
-            padding: 14px 16px;
-            min-width: 220px;
-        }
-
-        .hud-title {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.16em;
-            color: var(--muted);
-            margin-bottom: 8px;
-        }
-
-        .hud-hero {
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .hud-main {
-            font-size: 28px;
-            font-weight: 700;
-            line-height: 1;
-        }
-
-        .hud-sub {
-            font-size: 13px;
-            color: var(--muted);
-        }
-
-        .button-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        button, input, select {
-            font: inherit;
-        }
-
-        button {
-            border: none;
-            border-radius: 14px;
-            padding: 12px 16px;
-            cursor: pointer;
-            transition: transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
-        }
-
-        button:hover:not(:disabled) {
-            transform: translateY(-1px);
-            filter: brightness(1.04);
-        }
-
-        button:disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-        }
-
-        .primary-btn {
-            background: linear-gradient(135deg, var(--accent), #88aaff);
-            color: #07111f;
-            font-weight: 700;
-        }
-
-        .secondary-btn {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--text);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-
-        .danger-btn {
-            background: rgba(255, 125, 125, 0.14);
-            color: #ffd7d7;
-            border: 1px solid rgba(255, 125, 125, 0.22);
-        }
-
-        .accent-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
-            border-radius: 999px;
-            font-size: 12px;
-            color: var(--muted);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .status-banner {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            top: 18px;
-            max-width: min(540px, calc(100vw - 32px));
-            padding: 12px 16px;
-            text-align: center;
-            pointer-events: none;
-        }
-
-        .status-banner.hidden {
-            display: none;
-        }
-
-        .status-strong {
-            color: var(--accent);
-        }
-
-        .controls-info {
-            position: absolute;
-            top: 18px;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: min(760px, calc(100vw - 120px));
-            padding: 14px 18px;
-            text-align: center;
-            border-radius: 14px;
-            background: rgba(0, 0, 0, 0.64);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #f5fbff;
-            font-size: 13px;
-            line-height: 1.55;
-            z-index: 4;
-        }
-
-        .controls-info.hidden {
-            display: none;
-        }
-
-        .voice-status {
-            position: absolute;
-            top: 18px;
-            right: 20px;
-            z-index: 4;
-            padding: 10px 14px;
-            border-radius: 12px;
-            background: rgba(4, 24, 12, 0.72);
-            border: 1px solid rgba(117, 240, 182, 0.28);
-            color: #86ffc8;
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 0.03em;
-        }
-
-        .voice-status.hidden {
-            display: none;
-        }
-
-        .screen-layer {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 18px;
-            pointer-events: auto;
-        }
-
-        .screen-card {
-            width: min(680px, calc(100vw - 24px));
-            max-height: calc(100vh - 24px);
-            overflow: auto;
-            padding: 22px;
-        }
-
-        .screen-card h1, .screen-card h2, .screen-card h3, .hud h3 {
-            margin: 0;
-        }
-
-        .screen-eyebrow {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            color: var(--accent);
-            margin-bottom: 10px;
-        }
-
-        .screen-title {
-            font-size: clamp(34px, 6vw, 64px);
-            line-height: 0.94;
-            margin-bottom: 10px;
-        }
-
-        .screen-title em {
-            color: var(--accent-2);
-            font-style: normal;
-        }
-
-        .screen-copy {
-            margin: 0;
-            color: var(--muted);
-            line-height: 1.6;
-            max-width: 56ch;
-        }
-
-        .hero-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
-            gap: 16px;
-            margin-top: 18px;
-        }
-
-        .smash-menu-card {
-            width: min(1080px, calc(100vw - 26px));
-            padding: 28px;
-            background:
-                linear-gradient(180deg, rgba(22, 24, 44, 0.9), rgba(9, 14, 28, 0.88)),
-                radial-gradient(circle at top left, rgba(233, 69, 96, 0.14), transparent 30%);
-            border-color: rgba(233, 69, 96, 0.28);
-        }
-
-        .menu-panel-grid {
-            margin-top: 20px;
-        }
-
-        .menu-panel {
-            background: rgba(0, 0, 0, 0.44);
-            border: 1px solid rgba(233, 69, 96, 0.24);
-            border-radius: 22px;
-            padding: 20px;
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
-        }
-
-        .settings-row {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
-        .settings-block {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            min-width: 0;
-        }
-
-        .settings-block label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: var(--muted);
-        }
-
-        .settings-block select {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(13, 21, 40, 0.92);
-            color: var(--text);
-            font-size: 15px;
-        }
-
-        .menu-small-btn {
-            padding: 10px 12px;
-            font-size: 13px;
-        }
-
-        .menu-meta-text {
-            min-height: 40px;
-            font-size: 12px;
-            line-height: 1.45;
-            color: var(--muted);
-        }
-
-        .menu-account-row {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-            margin-bottom: 16px;
-        }
-
-        .menu-account-card {
-            min-height: 88px;
-        }
-
-        .store-feature {
-            margin-bottom: 18px;
-        }
-
-        .skin-store-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 14px;
-        }
-
-        .skin-card {
-            border-radius: 16px;
-            padding: 14px;
-            background: rgba(255, 255, 255, 0.045);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .skin-card.owned {
-            border-color: rgba(117, 240, 182, 0.28);
-            box-shadow: inset 0 0 0 1px rgba(117, 240, 182, 0.08);
-        }
-
-        .skin-card.locked {
-            border-color: rgba(255, 213, 116, 0.22);
-        }
-
-        .skin-preview {
-            height: 72px;
-            border-radius: 14px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03));
-            border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .skin-card-title {
-            font-weight: 700;
-            font-size: 14px;
-        }
-
-        .skin-card-meta {
-            font-size: 12px;
-            line-height: 1.45;
-            color: var(--muted);
-            min-height: 34px;
-        }
-
-        .skin-card-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .menu-action-group {
-            justify-content: center;
-            margin-top: 12px;
-        }
-
-        .menu-action-group button {
-            min-width: 210px;
-            font-size: 18px;
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-
-        .online-btn {
-            background: linear-gradient(135deg, #153964, #0d5688);
-            color: #eef6ff;
-        }
-
-        .menu-join-row {
-            margin-top: 16px;
-        }
-
-        .feature-list, .lobby-list, .result-list {
-            display: grid;
-            gap: 10px;
-        }
-
-        .feature {
-            padding: 14px;
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.04);
-        }
-
-        .feature strong {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 14px;
-        }
-
-        .feature span {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .stack {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .input-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 14px;
-        }
-
-        input[type="text"] {
-            flex: 1;
-            min-width: 160px;
-            padding: 12px 14px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--text);
-            outline: none;
-        }
-
-        input[type="text"]::placeholder {
-            color: rgba(144, 168, 200, 0.72);
-        }
-
-        .invite-panel {
-            display: grid;
-            gap: 10px;
-            margin-top: 12px;
-        }
-
-        .invite-panel.hidden {
-            display: none;
-        }
-
-        .invite-panel select {
-            width: 100%;
-            min-width: 0;
-            padding: 12px 14px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(13, 21, 40, 0.92);
-            color: var(--text);
-            outline: none;
-        }
-
-        .invite-panel .button-row {
-            margin-top: 0;
-        }
-
-        .lobby-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(240px, 0.8fr);
-            gap: 16px;
-            margin-top: 18px;
-        }
-
-        .lobby-section {
-            padding: 16px;
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .lobby-section h3 {
-            margin-bottom: 12px;
-            font-size: 15px;
-        }
-
-        .lobby-player {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 12px 14px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .lobby-player-main {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            min-width: 0;
-        }
-
-        .lobby-player-name {
-            font-size: 14px;
-            font-weight: 700;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .lobby-player-meta {
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .pill {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 74px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.04);
-        }
-
-        .pill.success {
-            color: var(--success);
-            border-color: rgba(117, 240, 182, 0.22);
-            background: rgba(117, 240, 182, 0.08);
-        }
-
-        .pill.warning {
-            color: var(--accent-2);
-            border-color: rgba(255, 213, 116, 0.22);
-            background: rgba(255, 213, 116, 0.08);
-        }
-
-        .pill.danger {
-            color: #ffd1d1;
-            border-color: rgba(255, 125, 125, 0.24);
-            background: rgba(255, 125, 125, 0.1);
-        }
-
-        .room-ribbon {
-            position: absolute;
-            left: 16px;
-            bottom: 16px;
-            max-width: min(380px, calc(100vw - 32px));
-            padding: 14px 16px;
-            pointer-events: auto;
-        }
-
-        .room-ribbon.hidden,
-        .hud.hidden,
-        .fighter-hud.hidden,
-        .touch-controls.hidden,
-        .screen-layer.hidden {
-            display: none;
-        }
-
-        .fighter-hud {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: 16px;
-            width: min(980px, calc(100vw - 32px));
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            pointer-events: none;
-        }
-
-        .fighter-card {
-            padding: 18px 22px;
-            border-radius: 18px;
-            background: rgba(0, 0, 0, 0.72);
-            border: 2px solid rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(12px);
-            min-height: 148px;
-            pointer-events: none;
-        }
-
-        .fighter-card.local {
-            border-color: rgba(233, 69, 96, 0.4);
-            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(233, 69, 96, 0.08) inset;
-        }
-
-        .fighter-card-header {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .fighter-name {
-            font-size: 14px;
-            font-weight: 700;
-        }
-
-        .fighter-swatch {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-            vertical-align: middle;
-            box-shadow: 0 0 12px currentColor;
-        }
-
-        .fighter-meta {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 4px;
-            line-height: 1.35;
-        }
-
-        .fighter-stats {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            margin-top: 12px;
-        }
-
-        .fighter-stat strong {
-            display: block;
-            font-size: 42px;
-            line-height: 1;
-        }
-
-        .fighter-stat span {
-            font-size: 11px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-        }
-
-        .fighter-stock-row {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            min-height: 42px;
-            align-items: center;
-        }
-
-        .fighter-stock-dot {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.24);
-            background: rgba(255, 255, 255, 0.06);
-            box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.38);
-            opacity: 0.46;
-        }
-
-        .fighter-stock-dot.alive {
-            background: var(--stock-color, #8ef5ff);
-            border-color: rgba(255, 255, 255, 0.82);
-            box-shadow: 0 0 18px rgba(255, 255, 255, 0.18);
-            opacity: 1;
-        }
-
-        .touch-controls {
-            position: absolute;
-            inset-inline: 0;
-            bottom: 16px;
-            padding: 0 16px;
-            display: none;
-            justify-content: space-between;
-            align-items: flex-end;
-            gap: 16px;
-            pointer-events: auto;
-        }
-
-        .touch-cluster {
-            display: grid;
-            grid-template-columns: repeat(3, 64px);
-            gap: 10px;
-        }
-
-        .touch-slot {
-            width: 64px;
-            height: 64px;
-        }
-
-        .touch-btn {
-            width: 64px;
-            height: 64px;
-            border-radius: 20px;
-            background: rgba(8, 15, 30, 0.72);
-            border: 1px solid rgba(143, 207, 255, 0.18);
-            color: var(--text);
-            font-size: 18px;
-            font-weight: 700;
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
-        }
-
-        .touch-btn.big {
-            width: 82px;
-            height: 82px;
-            border-radius: 24px;
-            font-size: 16px;
-        }
-
-        .touch-btn.primary {
-            background: linear-gradient(135deg, var(--accent), #7ca8ff);
-            color: #07111f;
-        }
-
-        .touch-btn.special {
-            background: linear-gradient(135deg, var(--accent-2), #ff9d6c);
-            color: #291100;
-        }
-
-        .touch-actions {
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-        }
-
-        .result-list {
-            margin-top: 16px;
-        }
-
-        .result-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 12px 14px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            font-size: 14px;
-        }
-
-        .result-card {
-            text-align: center;
-            background: rgba(0, 0, 0, 0.78);
-            border-color: rgba(233, 69, 96, 0.24);
-        }
-
-        @media (max-width: 980px) {
-            .settings-row,
-            .menu-account-row,
-            .skin-store-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .menu-action-group button {
-                min-width: 0;
-                width: 100%;
-            }
-
-            .hero-grid,
-            .lobby-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .fighter-hud {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                width: min(620px, calc(100vw - 24px));
-            }
-        }
-
-        @media (max-width: 860px) {
-            .hud {
-                flex-direction: column;
-            }
-
-            .hud-block {
-                width: 100%;
-                min-width: 0;
-            }
-
-            .fighter-hud {
-                bottom: 94px;
-            }
-
-            .touch-controls {
-                display: flex;
-            }
-
-            .controls-info {
-                max-width: calc(100vw - 28px);
-                top: 12px;
-                font-size: 12px;
-            }
-
-            .voice-status {
-                top: auto;
-                bottom: 144px;
-                right: 12px;
-            }
-        }
-
-        @media (max-width: 720px) {
-            .screen-card {
-                padding: 18px;
-                border-radius: 18px;
-            }
-
-            .screen-title {
-                font-size: clamp(28px, 10vw, 46px);
-            }
-
-            .fighter-hud {
-                width: calc(100vw - 24px);
-                gap: 10px;
-            }
-
-            .fighter-card {
-                min-height: 86px;
-                padding: 12px;
-            }
-        }
-
-        @media (max-width: 720px) and (orientation: landscape) {
-            .hud {
-                display: grid;
-                grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-            }
-
-            .room-ribbon {
-                bottom: 10px;
-                left: 10px;
-                max-width: min(320px, 40vw);
-            }
-
-            .fighter-hud {
-                width: min(760px, calc(100vw - 20px));
-                bottom: 10px;
-                left: auto;
-                right: 10px;
-                transform: none;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-
-            .touch-controls {
-                padding: 0 10px;
-                bottom: 10px;
-            }
-
-            .touch-btn,
-            .touch-slot {
-                width: 56px;
-                height: 56px;
-            }
-
-            .touch-btn.big {
-                width: 70px;
-                height: 70px;
-            }
-
-            .screen-layer {
-                align-items: flex-start;
-                padding-top: 12px;
-                overflow-y: auto;
-            }
-
-            .screen-card {
-                max-height: calc(100vh - 24px);
-                margin-bottom: 82px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NajiMiniApp SDK Demo</title>
+  <!-- Tailwind CSS для аккуратного оформления -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Подключение SDK по указанному адресу -->
+  <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
+  <style>
+    .scrollable-console {
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+    }
+  </style>
 </head>
-<body>
-    <div id="game"></div>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
 
-    <div id="overlay">
-        <div id="statusBanner" class="status-banner panel hidden"></div>
-        <div id="controlsInfo" class="controls-info hidden"></div>
-        <div id="voiceStatus" class="voice-status hidden">Голос: офлайн</div>
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 py-3 shadow-sm">
+    <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-2">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
+          NajiMiniApp Demo Panel
+        </h1>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
+          Инициализировать (Init)
+        </button>
+        <button id="btn-ready" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded transition" disabled>
+          Ready
+        </button>
+      </div>
+    </div>
+  </header>
 
-        <div id="hud" class="hud hidden">
-            <div class="hud-block panel">
-                <div class="hud-title">Super Smash 3D</div>
-                <div class="hud-hero">
-                    <div id="phaseValue" class="hud-main">Меню</div>
-                    <div id="phaseMeta" class="hud-sub">Арена готова к бою</div>
-                </div>
-                <div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <span id="modeChip" class="accent-chip">Локальная 1v1</span>
-                    <span id="roomChip" class="accent-chip">Без комнаты</span>
-                    <span id="voiceChip" class="accent-chip">Голос выкл</span>
-                </div>
-            </div>
+  <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
 
-            <div class="hud-block panel">
-                <div class="hud-title">Таймер</div>
-                <div class="hud-hero">
-                    <div id="timerValue" class="hud-main">02:00</div>
-                    <div id="timerMeta" class="hud-sub">До конца раунда</div>
-                </div>
-                <div id="hudButtons" class="button-row" style="margin-top: 14px;">
-                    <button id="voiceButton" class="secondary-btn">Голос</button>
-                    <button id="pauseButton" class="secondary-btn">Пауза</button>
-                    <button id="leaveButton" class="danger-btn">Выйти</button>
-                </div>
-            </div>
+    <!-- ЛЕВАЯ КОЛОНКА: Данные инициализации и Пользователь -->
+    <div class="space-y-6">
+      <!-- Блок информации о сессии -->
+      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Данные окружения</h2>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between border-b pb-1">
+            <span class="text-slate-500">Платформа:</span>
+            <span class="font-medium" id="val-platform">-</span>
+          </div>
+          <div class="flex justify-between border-b pb-1">
+            <span class="text-slate-500">Тема:</span>
+            <span class="font-medium" id="val-theme">-</span>
+          </div>
+          <div class="flex justify-between border-b pb-1">
+            <span class="text-slate-500">Родительский Origin:</span>
+            <span class="font-medium truncate max-w-[150px]" id="val-origin" title="-">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Параметры запуска:</span>
+            <span class="font-medium truncate max-w-[150px]" id="val-start-params">-</span>
+          </div>
         </div>
+      </section>
 
-        <div id="roomRibbon" class="room-ribbon panel hidden">
-            <div class="hud-title">Комната</div>
-            <div id="roomRibbonMain" class="hud-main" style="font-size: 22px;">----</div>
-            <div id="roomRibbonMeta" class="hud-sub" style="margin-top: 8px;">Создай приватную комнату или жми Quick Match</div>
-            <div style="margin-top: 12px;" class="button-row">
-                <button id="copyCodeButton" class="secondary-btn">Код</button>
-                <button id="inviteFriendButton" class="secondary-btn">Пригласить</button>
-                <button id="readyButton" class="primary-btn">Ready</button>
-                <button id="startMatchButton" class="primary-btn">Старт</button>
-            </div>
+      <!-- Блок пользователя -->
+      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Пользователь и Баланс</h2>
+        <div id="user-info-placeholder" class="text-sm text-slate-400 py-2 italic">
+          Ожидание инициализации...
         </div>
-
-        <div id="fighterHud" class="fighter-hud hidden"></div>
-
-        <div id="menuScreen" class="screen-layer">
-            <div class="screen-card panel smash-menu-card">
-                <div class="screen-eyebrow">Mini App Ultimate Edition</div>
-                <div class="screen-title">Super <em>Smash</em> 3D</div>
-                <p class="screen-copy">
-                    Собери свой сетап, выбери арену и выходи в локальный или онлайн-матч. Здесь есть реальные комнаты,
-                    голосовой чат через Mini App SDK и покупка редких скинов за Solana devnet прямо из игры.
-                </p>
-
-                <div class="menu-panel-grid">
-                    <div class="menu-panel">
-                        <div class="settings-row">
-                            <div class="settings-block">
-                                <label for="skinP1Select">Скин игрока 1</label>
-                                <select id="skinP1Select"></select>
-                                <button id="skinP1BuyButton" class="secondary-btn menu-small-btn">Купить выбранный</button>
-                            </div>
-                            <div class="settings-block">
-                                <label for="mapSelect">Карта арены</label>
-                                <select id="mapSelect"></select>
-                                <div id="mapMeta" class="menu-meta-text">Классическая арена с безопасным центром и drop-through платформами.</div>
-                            </div>
-                            <div class="settings-block">
-                                <label for="skinP2Select">Скин игрока 2</label>
-                                <select id="skinP2Select"></select>
-                                <button id="skinP2BuyButton" class="secondary-btn menu-small-btn">Купить выбранный</button>
-                            </div>
-                        </div>
-
-                        <div class="menu-account-row">
-                            <div class="feature menu-account-card">
-                                <strong id="playerNameLabel">Игрок</strong>
-                                <span id="playerMetaLabel">Подключение к Mini App SDK…</span>
-                            </div>
-                            <div class="feature menu-account-card">
-                                <strong>Управление</strong>
-                                <span id="menuControlsMeta">P1: A/D движение, W вверх, S вниз, Space прыжок, F атака, G special. P2: стрелки, Right Shift прыжок, Enter атака, Slash special.</span>
-                            </div>
-                        </div>
-
-                        <div class="feature store-feature">
-                            <strong>Скины и инвентарь</strong>
-                            <span>Free скины доступны сразу. Premium скины покупаются через Solana devnet и остаются в инвентаре Mini App.</span>
-                            <div id="skinStoreList" class="skin-store-grid"></div>
-                        </div>
-
-                        <div class="btn-group menu-action-group">
-                            <button id="soloButton" class="primary-btn">Локальная игра</button>
-                            <button id="quickMatchButton" class="primary-btn online-btn">Онлайн + голосовой чат</button>
-                            <button id="createRoomButton" class="secondary-btn online-btn">Создать комнату</button>
-                            <button id="spectateButton" class="secondary-btn">Тренировка</button>
-                        </div>
-
-                        <div class="input-row menu-join-row">
-                            <input id="joinCodeInput" type="text" maxlength="12" placeholder="ROOM CODE" autocomplete="off" autocapitalize="characters" />
-                            <button id="joinRoomButton" class="secondary-btn">Войти в комнату</button>
-                        </div>
-                    </div>
-                </div>
+        <div id="user-info-content" class="hidden space-y-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700" id="user-avatar">
+              U
             </div>
+            <div>
+              <div class="font-semibold text-slate-900" id="user-name">Username</div>
+              <div class="text-xs text-slate-500" id="user-id">ID: -</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 pt-2 border-t text-sm">
+            <div class="bg-amber-50 p-2 rounded">
+              <span class="block text-xs text-amber-600 font-medium">Sparks Balance</span>
+              <span class="text-lg font-bold text-amber-800" id="val-sparks">0</span>
+            </div>
+            <div class="bg-blue-50 p-2 rounded">
+              <span class="block text-xs text-blue-600 font-medium">Кошелек</span>
+              <span class="text-sm font-bold text-blue-800 truncate block" id="val-wallet">Отсутствует</span>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div id="lobbyScreen" class="screen-layer hidden">
-            <div class="screen-card panel">
-                <div class="screen-eyebrow">Лобби</div>
-                <h2 id="lobbyTitle" style="font-size: 38px;">Подготовка матча</h2>
-                <p id="lobbyCopy" class="screen-copy">Собираем игроков и ждём старта host-клиента.</p>
-
-                <div class="lobby-grid">
-                    <div class="lobby-section">
-                        <h3>Игроки</h3>
-                        <div id="lobbyPlayers" class="lobby-list"></div>
-                    </div>
-                    <div class="lobby-section">
-                        <h3>Статус комнаты</h3>
-                        <div class="stack">
-                            <div class="feature">
-                                <strong id="lobbyRoomCode">ROOM ----</strong>
-                                <span id="lobbyRoomMeta">Приватная комната готова для боя.</span>
-                            </div>
-                            <div class="feature">
-                                <strong>Управление</strong>
-                                <span>P1: A/D движение, W вверх, S вниз, Space прыжок, F атака, G special. P2: стрелки, Right Shift прыжок, Enter атака, Slash special. На мобильном доступны touch-кнопки.</span>
-                            </div>
-                            <div class="button-row">
-                                <button id="lobbyReadyButton" class="primary-btn">Готов</button>
-                                <button id="lobbyStartButton" class="primary-btn">Старт</button>
-                                <button id="lobbyInviteButton" class="secondary-btn">Пригласить</button>
-                                <button id="lobbyLeaveButton" class="danger-btn">Выйти</button>
-                            </div>
-                            <div id="invitePanel" class="invite-panel hidden">
-                                <select id="inviteContactSelect" aria-label="Контакт для приглашения">
-                                    <option value="">Загрузка контактов...</option>
-                                </select>
-                                <div class="button-row">
-                                    <button id="sendInviteButton" class="primary-btn">Отправить приглашение</button>
-                                    <button id="closeInvitePanelButton" class="secondary-btn">Скрыть</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- Контроль системных кнопок и вида -->
+      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Системные вызовы</h2>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="btn-expand" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Expand</button>
+          <button id="btn-collapse" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Collapse</button>
+          <button id="btn-close" class="border border-rose-200 text-rose-600 hover:bg-rose-50 py-1.5 rounded">Close App</button>
+          <button id="btn-ping" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Ping</button>
         </div>
-
-        <div id="resultScreen" class="screen-layer hidden">
-            <div class="screen-card panel result-card">
-                <div class="screen-eyebrow">Конец матча</div>
-                <h2 id="resultTitle" style="font-size: 64px;">Победа</h2>
-                <p id="resultCopy" class="screen-copy">Матч завершён.</p>
-                <div id="resultBoard" class="result-list"></div>
-                <div class="button-row" style="margin-top: 18px;">
-                    <button id="rematchButton" class="primary-btn">Реванш</button>
-                    <button id="resultMenuButton" class="secondary-btn">В главное меню</button>
-                </div>
-            </div>
+        <div class="pt-2 border-t">
+          <label class="block text-xs text-slate-500 mb-1">Цвет заголовка (Header Color)</label>
+          <div class="flex gap-1">
+            <input type="color" id="header-color-picker" class="w-8 h-8 rounded border p-0 cursor-pointer" value="#4f46e5">
+            <button id="btn-set-header" class="bg-slate-800 text-white text-xs px-2 py-1 rounded flex-1">Применить</button>
+          </div>
         </div>
-
-        <div id="pauseOverlay" class="screen-layer hidden">
-            <div class="screen-card panel" style="width: min(420px, calc(100vw - 24px));">
-                <div class="screen-eyebrow">Пауза</div>
-                <h2 style="font-size: 36px; margin-bottom: 10px;">Super Smash на паузе</h2>
-                <p class="screen-copy">Матч поставлен на паузу. Можно продолжить бой или выйти в меню.</p>
-                <div class="button-row" style="margin-top: 18px;">
-                    <button id="resumeButton" class="primary-btn">Продолжить</button>
-                    <button id="pauseExitButton" class="secondary-btn">Меню</button>
-                </div>
-            </div>
+        <div class="pt-2 border-t flex justify-between items-center">
+          <span class="text-xs text-slate-500">Кнопка «Назад»:</span>
+          <div class="flex gap-1 text-xs">
+            <button id="btn-back-show" class="bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded">Показать</button>
+            <button id="btn-back-hide" class="bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded">Скрыть</button>
+          </div>
         </div>
-
-        <div id="touchControls" class="touch-controls hidden">
-            <div class="touch-cluster">
-                <div class="touch-slot"></div>
-                <button id="touchUp" class="touch-btn">▲</button>
-                <div class="touch-slot"></div>
-                <button id="touchLeft" class="touch-btn">◀</button>
-                <button id="touchDown" class="touch-btn">▼</button>
-                <button id="touchRight" class="touch-btn">▶</button>
-            </div>
-            <div class="touch-actions">
-                <button id="touchJump" class="touch-btn big primary">JUMP</button>
-                <button id="touchAttack" class="touch-btn big">HIT</button>
-                <button id="touchSpecial" class="touch-btn big special">SMASH</button>
-            </div>
-        </div>
+      </section>
     </div>
 
-    <script src="./game.js?v=20260412-skins-005"></script>
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI и API -->
+    <div class="space-y-6 md:col-span-2">
+      
+      <!-- Логирование событий -->
+      <section class="bg-slate-900 text-slate-200 p-4 rounded-xl shadow-sm">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Лог событий SDK (Events)</h2>
+          <button id="btn-clear-logs" class="text-[10px] text-slate-400 hover:text-white border border-slate-700 px-2 py-0.5 rounded">Очистить</button>
+        </div>
+        <div id="sdk-console" class="scrollable-console text-xs space-y-1 bg-slate-950 p-2 rounded border border-slate-800 text-green-400">
+          <div>[System] Ожидание подключения и инициализации...</div>
+        </div>
+      </section>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <!-- Блок Локального хранилища (Storage) -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Хранилище (Storage)</h2>
+          <div class="space-y-2 text-xs">
+            <div>
+              <label class="block text-slate-500 mb-0.5">Ключ (Key)</label>
+              <input type="text" id="storage-key" class="w-full border border-slate-200 rounded p-1.5 focus:outline-indigo-500" value="demo_key">
+            </div>
+            <div>
+              <label class="block text-slate-500 mb-0.5">Значение (Value)</label>
+              <input type="text" id="storage-value" class="w-full border border-slate-200 rounded p-1.5 focus:outline-indigo-500" value="Hello Naji!">
+            </div>
+            <div class="grid grid-cols-3 gap-1 pt-1">
+              <button id="btn-store-set" class="bg-slate-800 text-white py-1 rounded hover:bg-slate-900">Set</button>
+              <button id="btn-store-get" class="bg-slate-100 hover:bg-slate-200 py-1 rounded">Get</button>
+              <button id="btn-store-del" class="text-rose-600 bg-rose-50 hover:bg-rose-100 py-1 rounded">Delete</button>
+            </div>
+            <button id="btn-store-keys" class="w-full border border-slate-200 hover:bg-slate-50 py-1 rounded mt-1">Показать все ключи</button>
+          </div>
+        </section>
+
+        <!-- Блок UI и Уведомлений -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Уведомления и Буфер</h2>
+          <div class="space-y-2 text-xs">
+            <div>
+              <label class="block text-slate-500 mb-0.5">Текст сообщения</label>
+              <input type="text" id="ui-message" class="w-full border border-slate-200 rounded p-1.5" value="Тестовое сообщение">
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button id="btn-ui-toast" class="bg-slate-800 text-white py-1.5 rounded">Toast</button>
+              <button id="btn-ui-alert" class="bg-slate-800 text-white py-1.5 rounded">Alert</button>
+              <button id="btn-ui-copy" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Copy text</button>
+              <button id="btn-ui-link" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded text-blue-600 font-medium">Open Link</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Блоки Мультиплеера, Звука и Окружения -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        
+        <!-- Мультиплеер (Multiplayer) -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Мультиплеер</h2>
+          <div class="text-xs space-y-2">
+            <div class="bg-slate-50 p-2 rounded border">
+              <div><span class="text-slate-500">Комната:</span> <span id="val-mp-room" class="font-mono font-medium">-</span></div>
+              <div><span class="text-slate-500">В очереди:</span> <span id="val-mp-queue" class="font-medium">-</span></div>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button id="btn-mp-create" class="bg-indigo-50 text-indigo-700 font-medium py-1 rounded border border-indigo-100 hover:bg-indigo-100">Создать комнату</button>
+              <button id="btn-mp-join" class="bg-slate-100 py-1 rounded hover:bg-slate-200">Войти в комнату</button>
+              <button id="btn-mp-match" class="bg-emerald-50 text-emerald-700 font-medium py-1 rounded border border-emerald-100 hover:bg-emerald-100">Искать игру</button>
+              <button id="btn-mp-leave" class="text-rose-600 bg-rose-50 py-1 rounded hover:bg-rose-100">Покинуть</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Голосовой чат (Voice) -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Голосовой чат</h2>
+          <div class="text-xs space-y-2">
+            <div class="bg-slate-50 p-2 rounded border space-y-1">
+              <div><span class="text-slate-500">Статус:</span> <span id="val-voice-status" class="font-medium">-</span></div>
+              <div><span class="text-slate-500">Микрофон:</span> <span id="val-voice-muted" class="font-semibold">-</span></div>
+              <div><span class="text-slate-500">Участников:</span> <span id="val-voice-count" class="font-medium">0</span></div>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button id="btn-voice-join" class="bg-slate-800 text-white py-1 rounded hover:bg-slate-900">Подключиться</button>
+              <button id="btn-voice-leave" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Выйти</button>
+              <button id="btn-voice-mute" class="col-span-2 bg-slate-100 py-1 rounded hover:bg-slate-200">Переключить микрофон</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Геймпады и Ориентация экрана -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <!-- Ориентация -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Ориентация экрана</h2>
+          <div class="text-xs space-y-2">
+            <div class="bg-slate-50 p-2 rounded border">
+              <div><span class="text-slate-500">Текущая ориентация:</span> <span id="val-orientation" class="font-medium">-</span></div>
+            </div>
+            <button id="btn-orient-refresh" class="w-full bg-slate-100 py-1 rounded hover:bg-slate-200">Обновить принудительно</button>
+          </div>
+        </section>
+
+        <!-- Геймпад -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Геймпад</h2>
+          <div class="text-xs space-y-2">
+            <div class="bg-slate-50 p-2 rounded border">
+              <div><span class="text-slate-500">Поддержка:</span> <span id="val-gamepad-support" class="font-medium">-</span></div>
+              <div><span class="text-slate-500">Активные геймпады:</span> <span id="val-gamepad-count" class="font-medium">0</span></div>
+            </div>
+            <button id="btn-gamepad-refresh" class="w-full bg-slate-100 py-1 rounded hover:bg-slate-200">Опросить геймпады</button>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // Помощник логирования во встроенную консоль на странице
+    const logContainer = document.getElementById('sdk-console');
+    function log(message, type = 'info') {
+      const el = document.createElement('div');
+      const time = new Date().toLocaleTimeString();
+      let colorClass = 'text-green-400';
+      if (type === 'error') colorClass = 'text-rose-400';
+      if (type === 'warning') colorClass = 'text-amber-400';
+      if (type === 'sys') colorClass = 'text-indigo-300';
+      
+      el.className = colorClass;
+      el.textContent = `[${time}] ${message}`;
+      logContainer.appendChild(el);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // Инициализация привязок интерфейса к SDK после загрузки страницы
+    window.addEventListener('DOMContentLoaded', () => {
+      const sdk = window.NajiMiniApp;
+      if (!sdk) {
+        log('Ошибка: SDK NajiMiniApp не загружен.', 'error');
+        return;
+      }
+      log('SDK обнаружен на странице. Ожидание инициализации...', 'sys');
+
+      // Кнопка принудительного вызова init
+      document.getElementById('btn-init').addEventListener('click', () => {
+        log('Запрос инициализации...', 'sys');
+        
+        // Попытка инициализировать SDK
+        sdk.init()
+          .then((data) => {
+            log('Инициализация успешна. Получены данные initData.');
+            document.getElementById('status-indicator').classList.replace('bg-amber-500', 'bg-emerald-500');
+            document.getElementById('btn-ready').removeAttribute('disabled');
+            updateUIWithInitData(data);
+          })
+          .catch((err) => {
+            log(`Ошибка инициализации: ${err.message}. Возможно, приложение запущено вне родительского фрейма.`, 'warning');
+            log(`Запуск демо-режима: эмуляция данных...`, 'sys');
+            mockInitData();
+          });
+      });
+
+      // Кнопка вызова готовности приложения (Ready)
+      document.getElementById('btn-ready').addEventListener('click', () => {
+        sdk.ready();
+        log('Отправлен сигнал APP_READY на хост.', 'sys');
+      });
+
+      // Заполнение полей из initData
+      function updateUIWithInitData(data) {
+        if (!data) return;
+        document.getElementById('val-platform').textContent = sdk.platform;
+        document.getElementById('val-theme').textContent = sdk.theme;
+        document.getElementById('val-origin').textContent = sdk.parentOrigin || 'N/A';
+        document.getElementById('val-origin').title = sdk.parentOrigin || '';
+        document.getElementById('val-start-params').textContent = JSON.stringify(sdk.startParams) || 'нет';
+
+        if (sdk.user) {
+          document.getElementById('user-info-placeholder').classList.add('hidden');
+          document.getElementById('user-info-content').classList.remove('hidden');
+          document.getElementById('user-name').textContent = sdk.user.username || sdk.user.firstName || 'User';
+          document.getElementById('user-id').textContent = `ID: ${sdk.user.id || '-'}`;
+          if (sdk.user.avatarUrl) {
+            document.getElementById('user-avatar').innerHTML = `<img src="${sdk.user.avatarUrl}" class="rounded-full w-full h-full object-cover">`;
+          }
+        }
+
+        document.getElementById('val-sparks').textContent = sdk.sparks?.balance || 0;
+        document.getElementById('val-wallet').textContent = data.wallet ? (data.wallet.address || 'Подключен') : 'Отсутствует';
+        
+        // Свойства модулей
+        document.getElementById('val-orientation').textContent = JSON.stringify(sdk.orientation) || 'N/A';
+        document.getElementById('val-gamepad-support').textContent = sdk.gamepadSupported ? 'Да' : 'Нет';
+        document.getElementById('val-gamepad-count').textContent = sdk.gamepads.length;
+
+        if (sdk.multiplayer.state) {
+          document.getElementById('val-mp-room').textContent = sdk.multiplayer.currentRoom?.id || '-';
+          document.getElementById('val-mp-queue').textContent = sdk.multiplayer.queue ? 'В поиске' : 'Нет';
+        }
+      }
+
+      // Эмуляция данных (для тестирования во внешнем браузере)
+      function mockInitData() {
+        const mockData = {
+          type: "NAJI_INIT_DATA",
+          platform: "web-mock",
+          theme: "dark",
+          user: {
+            id: 777123,
+            username: "Demo_Naji_User",
+            firstName: "Иван",
+            avatarUrl: ""
+          },
+          sparks: { balance: 1450 },
+          wallet: { address: "0xMockAddress...32ab" },
+          gamepadSupported: true,
+          orientation: { angle: 0, type: "landscape-primary" }
+        };
+        
+        // Отправляем фейковый event самой странице, как если бы пришел postMessage
+        window.postMessage(mockData, "*");
+        log('Отправлены эмулированные данные.', 'sys');
+      }
+
+      // Подписка на все доступные события через SDK
+      sdk.on('init', (payload) => {
+        log(`Событие 'init' получено: ${JSON.stringify(payload)}`);
+        updateUIWithInitData(payload);
+      });
+
+      sdk.on('themeChanged', (theme) => {
+        log(`Событие 'themeChanged': ${theme}`);
+        document.getElementById('val-theme').textContent = theme;
+      });
+
+      sdk.on('walletChanged', (wallet) => {
+        log(`Событие 'walletChanged': ${JSON.stringify(wallet)}`);
+        document.getElementById('val-wallet').textContent = wallet ? (wallet.address || 'Подключен') : 'Отсутствует';
+      });
+
+      sdk.on('orientationChanged', (orientation) => {
+        log(`Событие 'orientationChanged': ${JSON.stringify(orientation)}`);
+        document.getElementById('val-orientation').textContent = JSON.stringify(orientation);
+      });
+
+      sdk.on('gamepadsChanged', (payload) => {
+        log(`Событие 'gamepadsChanged'. Найдено геймпадов: ${payload?.gamepads?.length || 0}`);
+        document.getElementById('val-gamepad-count').textContent = payload?.gamepads?.length || 0;
+      });
+
+      sdk.on('backButtonClicked', () => {
+        log(`Событие 'backButtonClicked': Нажата системная кнопка «Назад»`, 'warning');
+      });
+
+      sdk.on('multiplayerStateChanged', (state) => {
+        log(`Событие 'multiplayerStateChanged': ${JSON.stringify(state)}`);
+        document.getElementById('val-mp-room').textContent = state?.room?.id || '-';
+        document.getElementById('val-mp-queue').textContent = state?.queue ? 'В поиске' : 'Нет';
+      });
+
+      sdk.on('voiceStateChanged', (state) => {
+        log(`Событие 'voiceStateChanged': ${JSON.stringify(state)}`);
+        document.getElementById('val-voice-status').textContent = state?.active ? 'Активен' : 'Отключен';
+        document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
+      });
+
+      sdk.on('voiceParticipantsChanged', (participants) => {
+        log(`Событие 'voiceParticipantsChanged'. Участников: ${participants.length}`);
+        document.getElementById('val-voice-count').textContent = participants.length;
+      });
+
+      // Настройка и управление кнопками UI/API
+      document.getElementById('btn-expand').addEventListener('click', () => sdk.expand());
+      document.getElementById('btn-collapse').addEventListener('click', () => sdk.collapse());
+      document.getElementById('btn-close').addEventListener('click', () => sdk.close());
+      document.getElementById('btn-ping').addEventListener('click', () => {
+        sdk.ping().then(() => log('Ping успешный (Pong получен)')).catch(e => log(`Ping error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-set-header').addEventListener('click', () => {
+        const color = document.getElementById('header-color-picker').value;
+        sdk.setHeaderColor(color);
+        log(`Отправлен запрос на изменение цвета шапки: ${color}`);
+      });
+
+      document.getElementById('btn-back-show').addEventListener('click', () => sdk.backButton.show());
+      document.getElementById('btn-back-hide').addEventListener('click', () => sdk.backButton.hide());
+
+      // Работа с локальным хранилищем (Storage)
+      document.getElementById('btn-store-set').addEventListener('click', () => {
+        const key = document.getElementById('storage-key').value;
+        const val = document.getElementById('storage-value').value;
+        sdk.storage.set(key, val)
+          .then(() => log(`Хранилище: Успешно записан ключ [${key}]`))
+          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-store-get').addEventListener('click', () => {
+        const key = document.getElementById('storage-key').value;
+        sdk.storage.get(key)
+          .then(res => {
+            log(`Хранилище: Получено значение для [${key}] -> "${res}"`);
+            if (res) document.getElementById('storage-value').value = res;
+          })
+          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-store-del').addEventListener('click', () => {
+        const key = document.getElementById('storage-key').value;
+        sdk.storage.remove(key)
+          .then(() => log(`Хранилище: Ключ [${key}] удален`))
+          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-store-keys').addEventListener('click', () => {
+        sdk.storage.keys()
+          .then(keys => log(`Хранилище: Доступные ключи: [${keys.join(', ')}]`))
+          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+      });
+
+      // Всплывающие окна и Буфер обмена (UI)
+      document.getElementById('btn-ui-toast').addEventListener('click', () => {
+        const msg = document.getElementById('ui-message').value;
+        sdk.ui.toast(msg).then(() => log(`Toast отправлен: "${msg}"`));
+      });
+
+      document.getElementById('btn-ui-alert').addEventListener('click', () => {
+        const msg = document.getElementById('ui-message').value;
+        sdk.ui.alert(msg);
+        log(`Вызван Alert с текстом: "${msg}"`);
+      });
+
+      document.getElementById('btn-ui-copy').addEventListener('click', () => {
+        const msg = document.getElementById('ui-message').value;
+        sdk.ui.copy(msg)
+          .then(() => log(`Текст скопирован в буфер`))
+          .catch(e => log(`Ошибка копирования: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-ui-link').addEventListener('click', () => {
+        sdk.ui.openLink('https://naji.com')
+          .then(() => log(`Запрос на открытие внешней ссылки отправлен`))
+          .catch(e => log(`Ошибка открытия ссылки: ${e.message}`, 'error'));
+      });
+
+      // Управление мультиплеером
+      document.getElementById('btn-mp-create').addEventListener('click', () => {
+        sdk.multiplayer.createRoom({ maxPlayers: 4 })
+          .then(state => log(`Мультиплеер: Комната создана. ID: ${state?.room?.id}`))
+          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-mp-join').addEventListener('click', () => {
+        const roomId = prompt("Введите ID комнаты:");
+        if (!roomId) return;
+        sdk.multiplayer.joinRoom({ roomId })
+          .then(state => log(`Мультиплеер: Подключение к комнате ${roomId}`))
+          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-mp-match').addEventListener('click', () => {
+        sdk.multiplayer.joinMatchmaking()
+          .then(state => log(`Мультиплеер: Начало подбора игроков`))
+          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-mp-leave').addEventListener('click', () => {
+        sdk.multiplayer.leaveRoom()
+          .then(() => log(`Мультиплеер: Сессия покинута`))
+          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
+      });
+
+      // Управление Voice модулем
+      document.getElementById('btn-voice-join').addEventListener('click', () => {
+        sdk.voice.join()
+          .then(state => log('Голос: Подключено'))
+          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-voice-leave').addEventListener('click', () => {
+        sdk.voice.leave()
+          .then(() => log('Голос: Отключено'))
+          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-voice-mute').addEventListener('click', () => {
+        sdk.voice.toggleMuted()
+          .then(state => log(`Голос: Микрофон изменен. Muted: ${state?.muted}`))
+          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
+      });
+
+      // Геймпад и Ориентация
+      document.getElementById('btn-orient-refresh').addEventListener('click', () => {
+        sdk.orientation.getState().then(res => log(`Ориентация обновлена: ${JSON.stringify(res)}`));
+      });
+
+      document.getElementById('btn-gamepad-refresh').addEventListener('click', () => {
+        sdk.gamepad.getState().then(res => log(`Состояние геймпадов опрошено. Найдено устройств: ${res?.length || 0}`));
+      });
+
+      document.getElementById('btn-clear-logs').addEventListener('click', () => {
+        logContainer.innerHTML = '';
+        log('Лог очищен.', 'sys');
+      });
+    });
+  </script>
 </body>
 </html>
