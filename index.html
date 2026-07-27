@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo</title>
+  <title>NajiMiniApp SDK Demo (с поддержкой датчиков)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Подключение SDK по указанному адресу -->
@@ -25,7 +25,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK и датчиков движения</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -120,7 +120,7 @@
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI и API -->
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, API -->
     <div class="space-y-6 md:col-span-2">
       
       <!-- Логирование событий -->
@@ -131,6 +131,70 @@
         </div>
         <div id="sdk-console" class="scrollable-console text-xs space-y-1 bg-slate-950 p-2 rounded border border-slate-800 text-green-400">
           <div>[System] Ожидание подключения и инициализации...</div>
+        </div>
+      </section>
+
+      <!-- ДАТЧИКИ ДВИЖЕНИЯ (Новая секция: Гироскоп и Акселерометр) -->
+      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div class="flex justify-between items-center border-b pb-2">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Датчики движения (Motion Sensors)</h2>
+          <button id="btn-mock-sensors" class="text-[10px] bg-slate-100 hover:bg-slate-200 border px-2 py-1 rounded">Сэмулировать данные датчиков</button>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Гироскоп -->
+          <div class="bg-slate-50 p-3 rounded-lg border space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-bold text-slate-700 uppercase">Гироскоп (Gyroscope)</span>
+              <span id="badge-gyro" class="w-2 h-2 rounded-full bg-slate-400"></span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+              <div class="bg-white p-1 rounded border">
+                <span class="block text-[10px] text-slate-400">X (Pitch)</span>
+                <span id="val-gyro-x" class="font-bold">0.00</span>
+              </div>
+              <div class="bg-white p-1 rounded border">
+                <span class="block text-[10px] text-slate-400">Y (Roll)</span>
+                <span id="val-gyro-y" class="font-bold">0.00</span>
+              </div>
+              <div class="bg-white p-1 rounded border">
+                <span class="block text-[10px] text-slate-400">Z (Yaw)</span>
+                <span id="val-gyro-z" class="font-bold">0.00</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[10px] pt-1">
+              <button id="btn-gyro-start" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1 rounded">Start</button>
+              <button id="btn-gyro-stop" class="bg-slate-200 hover:bg-slate-300 py-1 rounded">Stop</button>
+              <button id="btn-gyro-get" class="border border-slate-300 hover:bg-slate-100 py-1 rounded">Get State</button>
+            </div>
+          </div>
+
+          <!-- Акселерометр -->
+          <div class="bg-slate-50 p-3 rounded-lg border space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-bold text-slate-700 uppercase">Акселерометр (Accelerometer)</span>
+              <span id="badge-acc" class="w-2 h-2 rounded-full bg-slate-400"></span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+              <div class="bg-white p-1 rounded border">
+                <span class="block text-[10px] text-slate-400">X (M/S²)</span>
+                <span id="val-acc-x" class="font-bold">0.00</span>
+              </div>
+              <div class="bg-white p-1 rounded border">
+                <span class="block text-[10px] text-slate-400">Y (M/S²)</span>
+                <span id="val-acc-y" class="font-bold">0.00</span>
+              </div>
+              <div class="bg-white p-1 rounded border">
+                <span class="block text-[10px] text-slate-400">Z (M/S²)</span>
+                <span id="val-acc-z" class="font-bold">0.00</span>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[10px] pt-1">
+              <button id="btn-acc-start" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1 rounded">Start</button>
+              <button id="btn-acc-stop" class="bg-slate-200 hover:bg-slate-300 py-1 rounded">Stop</button>
+              <button id="btn-acc-get" class="border border-slate-300 hover:bg-slate-100 py-1 rounded">Get State</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -258,7 +322,6 @@
       logContainer.scrollTop = logContainer.scrollHeight;
     }
 
-    // Инициализация привязок интерфейса к SDK после загрузки страницы
     window.addEventListener('DOMContentLoaded', () => {
       const sdk = window.NajiMiniApp;
       if (!sdk) {
@@ -271,7 +334,6 @@
       document.getElementById('btn-init').addEventListener('click', () => {
         log('Запрос инициализации...', 'sys');
         
-        // Попытка инициализировать SDK
         sdk.init()
           .then((data) => {
             log('Инициализация успешна. Получены данные initData.');
@@ -343,12 +405,12 @@
           orientation: { angle: 0, type: "landscape-primary" }
         };
         
-        // Отправляем фейковый event самой странице, как если бы пришел postMessage
         window.postMessage(mockData, "*");
         log('Отправлены эмулированные данные.', 'sys');
       }
 
-      // Подписка на все доступные события через SDK
+      // ================= ПОДПИСКИ НА СОБЫТИЯ SDK =================
+
       sdk.on('init', (payload) => {
         log(`Событие 'init' получено: ${JSON.stringify(payload)}`);
         updateUIWithInitData(payload);
@@ -395,7 +457,116 @@
         document.getElementById('val-voice-count').textContent = participants.length;
       });
 
-      // Настройка и управление кнопками UI/API
+      // === ПОДПИСКА НА ДАТЧИКИ (Новые события) ===
+
+      sdk.gyroscope.onChange((data) => {
+        if (!data) return;
+        document.getElementById('val-gyro-x').textContent = Number(data.x || 0).toFixed(3);
+        document.getElementById('val-gyro-y').textContent = Number(data.y || 0).toFixed(3);
+        document.getElementById('val-gyro-z').textContent = Number(data.z || 0).toFixed(3);
+      });
+
+      sdk.accelerometer.onChange((data) => {
+        if (!data) return;
+        document.getElementById('val-acc-x').textContent = Number(data.x || 0).toFixed(3);
+        document.getElementById('val-acc-y').textContent = Number(data.y || 0).toFixed(3);
+        document.getElementById('val-acc-z').textContent = Number(data.z || 0).toFixed(3);
+      });
+
+      // ================= УПРАВЛЕНИЕ ДАТЧИКАМИ =================
+
+      // Гироскоп кнопки
+      document.getElementById('btn-gyro-start').addEventListener('click', () => {
+        sdk.gyroscope.start();
+        document.getElementById('badge-gyro').classList.replace('bg-slate-400', 'bg-emerald-500');
+        log('Отправлена команда: GYROSCOPE_START');
+      });
+
+      document.getElementById('btn-gyro-stop').addEventListener('click', () => {
+        sdk.gyroscope.stop();
+        document.getElementById('badge-gyro').classList.replace('bg-emerald-500', 'bg-slate-400');
+        log('Отправлена команда: GYROSCOPE_STOP');
+      });
+
+      document.getElementById('btn-gyro-get').addEventListener('click', () => {
+        sdk.gyroscope.getState()
+          .then((state) => {
+            log(`Гироскоп (Текущее состояние): ${JSON.stringify(state)}`);
+            if (state) {
+              document.getElementById('val-gyro-x').textContent = Number(state.x || 0).toFixed(3);
+              document.getElementById('val-gyro-y').textContent = Number(state.y || 0).toFixed(3);
+              document.getElementById('val-gyro-z').textContent = Number(state.z || 0).toFixed(3);
+            }
+          })
+          .catch((e) => log(`Ошибка запроса гироскопа: ${e.message}`, 'error'));
+      });
+
+      // Акселерометр кнопки
+      document.getElementById('btn-acc-start').addEventListener('click', () => {
+        sdk.accelerometer.start();
+        document.getElementById('badge-acc').classList.replace('bg-slate-400', 'bg-emerald-500');
+        log('Отправлена команда: ACCELEROMETER_START');
+      });
+
+      document.getElementById('btn-acc-stop').addEventListener('click', () => {
+        sdk.accelerometer.stop();
+        document.getElementById('badge-acc').classList.replace('bg-emerald-500', 'bg-slate-400');
+        log('Отправлена команда: ACCELEROMETER_STOP');
+      });
+
+      document.getElementById('btn-acc-get').addEventListener('click', () => {
+        sdk.accelerometer.getState()
+          .then((state) => {
+            log(`Акселерометр (Текущее состояние): ${JSON.stringify(state)}`);
+            if (state) {
+              document.getElementById('val-acc-x').textContent = Number(state.x || 0).toFixed(3);
+              document.getElementById('val-acc-y').textContent = Number(state.y || 0).toFixed(3);
+              document.getElementById('val-acc-z').textContent = Number(state.z || 0).toFixed(3);
+            }
+          })
+          .catch((e) => log(`Ошибка запроса акселерометра: ${e.message}`, 'error'));
+      });
+
+      // Эмуляция работы датчиков (для локального тестирования)
+      let mockInterval = null;
+      document.getElementById('btn-mock-sensors').addEventListener('click', () => {
+        if (mockInterval) {
+          clearInterval(mockInterval);
+          mockInterval = null;
+          document.getElementById('btn-mock-sensors').textContent = 'Сэмулировать данные датчиков';
+          log('Эмуляция датчиков остановлена.', 'sys');
+          return;
+        }
+
+        document.getElementById('btn-mock-sensors').textContent = 'Остановить эмуляцию';
+        log('Запущена генерация случайных значений датчиков...', 'sys');
+        
+        mockInterval = setInterval(() => {
+          // Имитируем отправку событий от родительского контейнера
+          const gX = (Math.random() * 2 - 1) * 5;
+          const gY = (Math.random() * 2 - 1) * 5;
+          const gZ = (Math.random() * 2 - 1) * 5;
+          
+          window.postMessage({
+            type: "NAJI_EVENT",
+            eventName: "gyroscopeChanged",
+            payload: { x: gX, y: gY, z: gZ }
+          }, "*");
+
+          const aX = (Math.random() * 2 - 1) * 9.8;
+          const aY = (Math.random() * 2 - 1) * 9.8;
+          const aZ = (Math.random() * 2 - 1) * 9.8;
+
+          window.postMessage({
+            type: "NAJI_EVENT",
+            eventName: "accelerometerChanged",
+            payload: { x: aX, y: aY, z: aZ }
+          }, "*");
+        }, 300);
+      });
+
+      // ================= ОСТАЛЬНЫЕ УТИЛИТЫ И КНОПКИ =================
+
       document.getElementById('btn-expand').addEventListener('click', () => sdk.expand());
       document.getElementById('btn-collapse').addEventListener('click', () => sdk.collapse());
       document.getElementById('btn-close').addEventListener('click', () => sdk.close());
@@ -412,12 +583,12 @@
       document.getElementById('btn-back-show').addEventListener('click', () => sdk.backButton.show());
       document.getElementById('btn-back-hide').addEventListener('click', () => sdk.backButton.hide());
 
-      // Работа с локальным хранилищем (Storage)
+      // Работа с хранилищем (Storage)
       document.getElementById('btn-store-set').addEventListener('click', () => {
         const key = document.getElementById('storage-key').value;
         const val = document.getElementById('storage-value').value;
         sdk.storage.set(key, val)
-          .then(() => log(`Хранилище: Успешно записан ключ [${key}]`))
+          .then(() => log(`Хранилище: Записан ключ [${key}]`))
           .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
       });
 
@@ -444,7 +615,7 @@
           .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
       });
 
-      // Всплывающие окна и Буфер обмена (UI)
+      // Всплывающие окна и Буфер (UI)
       document.getElementById('btn-ui-toast').addEventListener('click', () => {
         const msg = document.getElementById('ui-message').value;
         sdk.ui.toast(msg).then(() => log(`Toast отправлен: "${msg}"`));
@@ -469,7 +640,7 @@
           .catch(e => log(`Ошибка открытия ссылки: ${e.message}`, 'error'));
       });
 
-      // Управление мультиплеером
+      // Мультиплеер
       document.getElementById('btn-mp-create').addEventListener('click', () => {
         sdk.multiplayer.createRoom({ maxPlayers: 4 })
           .then(state => log(`Мультиплеер: Комната создана. ID: ${state?.room?.id}`))
@@ -496,7 +667,7 @@
           .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
       });
 
-      // Управление Voice модулем
+      // Голосовой чат
       document.getElementById('btn-voice-join').addEventListener('click', () => {
         sdk.voice.join()
           .then(state => log('Голос: Подключено'))
