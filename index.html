@@ -954,14 +954,22 @@
         epLog.scrollTop = epLog.scrollHeight;
       }
 
-      function hexToBytes(hex) {
-        const clean = hex.replace(/\s+/g, '');
-        return new Uint8Array(clean.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-      }
+      // Безопасный конвертер HEX -> Uint8Array (без вылетов на пустых строках)
+function hexToBytes(hex) {
+  if (!hex || typeof hex !== 'string') return new Uint8Array(0);
+  const clean = hex.replace(/\s+/g, '');
+  if (!clean) return new Uint8Array(0);
+  const match = clean.match(/.{1,2}/g);
+  if (!match) return new Uint8Array(0);
+  return new Uint8Array(match.map(b => parseInt(b, 16)));
+}
 
-      function bytesToHex(bytes) {
-        return Array.from(new Uint8Array(bytes)).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
+// Безопасный конвертер Uint8Array -> HEX
+function bytesToHex(bytes) {
+  if (!bytes) return '';
+  const arr = new Uint8Array(bytes);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
       // ---- 3DES implementation (crypto-js) ----
       function hexToWA(hex) { return CryptoJS.enc.Hex.parse(hex.replace(/\s/g, '')); }
@@ -1321,12 +1329,38 @@ async function epMutualAuth(rndIcc) {
         return resp2;
       }
 
+function parseDoTags(hex) {
+  const dos = {};
+  let offset = 0;
+  while (offset < hex.length) {
+    const tag = hex.slice(offset, offset + 2).toUpperCase();
+    offset += 2;
+    if (!tag || tag.length < 2) break;
+    
+    let len = parseInt(hex.slice(offset, offset + 2), 16);
+    offset += 2;
+    if (isNaN(len)) break;
+    
+    if (len & 0x80) {
+      const numBytes = len & 0x7F;
+      len = parseInt(hex.slice(offset, offset + numBytes * 2), 16);
+      offset += numBytes * 2;
+    }
+    
+    const val = hex.slice(offset, offset + len * 2);
+    offset += len * 2;
+    dos[tag] = val;
+  }
+  return dos;
+}
+
+// Защищенный обмен сообщениями (Secure Messaging)
 async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
   if (!bacSsc || !bacKenc || !bacKmac) {
     throw new Error('Сессия Secure Messaging не активна');
   }
 
-  // 1. Инкремент SSC (8 байт счетчика)
+  // 1. Инкремент SSC
   for (let i = 7; i >= 0; i--) {
     bacSsc[i]++;
     if (bacSsc[i] !== 0) break;
@@ -1334,13 +1368,13 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
 
   const sscBytes = bacSsc.slice();
 
-  // 2. Формирование DO87 (если есть отправляемые данные)
+  // 2. Сборка DO87 (если есть передаваемые данные)
   let do87Hex = '';
   if (dataHex && dataHex.length > 0) {
     const paddedData = isoPad(hexToBytes(dataHex), 8);
     const encData = des3EncryptCBC(bacKenc, paddedData, new Uint8Array(8));
     const encHex = bytesToHex(encData);
-    const payloadHex = '01' + encHex; // 01 - индикатор дополнения
+    const payloadHex = '01' + encHex;
     const payloadLen = payloadHex.length / 2;
     const lenField = payloadLen < 0x80 
       ? payloadLen.toString(16).padStart(2, '0') 
@@ -1348,17 +1382,17 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
     do87Hex = '87' + lenField + payloadHex;
   }
 
-  // 3. Формирование DO97 (запрос длины ответа Le)
+  // 3. Сборка DO97 (Le)
   let do97Hex = '';
   if (leHex !== null && leHex !== undefined && leHex !== '') {
     do97Hex = '9701' + leHex.padStart(2, '0');
   }
 
-  // 4. Маскированный заголовок (CLA=0C) для расчета MAC
+  // 4. Заголовок CLA=0C для расчета MAC
   const headerBytes = new Uint8Array([0x0C, ins, p1, p2]);
   const paddedHeader = isoPad(headerBytes, 8);
 
-  // 5. Расчет Retail MAC over (SSC || Header || DO87 || DO97)
+  // 5. Расчет Retail MAC
   const macInput = new Uint8Array([
     ...sscBytes,
     ...paddedHeader,
@@ -1369,7 +1403,7 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
   const macBytes = des3Mac(bacKmac, macInput);
   const do8eHex = '8E08' + bytesToHex(macBytes);
 
-  // 6. Сборка итоговой SM APDU
+  // 6. Формирование и отправка APDU
   const doBodyHex = do87Hex + do97Hex + do8eHex;
   const lcHex = (doBodyHex.length / 2).toString(16).padStart(2, '0');
   const smApduHex = `0C${ins.toString(16).padStart(2, '0')}${p1.toString(16).padStart(2, '0')}${p2.toString(16).padStart(2, '0')}${lcHex}${doBodyHex}00`;
@@ -1379,37 +1413,30 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
 
   const status = respHex.slice(-4);
   if (status !== '9000') {
-    throw new Error(`Ошибка SM (Статус: ${status})`);
+    throw new Error(`Статус чипа: ${status}`);
   }
 
-  // 7. Инкремент SSC для ответа чипа
+  // 7. Инкремент SSC для ответа
   for (let i = 7; i >= 0; i--) {
     bacSsc[i]++;
     if (bacSsc[i] !== 0) break;
   }
 
+  // 8. Разбор и расшифровка DO87 из ответа
   const respDataHex = respHex.slice(0, -4);
+  const dos = parseDoTags(respDataHex);
   
-  // 8. Извлечение и расшифровка DO87 из ответа
   let plainDataHex = '';
-  if (respDataHex.startsWith('87')) {
-    let offset = 2;
-    let len = parseInt(respDataHex.slice(offset, offset + 2), 16);
-    offset += 2;
-    if (len & 0x80) {
-      const numBytes = len & 0x7F;
-      len = parseInt(respDataHex.slice(offset, offset + numBytes * 2), 16);
-      offset += numBytes * 2;
+  if (dos['87']) {
+    let encPayload = dos['87'];
+    if (encPayload.startsWith('01')) {
+      encPayload = encPayload.slice(2); // Пропускаем индикатор 01
     }
-    if (respDataHex.slice(offset, offset + 2) === '01') {
-      offset += 2;
-    }
-    const encRespDataHex = respDataHex.slice(offset, offset + (len - 1) * 2);
     
-    // Расшифровка сессионным ключом Kenc
-    const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encRespDataHex), new Uint8Array(8));
+    // Расшифровка сессионным ключом
+    const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encPayload), new Uint8Array(8));
     
-    // Снятие дополнения ISO 9797 Method 2
+    // Удаление дополнения ISO 9797 Method 2
     let unpaddedLen = decBytes.length;
     while (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x00) unpaddedLen--;
     if (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x80) unpaddedLen--;
@@ -1418,68 +1445,6 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
   }
 
   return plainDataHex;
-}
-      
-async function epReadDG(dgSfi, dgName) {
-  epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) в режиме Secure Messaging —`);
-  if (!bacSsc) {
-    epAppend('❌ Сначала пройдите аутентификацию (Read Passport)');
-    return;
-  }
-
-  try {
-    // 1. Читаем первые 4 байта заголовка файла для получения его длины (ASN.1 TLV)
-    const p1 = 0x80 | dgSfi; // 0x81 для DG1, 0x82 для DG2
-    const headerHex = await sendSmApdu(0xB0, p1, 0x00, '', '04');
-    
-    if (!headerHex || headerHex.length < 4) {
-      throw new Error('Не удалось получить заголовок файла');
-    }
-
-    // Парсинг длины файла из ASN.1 заголовка
-    let dgLen = 0;
-    const lenByte = parseInt(headerHex.slice(2, 4), 16);
-
-    if (lenByte < 0x80) {
-      dgLen = lenByte + 2;
-    } else if (lenByte === 0x81) {
-      const l2 = parseInt(headerHex.slice(4, 6), 16);
-      dgLen = l2 + 3;
-    } else if (lenByte === 0x82) {
-      const l2 = parseInt(headerHex.slice(4, 8), 16);
-      dgLen = l2 + 4;
-    }
-
-    epAppend(`📊 Размер ${dgName}: ${dgLen} байт`);
-
-    // 2. Чтение файла порциями по 128 байт
-    let fullDataHex = '';
-    let offset = 0;
-    const chunkSize = 128;
-
-    while (offset < dgLen) {
-      const readLen = Math.min(chunkSize, dgLen - offset);
-      const p1Offset = Math.floor(offset / 256);
-      const p2Offset = offset % 256;
-      
-      // Для первого блока передаем SFI в P1, для последующих - смещение
-      const actualP1 = (offset === 0) ? p1 : p1Offset;
-      const leHex = readLen.toString(16).padStart(2, '0');
-      
-      const chunk = await sendSmApdu(0xB0, actualP1, p2Offset, '', leHex);
-      fullDataHex += chunk;
-      offset += chunk.length / 2;
-      
-      epAppend(`⏳ Прочитано: ${offset} / ${dgLen} байт`);
-    }
-
-    epAppend(`✅ ${dgName} УСПЕШНО ПРОЧИТАН!`);
-    epAppend(`📄 HEX (${fullDataHex.length / 2} байт):\n${fullDataHex}`);
-    document.getElementById('isodep-response').value = fullDataHex;
-
-  } catch (e) {
-    epAppend(`❌ Ошибка чтения ${dgName}: ${e.message}`);
-  }
 }
 
       // ---- Main Read ----
