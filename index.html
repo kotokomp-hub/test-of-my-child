@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, камера, видеозапись, платежи)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
@@ -61,7 +61,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации и NFC</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, Камеры, Видеозаписи и Платежей</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -80,7 +80,10 @@
     <div class="space-y-6">
       <!-- Блок информации о сессии -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Данные окружения</h2>
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Данные окружения</h2>
+          <button id="btn-req-context" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded border">Request Context</button>
+        </div>
         <div class="space-y-2 text-sm">
           <div class="flex justify-between border-b pb-1">
             <span class="text-slate-500">Платформа:</span>
@@ -94,7 +97,7 @@
             <span class="text-slate-500">Родительский Origin:</span>
             <span class="font-medium truncate max-w-[150px]" id="val-origin" title="-">-</span>
           </div>
-          <div class="flex justify-between">
+          <div class="flex justify-between border-b pb-1">
             <span class="text-slate-500">Параметры запуска:</span>
             <span class="font-medium truncate max-w-[150px]" id="val-start-params">-</span>
           </div>
@@ -103,7 +106,7 @@
 
       <!-- Блок пользователя -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Пользователь и Баланс</h2>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3">Пользователь и Кошелек</h2>
         <div id="user-info-placeholder" class="text-sm text-slate-400 py-2 italic">
           Ожидание инициализации...
         </div>
@@ -124,8 +127,12 @@
             </div>
             <div class="bg-blue-50 p-2 rounded">
               <span class="block text-xs text-blue-600 font-medium">Кошелек</span>
-              <span class="text-sm font-bold text-blue-800 truncate block" id="val-wallet">Отсутствует</span>
+              <span class="text-xs font-bold text-blue-800 truncate block" id="val-wallet">Отсутствует</span>
             </div>
+          </div>
+          <div class="grid grid-cols-2 gap-1 pt-1 text-[11px]">
+            <button id="btn-wallet-get" class="border border-slate-200 hover:bg-slate-50 py-1 rounded">Get State</button>
+            <button id="btn-wallet-refresh" class="border border-slate-200 hover:bg-slate-50 py-1 rounded">Refresh State</button>
           </div>
         </div>
       </section>
@@ -156,7 +163,7 @@
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, API -->
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, API, Камера, Платежи -->
     <div class="space-y-6 md:col-span-2">
       
       <!-- Логирование событий -->
@@ -169,6 +176,45 @@
           <div>[System] Ожидание подключения и инициализации...</div>
         </div>
       </section>
+
+      <!-- ПЛАТЕЖИ И КАМЕРА -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        
+        <!-- Камера, Сканер, Запись и Поток -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <div class="flex justify-between items-center">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Камера & Видео</h2>
+            <span id="badge-camera-stream" class="w-2 h-2 rounded-full bg-slate-400" title="Статус стрима"></span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <button id="btn-camera-photo" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded">Фото</button>
+            <button id="btn-camera-qr" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-1.5 rounded">Сканер QR</button>
+            <button id="btn-camera-video" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-1.5 rounded">Запись видео</button>
+          </div>
+          <div class="border-t pt-2 space-y-1.5 text-xs">
+            <span class="block text-[10px] text-slate-400 uppercase font-semibold">Потоковое видео (Camera Stream)</span>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="btn-camera-stream-start" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-medium py-1 rounded">Start Stream</button>
+              <button id="btn-camera-stream-stop" class="border border-rose-200 text-rose-600 hover:bg-rose-50 font-medium py-1 rounded">Stop Stream</button>
+            </div>
+            <div class="bg-slate-50 p-1.5 rounded border text-[10px] flex justify-between items-center">
+              <span class="text-slate-500">Получено кадров (cameraFrame):</span>
+              <span id="val-camera-frames" class="font-bold text-indigo-600">0</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Платежная система -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Платежи (Payments)</h2>
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <button id="btn-pay-sparks" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-1.5 rounded font-medium">Sparks Invoice</button>
+            <button id="btn-pay-crypto" class="bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 py-1.5 rounded font-medium">Crypto Request</button>
+            <button id="btn-pay-solana" class="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 py-1.5 rounded font-medium">Solana Pay</button>
+          </div>
+        </section>
+
+      </div>
 
       <!-- ДАТЧИКИ ДВИЖЕНИЯ (Гироскоп с 3D-Кубиком и Акселерометр) -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -380,6 +426,15 @@
               <button id="btn-contacts-invite" class="col-span-2 border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Пригласить в комнату</button>
             </div>
           </section>
+
+          <!-- API-запросы через хост -->
+          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">SDK API Request</h2>
+            <div class="flex gap-1 text-xs">
+              <input type="text" id="api-path-input" class="flex-1 border rounded p-1.5" value="/v1/user/profile">
+              <button id="btn-api-send" class="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Запрос</button>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -439,6 +494,10 @@
               <button id="btn-mp-join" class="bg-slate-100 py-1 rounded hover:bg-slate-200">Войти в комнату</button>
               <button id="btn-mp-match" class="bg-emerald-50 text-emerald-700 font-medium py-1 rounded border border-emerald-100 hover:bg-emerald-100">Искать игру</button>
               <button id="btn-mp-leave" class="text-rose-600 bg-rose-50 py-1 rounded hover:bg-rose-100">Покинуть</button>
+            </div>
+            <div class="grid grid-cols-2 gap-1.5 pt-1 border-t">
+              <button id="btn-mp-send-fast" class="border border-slate-200 py-1 rounded hover:bg-slate-50 text-[10px]">Send Fast Event</button>
+              <button id="btn-mp-update-state" class="border border-slate-200 py-1 rounded hover:bg-slate-50 text-[10px]">Update State</button>
             </div>
           </div>
         </section>
@@ -637,14 +696,35 @@
         document.getElementById('val-gamepad-count').textContent = payload?.gamepads?.length || 0;
       });
 
+      sdk.on('gamepadConnected', (payload) => {
+        log(`Геймпад подключен: ${payload?.gamepad?.id || 'Устройство'}`);
+      });
+
+      sdk.on('gamepadDisconnected', (payload) => {
+        log(`Геймпад отключен: ${payload?.gamepad?.id || 'Устройство'}`, 'warning');
+      });
+
       sdk.on('backButtonClicked', () => {
         log(`Событие 'backButtonClicked': Нажата системная кнопка «Назад»`, 'warning');
+      });
+
+      sdk.on('launchParamsChanged', (params) => {
+        log(`Событие 'launchParamsChanged': ${JSON.stringify(params)}`);
+        document.getElementById('val-start-params').textContent = JSON.stringify(sdk.startParams) || 'нет';
       });
 
       sdk.on('multiplayerStateChanged', (state) => {
         log(`Событие 'multiplayerStateChanged': ${JSON.stringify(state)}`);
         document.getElementById('val-mp-room').textContent = state?.room?.id || '-';
         document.getElementById('val-mp-queue').textContent = state?.queue ? 'В поиске' : 'Нет';
+      });
+
+      sdk.on('multiplayerMatchFound', (payload) => {
+        log(`Мультиплеер: Матч найден! ${JSON.stringify(payload)}`, 'sys');
+      });
+
+      sdk.multiplayer.onEvent((payload) => {
+        log(`Мультиплеер Ивент (onEvent): ${JSON.stringify(payload)}`);
       });
 
       sdk.on('voiceStateChanged', (state) => {
@@ -656,6 +736,116 @@
       sdk.on('voiceParticipantsChanged', (participants) => {
         log(`Событие 'voiceParticipantsChanged'. Участников: ${participants.length}`);
         document.getElementById('val-voice-count').textContent = participants.length;
+      });
+
+      sdk.voice.onParticipantJoined((p) => {
+        log(`Голос: Участник присоединился: ${JSON.stringify(p)}`, 'sys');
+      });
+
+      sdk.voice.onParticipantLeft((p) => {
+        log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
+      });
+
+      // ================= УПРАВЛЕНИЕ КАМЕРОЙ (ФОТО, QR, STREAM, VIDEO) =================
+
+      let cameraFrameCount = 0;
+
+      // Обработка потокового кадра с камеры
+      sdk.camera.onFrame((frameData) => {
+        cameraFrameCount++;
+        document.getElementById('val-camera-frames').textContent = cameraFrameCount;
+        if (cameraFrameCount % 30 === 0) {
+          log(`Камера: Получено 30 кадров. Последний кадр: ${JSON.stringify(frameData).slice(0, 50)}...`);
+        }
+      });
+
+      document.getElementById('btn-camera-photo').addEventListener('click', () => {
+        log('Запрос снимка с камеры...', 'sys');
+        sdk.camera.takePhoto()
+          .then((res) => log(`Фото получено: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка снимка камеры: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-camera-qr').addEventListener('click', () => {
+        log('Запуск сканера QR-кодов...', 'sys');
+        sdk.camera.scanQr()
+          .then((res) => log(`Сканирован QR: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка сканирования QR: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-camera-video').addEventListener('click', () => {
+        log('Запуск записи видео с камеры (startVideo)...', 'sys');
+        sdk.camera.startVideo()
+          .then((res) => log(`Запись видео завершена: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка записи видео: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-camera-stream-start').addEventListener('click', () => {
+        log('Запуск видеопотока с камеры (startStream)...', 'sys');
+        sdk.camera.startStream()
+          .then((res) => {
+            document.getElementById('badge-camera-stream').classList.replace('bg-slate-400', 'bg-emerald-500');
+            log(`Видеопоток с камеры запущен: ${JSON.stringify(res)}`);
+          })
+          .catch((e) => log(`Ошибка запуска видеопотока: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-camera-stream-stop').addEventListener('click', () => {
+        sdk.camera.stopStream();
+        document.getElementById('badge-camera-stream').classList.replace('bg-emerald-500', 'bg-slate-400');
+        log('Видеопоток с камеры остановлен (stopStream).');
+      });
+
+      // ================= УПРАВЛЕНИЕ ПЛАТЕЖАМИ =================
+
+      document.getElementById('btn-pay-sparks').addEventListener('click', () => {
+        sdk.payments.invoice({ amount: 100, title: "Демо покупка" })
+          .then((res) => log(`Sparks Инвойс создан: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка Sparks Invoice: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-pay-crypto').addEventListener('click', () => {
+        sdk.payments.crypto({ symbol: "USDT", amount: 10 })
+          .then((res) => log(`Crypto запрос создан: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка Crypto Request: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-pay-solana').addEventListener('click', () => {
+        sdk.payments.solana({ amount: 0.1, recipient: "DemoSolanaAddressHere" })
+          .then((res) => log(`Solana платеж выполнен: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка Solana Payment: ${e.message}`, 'error'));
+      });
+
+      // ================= УПРАВЛЕНИЕ КОШЕЛЬКОМ И КОНТЕКСТОМ =================
+
+      document.getElementById('btn-req-context').addEventListener('click', () => {
+        sdk.requestContext()
+          .then((ctx) => {
+            log(`Запрошен контекст приложения: ${JSON.stringify(ctx)}`, 'sys');
+            updateUIWithInitData(ctx);
+          })
+          .catch((e) => log(`Ошибка запроса контекста: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-wallet-get').addEventListener('click', () => {
+        sdk.wallet.getState()
+          .then((w) => log(`Состояние кошелька: ${JSON.stringify(w)}`))
+          .catch((e) => log(`Ошибка кошелька: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-wallet-refresh').addEventListener('click', () => {
+        sdk.wallet.refresh();
+        log('Запрос обновления состояния кошелька отправлен.');
+      });
+
+      // ================= API REQUEST =================
+
+      document.getElementById('btn-api-send').addEventListener('click', () => {
+        const path = document.getElementById('api-path-input').value;
+        log(`Отправка API запроса: ${path}...`, 'sys');
+        sdk.api.request(path, { method: 'GET' })
+          .then((res) => log(`Ответ API: ${JSON.stringify(res)}`))
+          .catch((e) => log(`Ошибка API: ${e.message}`, 'error'));
       });
 
       // === ПОДПИСКА НА ДАТЧИКИ И КУБ ===
@@ -805,12 +995,10 @@
 
       // ================= УПРАВЛЕНИЕ NFC =================
 
-      // Слушатель события получения данных с NFC-тэга
       sdk.nfc.onTagRead((tag) => {
         log(`Событие 'nfcTagRead': Данные тэга -> ${JSON.stringify(tag)}`, 'sys');
       });
 
-      // Проверка доступности NFC
       document.getElementById('btn-nfc-check').addEventListener('click', () => {
         Promise.all([sdk.nfc.isAvailable(), sdk.nfc.isEnabled()])
           .then(([available, enabled]) => {
@@ -821,13 +1009,11 @@
           .catch((e) => log(`Ошибка проверки NFC: ${e.message}`, 'error'));
       });
 
-      // Отмена текущей операции NFC
       document.getElementById('btn-nfc-cancel').addEventListener('click', () => {
         sdk.nfc.cancel();
         log('Отправлена команда отмены NFC (Cancel)');
       });
 
-      // Чтение тэга
       document.getElementById('btn-nfc-read').addEventListener('click', () => {
         log('Режим чтения NFC запущен. Поднесите тэг...');
         sdk.nfc.read()
@@ -837,7 +1023,6 @@
           .catch((e) => log(`Ошибка чтения NFC: ${e.message}`, 'error'));
       });
 
-      // Запись на тэг
       document.getElementById('btn-nfc-write').addEventListener('click', () => {
         const textValue = document.getElementById('nfc-text-input').value;
         const records = [
@@ -855,7 +1040,6 @@
           .catch((e) => log(`Ошибка записи NFC: ${e.message}`, 'error'));
       });
 
-      // Шеринг payload по NFC
       document.getElementById('btn-nfc-share').addEventListener('click', () => {
         const textValue = document.getElementById('nfc-text-input').value;
         sdk.nfc.sharePayload(textValue)
@@ -863,13 +1047,11 @@
           .catch((e) => log(`Ошибка запуска шеринга NFC: ${e.message}`, 'error'));
       });
 
-      // Остановка шеринга
       document.getElementById('btn-nfc-stop-share').addEventListener('click', () => {
         sdk.nfc.stopShare();
         log('Шеринг payload по NFC остановлен');
       });
 
-      // Эмуляция чтения тэга (для браузера)
       document.getElementById('btn-mock-nfc-read').addEventListener('click', () => {
         const textValue = document.getElementById('nfc-text-input').value;
         window.postMessage({
@@ -912,9 +1094,7 @@
         sdk.nfc.disconnect();
         isoDepConnected = false;
         document.getElementById('badge-isodep').classList.replace('bg-emerald-500', 'bg-slate-400');
-        document.getElementById('badge-pace').classList.replace('bg-emerald-500', 'bg-slate-400');
         document.getElementById('isodep-response').value = '';
-        paceLog.value = '';
         log('IsoDep: отключен', 'sys');
       });
 
@@ -929,7 +1109,6 @@
           .catch((e) => log(`IsoDep: ошибка: ${e.message}`, 'error'));
       });
 
-      // Предустановленные APDU-команды
       document.getElementById('btn-isodep-select-mf').addEventListener('click', () => {
         document.getElementById('isodep-command').value = '00A40000023F00';
         document.getElementById('btn-isodep-send').click();
@@ -954,48 +1133,23 @@
         epLog.scrollTop = epLog.scrollHeight;
       }
 
-      // Безопасный конвертер HEX -> Uint8Array (без вылетов на пустых строках)
-function hexToBytes(hex) {
-  if (!hex || typeof hex !== 'string') return new Uint8Array(0);
-  const clean = hex.replace(/\s+/g, '');
-  if (!clean) return new Uint8Array(0);
-  const match = clean.match(/.{1,2}/g);
-  if (!match) return new Uint8Array(0);
-  return new Uint8Array(match.map(b => parseInt(b, 16)));
-}
+      function hexToBytes(hex) {
+        if (!hex || typeof hex !== 'string') return new Uint8Array(0);
+        const clean = hex.replace(/\s+/g, '');
+        if (!clean) return new Uint8Array(0);
+        const match = clean.match(/.{1,2}/g);
+        if (!match) return new Uint8Array(0);
+        return new Uint8Array(match.map(b => parseInt(b, 16)));
+      }
 
-// Безопасный конвертер Uint8Array -> HEX
-function bytesToHex(bytes) {
-  if (!bytes) return '';
-  const arr = new Uint8Array(bytes);
-  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+      function bytesToHex(bytes) {
+        if (!bytes) return '';
+        const arr = new Uint8Array(bytes);
+        return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
 
-      // ---- 3DES implementation (crypto-js) ----
-      function hexToWA(hex) { return CryptoJS.enc.Hex.parse(hex.replace(/\s/g, '')); }
-      function waToHex(wa) { return CryptoJS.enc.Hex.stringify(wa); }
       function bytesToWA(b) { return CryptoJS.enc.Hex.parse(bytesToHex(b)); }
       function waToBytes(wa) { return hexToBytes(CryptoJS.enc.Hex.stringify(wa)); }
-
-      function des3EncryptBlock(keyBytes, dataBytes) {
-        const key = bytesToWA(keyBytes);
-        const data = bytesToWA(dataBytes);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const enc = CryptoJS.TripleDES.encrypt(data, key, {
-          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        return waToBytes(enc.ciphertext);
-      }
-
-      function des3DecryptBlock(keyBytes, dataBytes) {
-        const key = bytesToWA(keyBytes);
-        const ct = bytesToWA(dataBytes);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const dec = CryptoJS.TripleDES.decrypt({ ciphertext: ct, salt: null }, key, {
-          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        return waToBytes(dec);
-      }
 
       function des3EncryptCBC(keyBytes, dataBytes, iv) {
         const key = bytesToWA(keyBytes);
@@ -1017,7 +1171,6 @@ function bytesToHex(bytes) {
         return waToBytes(dec);
       }
 
-      // ISO 9797-1 padding method 2
       function isoPad(data, blockSize) {
         const padLen = blockSize - (data.length % blockSize);
         const padded = new Uint8Array(data.length + padLen);
@@ -1025,72 +1178,49 @@ function bytesToHex(bytes) {
         padded[data.length] = 0x80;
         return padded;
       }
+
       function desEncryptBlock(key8Bytes, data8Bytes) {
-  const key = bytesToWA(key8Bytes);
-  const data = bytesToWA(data8Bytes);
-  const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-  const enc = CryptoJS.DES.encrypt(data, key, {
-    mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-  });
-  return waToBytes(enc.ciphertext);
-}
-
-function desDecryptBlock(key8Bytes, data8Bytes) {
-  const key = bytesToWA(key8Bytes);
-  const data = bytesToWA(data8Bytes);
-  const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-  const dec = CryptoJS.DES.decrypt({ ciphertext: data, salt: null }, key, {
-    mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-  });
-  return waToBytes(dec);
-}
-
-      // CBC-MAC with 3DES
-      function des3Mac(key16Bytes, dataBytes) {
-  const k1 = key16Bytes.slice(0, 8);
-  const k2 = key16Bytes.slice(8, 16);
-  const padded = isoPad(dataBytes, 8); // Дополнение ISO 9797-1 method 2 (0x80 ...)
-
-  let y = new Uint8Array(8); // Начальный вектор IV = 0000000000000000
-
-  // ЭТАП 1: Проход Single DES CBC по всем блокам с помощью K1
-  for (let i = 0; i < padded.length; i += 8) {
-    const block = padded.slice(i, i + 8);
-    const xorBlock = new Uint8Array(8);
-    for (let j = 0; j < 8; j++) {
-      xorBlock[j] = block[j] ^ y[j];
-    }
-    y = desEncryptBlock(k1, xorBlock);
-  }
-
-  // ЭТАП 2: Расшифровка с помощью K2
-  const y2 = desDecryptBlock(k2, y);
-
-  // ЭТАП 3: Зашифровка с помощью K1
-  const mac = desEncryptBlock(k1, y2);
-
-  return mac; // Строго 8 байт MAC
-}
-
-      // ---- BAC Protocol ----
-      let bacKenc = null, bacKmac = null, bacSsc = null;
-      let bacSeqSend = 0, bacSeqRecv = 0;
-
-      // 3DES self-test
-      function desSelfTest() {
-        const key = new Uint8Array([0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01]);
-        const data = new Uint8Array([0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01]);
-        try {
-          const enc = des3EncryptBlock(key, data);
-          const hex = bytesToHex(enc);
-          epAppend(`🔬 3DES test: ${bytesToHex(data)} → ${hex}`);
-          const dec = des3DecryptBlock(key, enc);
-          const decHex = bytesToHex(dec);
-          epAppend(`🔬 3DES decrypt: ${hex} → ${decHex}`);
-          if (decHex === bytesToHex(data)) epAppend('✅ 3DES self-test: OK');
-          else epAppend('❌ 3DES self-test: FAILED');
-        } catch (e) { epAppend(`❌ 3DES test error: ${e.message}`); }
+        const key = bytesToWA(key8Bytes);
+        const data = bytesToWA(data8Bytes);
+        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
+        const enc = CryptoJS.DES.encrypt(data, key, {
+          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
+        });
+        return waToBytes(enc.ciphertext);
       }
+
+      function desDecryptBlock(key8Bytes, data8Bytes) {
+        const key = bytesToWA(key8Bytes);
+        const data = bytesToWA(data8Bytes);
+        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
+        const dec = CryptoJS.DES.decrypt({ ciphertext: data, salt: null }, key, {
+          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
+        });
+        return waToBytes(dec);
+      }
+
+      function des3Mac(key16Bytes, dataBytes) {
+        const k1 = key16Bytes.slice(0, 8);
+        const k2 = key16Bytes.slice(8, 16);
+        const padded = isoPad(dataBytes, 8);
+
+        let y = new Uint8Array(8);
+
+        for (let i = 0; i < padded.length; i += 8) {
+          const block = padded.slice(i, i + 8);
+          const xorBlock = new Uint8Array(8);
+          for (let j = 0; j < 8; j++) {
+            xorBlock[j] = block[j] ^ y[j];
+          }
+          y = desEncryptBlock(k1, xorBlock);
+        }
+
+        const y2 = desDecryptBlock(k2, y);
+        const mac = desEncryptBlock(k1, y2);
+        return mac;
+      }
+
+      let bacKenc = null, bacKmac = null, bacSsc = null;
 
       function parseMRZ(line2) {
         const cleaned = line2.replace(/\s/g, '').toUpperCase();
@@ -1119,106 +1249,82 @@ function desDecryptBlock(key8Bytes, data8Bytes) {
         return res;
       }
 
-async function deriveBacKeys(mrzInfo) {
-  const enc = new TextEncoder().encode(mrzInfo);
-  
-  // Kseed = SHA-1(MRZ)[0..15]
-  const hash = await crypto.subtle.digest('SHA-1', enc);
-  const kSeed = new Uint8Array(hash).slice(0, 16);
+      async function deriveBacKeys(mrzInfo) {
+        const enc = new TextEncoder().encode(mrzInfo);
+        const hash = await crypto.subtle.digest('SHA-1', enc);
+        const kSeed = new Uint8Array(hash).slice(0, 16);
 
-  // Kenc = SHA-1(Kseed || 00000001)[0..15]
-  const dEnc = new Uint8Array(20);
-  dEnc.set(kSeed, 0);
-  dEnc.set([0x00, 0x00, 0x00, 0x01], 16);
-  const hashEnc = new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc));
-  bacKenc = setOddParity(hashEnc.slice(0, 16));
+        const dEnc = new Uint8Array(20);
+        dEnc.set(kSeed, 0);
+        dEnc.set([0x00, 0x00, 0x00, 0x01], 16);
+        const hashEnc = new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc));
+        bacKenc = setOddParity(hashEnc.slice(0, 16));
 
-  // Kmac = SHA-1(Kseed || 00000002)[0..15]
-  const dMac = new Uint8Array(20);
-  dMac.set(kSeed, 0);
-  dMac.set([0x00, 0x00, 0x00, 0x02], 16);
-  const hashMac = new Uint8Array(await crypto.subtle.digest('SHA-1', dMac));
-  bacKmac = setOddParity(hashMac.slice(0, 16));
+        const dMac = new Uint8Array(20);
+        dMac.set(kSeed, 0);
+        dMac.set([0x00, 0x00, 0x00, 0x02], 16);
+        const hashMac = new Uint8Array(await crypto.subtle.digest('SHA-1', dMac));
+        bacKmac = setOddParity(hashMac.slice(0, 16));
 
-  return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
-}
+        return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
+      }
 
-async function epReadDG(dgSfi, dgName) {
-  epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) в режиме Secure Messaging —`);
-  if (!bacSsc) {
-    epAppend('❌ Сначала пройдите аутентификацию (Read Passport)');
-    return;
-  }
+      async function epReadDG(dgSfi, dgName) {
+        epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) в режиме Secure Messaging —`);
+        if (!bacSsc) {
+          epAppend('❌ Сначала пройдите аутентификацию (Read Passport)');
+          return;
+        }
 
-  try {
-    // 1. Читаем первые 4 байта заголовка файла для получения его длины (ASN.1 TLV)
-    const p1 = 0x80 | dgSfi; // 0x81 для DG1, 0x82 для DG2
-    const headerHex = await sendSmApdu(0xB0, p1, 0x00, '', '04');
-    
-    if (!headerHex || headerHex.length < 4) {
-      throw new Error('Не удалось получить заголовок файла');
-    }
+        try {
+          const p1 = 0x80 | dgSfi;
+          const headerHex = await sendSmApdu(0xB0, p1, 0x00, '', '04');
+          
+          if (!headerHex || headerHex.length < 4) {
+            throw new Error('Не удалось получить заголовок файла');
+          }
 
-    // Парсинг длины файла из ASN.1 заголовка
-    let dgLen = 0;
-    const lenByte = parseInt(headerHex.slice(2, 4), 16);
+          let dgLen = 0;
+          const lenByte = parseInt(headerHex.slice(2, 4), 16);
 
-    if (lenByte < 0x80) {
-      dgLen = lenByte + 2;
-    } else if (lenByte === 0x81) {
-      const l2 = parseInt(headerHex.slice(4, 6), 16);
-      dgLen = l2 + 3;
-    } else if (lenByte === 0x82) {
-      const l2 = parseInt(headerHex.slice(4, 8), 16);
-      dgLen = l2 + 4;
-    }
+          if (lenByte < 0x80) {
+            dgLen = lenByte + 2;
+          } else if (lenByte === 0x81) {
+            const l2 = parseInt(headerHex.slice(4, 6), 16);
+            dgLen = l2 + 3;
+          } else if (lenByte === 0x82) {
+            const l2 = parseInt(headerHex.slice(4, 8), 16);
+            dgLen = l2 + 4;
+          }
 
-    epAppend(`📊 Размер ${dgName}: ${dgLen} байт`);
+          epAppend(`📊 Размер ${dgName}: ${dgLen} байт`);
 
-    // 2. Чтение файла порциями по 128 байт
-    let fullDataHex = '';
-    let offset = 0;
-    const chunkSize = 128;
+          let fullDataHex = '';
+          let offset = 0;
+          const chunkSize = 128;
 
-    while (offset < dgLen) {
-      const readLen = Math.min(chunkSize, dgLen - offset);
-      const p1Offset = Math.floor(offset / 256);
-      const p2Offset = offset % 256;
-      
-      // Для первого блока передаем SFI в P1, для последующих - смещение
-      const actualP1 = (offset === 0) ? p1 : p1Offset;
-      const leHex = readLen.toString(16).padStart(2, '0');
-      
-      const chunk = await sendSmApdu(0xB0, actualP1, p2Offset, '', leHex);
-      fullDataHex += chunk;
-      offset += chunk.length / 2;
-      
-      epAppend(`⏳ Прочитано: ${offset} / ${dgLen} байт`);
-    }
+          while (offset < dgLen) {
+            const readLen = Math.min(chunkSize, dgLen - offset);
+            const p1Offset = Math.floor(offset / 256);
+            const p2Offset = offset % 256;
+            
+            const actualP1 = (offset === 0) ? p1 : p1Offset;
+            const leHex = readLen.toString(16).padStart(2, '0');
+            
+            const chunk = await sendSmApdu(0xB0, actualP1, p2Offset, '', leHex);
+            fullDataHex += chunk;
+            offset += chunk.length / 2;
+            
+            epAppend(`⏳ Прочитано: ${offset} / ${dgLen} байт`);
+          }
 
-    epAppend(`✅ ${dgName} УСПЕШНО ПРОЧИТАН!`);
-    epAppend(`📄 HEX (${fullDataHex.length / 2} байт):\n${fullDataHex}`);
-    document.getElementById('isodep-response').value = fullDataHex;
+          epAppend(`✅ ${dgName} УСПЕШНО ПРОЧИТАН!`);
+          epAppend(`📄 HEX (${fullDataHex.length / 2} байт):\n${fullDataHex}`);
+          document.getElementById('isodep-response').value = fullDataHex;
 
-  } catch (e) {
-    epAppend(`❌ Ошибка чтения ${dgName}: ${e.message}`);
-  }
-}
-      
-      function buildSMCommand(cmdApdu, data, le) {
-        if (!bacSsc || !bacKenc || !bacKmac) return cmdApdu + data; // no SM yet
-        for (let i = 7; i >= 0; i--) { bacSsc[i]++; if (bacSsc[i] !== 0) break; }
-        const sscBytes = bacSsc.slice();
-        const encData = des3EncryptCBC(bacKenc, isoPad(hexToBytes(data), 8), new Uint8Array(8));
-        const encLen = encData.length;
-        const do87 = '87' + (encLen <= 127 ? encLen.toString(16).padStart(2, '0') : '81' + encLen.toString(16).padStart(2, '0')) + bytesToHex(encData);
-        const do97 = '9701' + le;
-        const macInput = new Uint8Array([...sscBytes, ...hexToBytes(cmdApdu), ...hexToBytes(do87 + do97)]);
-        const mac = des3Mac(bacKmac, macInput);
-        const do8e = '8E' + mac.length.toString(16).padStart(2, '0') + bytesToHex(mac);
-        const doData = do87 + do97 + do8e;
-        const lcHex = (doData.length / 2).toString(16).padStart(2, '0');
-        return '0C' + cmdApdu.slice(2) + lcHex + doData;
+        } catch (e) {
+          epAppend(`❌ Ошибка чтения ${dgName}: ${e.message}`);
+        }
       }
 
       async function rawTransceive(hex) {
@@ -1228,13 +1334,12 @@ async function epReadDG(dgSfi, dgName) {
       }
 
       const EP_AIDS = [
-        'A0000002470001',   // ICAO ePassport (standard)
-        'A0000002471001',   // ICAO ePassport alt
-        'A0000002472001',   // eMRTD
+        'A0000002470001',
+        'A0000002471001',
+        'A0000002472001',
       ];
 
       async function epGetCurrentApplet() {
-        // Send empty SELECT to see what's currently active
         epAppend('→ Запрос текущего applet');
         const resp = await rawTransceive('00A4040000');
         epAppend(`← ${resp}`);
@@ -1242,10 +1347,8 @@ async function epReadDG(dgSfi, dgName) {
       }
 
       async function epSelectOrSkip() {
-        // First check what's already selected
         const current = await epGetCurrentApplet();
         if (!current.endsWith('9000')) {
-          // No applet selected — try explicit SELECT
           for (const p2 of ['00', '04', '0C']) {
             for (const aid of EP_AIDS) {
               const lc = aid.length / 2;
@@ -1264,9 +1367,7 @@ async function epReadDG(dgSfi, dgName) {
           }
           throw new Error('Не удалось SELECT ни один ePassport AID');
         }
-        // Parse AID from FCI template
         const data = current.slice(0, -4);
-        // Look for 84 tag (AID) in the response
         const aidMatch = data.match(/84([0-9a-f]{2})([0-9a-f]+)/i);
         if (aidMatch) {
           const aidLen = parseInt(aidMatch[1], 16) * 2;
@@ -1276,7 +1377,6 @@ async function epReadDG(dgSfi, dgName) {
             return foundAid.toUpperCase();
           }
         }
-        // Try to find any known AID in the data
         for (const aid of EP_AIDS) {
           if (data.toUpperCase().includes(aid)) {
             epAppend(`✅ Найден AID в FCI: ${aid}`);
@@ -1296,220 +1396,182 @@ async function epReadDG(dgSfi, dgName) {
         return hexToBytes(resp.slice(0, -4));
       }
 
-async function epMutualAuth(rndIcc) {
-  epAppend('— MUTUAL AUTHENTICATE —');
-  
-  const rndIfd = crypto.getRandomValues(new Uint8Array(8));
-  const kifd = crypto.getRandomValues(new Uint8Array(16)); // K.IFD = 16 случайных байт
+      async function epMutualAuth(rndIcc) {
+        epAppend('— MUTUAL AUTHENTICATE —');
+        
+        const rndIfd = crypto.getRandomValues(new Uint8Array(8));
+        const kifd = crypto.getRandomValues(new Uint8Array(16));
 
-  // Строго 32 байта: RND.IFD (8B) || RND.ICC (8B) || K.IFD (16B)
-  const s = new Uint8Array(32);
-  s.set(rndIfd, 0);
-  s.set(rndIcc, 8);
-  s.set(kifd, 16);
+        const s = new Uint8Array(32);
+        s.set(rndIfd, 0);
+        s.set(rndIcc, 8);
+        s.set(kifd, 16);
 
-  // Шифрование S с помощью 3DES-CBC (IV = 0)
-  const encS = des3EncryptCBC(bacKenc, s, new Uint8Array(8));
-  
-  // Расчет правильного Retail MAC (ISO 9797-1 Alg 3)
-  const macS = des3Mac(bacKmac, encS);
+        const encS = des3EncryptCBC(bacKenc, s, new Uint8Array(8));
+        const macS = des3Mac(bacKmac, encS);
 
-  const data = bytesToHex(encS) + bytesToHex(macS); // 32 + 8 = 40 байт (0x28)
-  const lcHex = (data.length / 2).toString(16).padStart(2, '0');
-  const cmd = '00820000' + lcHex + data + '08';
-  
-  epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08`);
-  const resp = await rawTransceive(cmd);
-  epAppend(`← ${resp}`);
-
-  if (!resp.endsWith('9000')) {
-    throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
-  }
-
-  const respData = hexToBytes(resp.slice(0, -4));
-  const encResp = respData.slice(0, respData.length - 8);
-  const respMac = respData.slice(respData.length - 8);
-
-  // Проверка MAC ответа чипа
-  const expectedMac = des3Mac(bacKmac, encResp);
-  let macOk = true;
-  for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
-
-  if (!macOk) { 
-    epAppend('⚠ MAC ответа не совпал'); 
-    return false; 
-  }
-
-  // Расшифровка ответа чипа
-  const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
-  const rndIccBack = decResp.slice(0, 8);
-  const kifdBack = decResp.slice(8, 16);
-  const kicc = decResp.slice(16, 32);
-
-  // Проверка совпадения RND.ICC
-  let rndOk = true;
-  for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
-  if (!rndOk) { 
-    epAppend('⚠ RND.ICC не совпал'); 
-    return false; 
-  }
-
-  epAppend('✅ Mutual Auth OK!');
-
-  // Установка SSC (Send Sequence Counter) и сессионных ключей Kenc/Kmac
-  const kSeed = new Uint8Array(16);
-  for (let i = 0; i < 16; i++) kSeed[i] = kifd[i] ^ kicc[i];
-
-  bacSsc = new Uint8Array(8);
-  bacSsc.set(rndIcc.slice(4, 8), 0);
-  bacSsc.set(rndIfd.slice(4, 8), 4);
-
-  const dEnc = new Uint8Array(20); dEnc.set(kSeed, 0); dEnc.set([0,0,0,1], 16);
-  bacKenc = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc)).slice(0, 16));
-
-  const dMac = new Uint8Array(20); dMac.set(kSeed, 0); dMac.set([0,0,0,2], 16);
-  bacKmac = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dMac)).slice(0, 16));
-
-  epAppend('🔐 Сессия установлена. Переход в Secure Messaging.');
-  return true;
-}
-
-      async function epReadBinaryWithSM(sfi, offset, le) {
-        const sfiByte = 0x80 | sfi;
-        const selectCmd = `00A4000002${('0' + sfiByte.toString(16)).slice(-2)}00`;
-        epAppend(`→ SELECT SFI ${sfi}`);
-        let resp = await rawTransceive(selectCmd);
+        const data = bytesToHex(encS) + bytesToHex(macS);
+        const lcHex = (data.length / 2).toString(16).padStart(2, '0');
+        const cmd = '00820000' + lcHex + data + '08';
+        
+        epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08`);
+        const resp = await rawTransceive(cmd);
         epAppend(`← ${resp}`);
-        if (!resp.endsWith('9000')) throw new Error('SELECT SFI failed: ' + resp.slice(-4));
 
-        const offHex = ('000' + offset.toString(16)).slice(-4);
-        const leHex = ('00' + le.toString(16)).slice(-2);
-        const readApdu = '0CB000' + offHex + leHex;
-        // In secure messaging, the DOs are added automatically
-        const resp2 = await rawTransceive(readApdu);
-        epAppend(`← ${resp2}`);
-        return resp2;
+        if (!resp.endsWith('9000')) {
+          throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
+        }
+
+        const respData = hexToBytes(resp.slice(0, -4));
+        const encResp = respData.slice(0, respData.length - 8);
+        const respMac = respData.slice(respData.length - 8);
+
+        const expectedMac = des3Mac(bacKmac, encResp);
+        let macOk = true;
+        for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
+
+        if (!macOk) { 
+          epAppend('⚠ MAC ответа не совпал'); 
+          return false; 
+        }
+
+        const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
+        const rndIccBack = decResp.slice(0, 8);
+        const kicc = decResp.slice(16, 32);
+
+        let rndOk = true;
+        for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
+        if (!rndOk) { 
+          epAppend('⚠ RND.ICC не совпал'); 
+          return false; 
+        }
+
+        epAppend('✅ Mutual Auth OK!');
+
+        const kSeed = new Uint8Array(16);
+        for (let i = 0; i < 16; i++) kSeed[i] = kifd[i] ^ kicc[i];
+
+        bacSsc = new Uint8Array(8);
+        bacSsc.set(rndIcc.slice(4, 8), 0);
+        bacSsc.set(rndIfd.slice(4, 8), 4);
+
+        const dEnc = new Uint8Array(20); dEnc.set(kSeed, 0); dEnc.set([0,0,0,1], 16);
+        bacKenc = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc)).slice(0, 16));
+
+        const dMac = new Uint8Array(20); dMac.set(kSeed, 0); dMac.set([0,0,0,2], 16);
+        bacKmac = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dMac)).slice(0, 16));
+
+        epAppend('🔐 Сессия установлена. Переход в Secure Messaging.');
+        return true;
       }
 
-function parseDoTags(hex) {
-  const dos = {};
-  let offset = 0;
-  while (offset < hex.length) {
-    const tag = hex.slice(offset, offset + 2).toUpperCase();
-    offset += 2;
-    if (!tag || tag.length < 2) break;
-    
-    let len = parseInt(hex.slice(offset, offset + 2), 16);
-    offset += 2;
-    if (isNaN(len)) break;
-    
-    if (len & 0x80) {
-      const numBytes = len & 0x7F;
-      len = parseInt(hex.slice(offset, offset + numBytes * 2), 16);
-      offset += numBytes * 2;
-    }
-    
-    const val = hex.slice(offset, offset + len * 2);
-    offset += len * 2;
-    dos[tag] = val;
-  }
-  return dos;
-}
+      function parseDoTags(hex) {
+        const dos = {};
+        let offset = 0;
+        while (offset < hex.length) {
+          const tag = hex.slice(offset, offset + 2).toUpperCase();
+          offset += 2;
+          if (!tag || tag.length < 2) break;
+          
+          let len = parseInt(hex.slice(offset, offset + 2), 16);
+          offset += 2;
+          if (isNaN(len)) break;
+          
+          if (len & 0x80) {
+            const numBytes = len & 0x7F;
+            len = parseInt(hex.slice(offset, offset + numBytes * 2), 16);
+            offset += numBytes * 2;
+          }
+          
+          const val = hex.slice(offset, offset + len * 2);
+          offset += len * 2;
+          dos[tag] = val;
+        }
+        return dos;
+      }
 
-// Защищенный обмен сообщениями (Secure Messaging)
-async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
-  if (!bacSsc || !bacKenc || !bacKmac) {
-    throw new Error('Сессия Secure Messaging не активна');
-  }
+      async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
+        if (!bacSsc || !bacKenc || !bacKmac) {
+          throw new Error('Сессия Secure Messaging не активна');
+        }
 
-  // 1. Инкремент SSC
-  for (let i = 7; i >= 0; i--) {
-    bacSsc[i]++;
-    if (bacSsc[i] !== 0) break;
-  }
+        for (let i = 7; i >= 0; i--) {
+          bacSsc[i]++;
+          if (bacSsc[i] !== 0) break;
+        }
 
-  const sscBytes = bacSsc.slice();
+        const sscBytes = bacSsc.slice();
 
-  // 2. Сборка DO87 (если есть передаваемые данные)
-  let do87Hex = '';
-  if (dataHex && dataHex.length > 0) {
-    const paddedData = isoPad(hexToBytes(dataHex), 8);
-    const encData = des3EncryptCBC(bacKenc, paddedData, new Uint8Array(8));
-    const encHex = bytesToHex(encData);
-    const payloadHex = '01' + encHex;
-    const payloadLen = payloadHex.length / 2;
-    const lenField = payloadLen < 0x80 
-      ? payloadLen.toString(16).padStart(2, '0') 
-      : '81' + payloadLen.toString(16).padStart(2, '0');
-    do87Hex = '87' + lenField + payloadHex;
-  }
+        let do87Hex = '';
+        if (dataHex && dataHex.length > 0) {
+          const paddedData = isoPad(hexToBytes(dataHex), 8);
+          const encData = des3EncryptCBC(bacKenc, paddedData, new Uint8Array(8));
+          const encHex = bytesToHex(encData);
+          const payloadHex = '01' + encHex;
+          const payloadLen = payloadHex.length / 2;
+          const lenField = payloadLen < 0x80 
+            ? payloadLen.toString(16).padStart(2, '0') 
+            : '81' + payloadLen.toString(16).padStart(2, '0');
+          do87Hex = '87' + lenField + payloadHex;
+        }
 
-  // 3. Сборка DO97 (Le)
-  let do97Hex = '';
-  if (leHex !== null && leHex !== undefined && leHex !== '') {
-    do97Hex = '9701' + leHex.padStart(2, '0');
-  }
+        let do97Hex = '';
+        if (leHex !== null && leHex !== undefined && leHex !== '') {
+          do97Hex = '9701' + leHex.padStart(2, '0');
+        }
 
-  // 4. Заголовок CLA=0C для расчета MAC
-  const headerBytes = new Uint8Array([0x0C, ins, p1, p2]);
-  const paddedHeader = isoPad(headerBytes, 8);
+        const headerBytes = new Uint8Array([0x0C, ins, p1, p2]);
+        const paddedHeader = isoPad(headerBytes, 8);
 
-  // 5. Расчет Retail MAC
-  const macInput = new Uint8Array([
-    ...sscBytes,
-    ...paddedHeader,
-    ...hexToBytes(do87Hex),
-    ...hexToBytes(do97Hex)
-  ]);
+        const macInput = new Uint8Array([
+          ...sscBytes,
+          ...paddedHeader,
+          ...hexToBytes(do87Hex),
+          ...hexToBytes(do97Hex)
+        ]);
 
-  const macBytes = des3Mac(bacKmac, macInput);
-  const do8eHex = '8E08' + bytesToHex(macBytes);
+        const macBytes = des3Mac(bacKmac, macInput);
+        const do8eHex = '8E08' + bytesToHex(macBytes);
 
-  // 6. Формирование и отправка APDU
-  const doBodyHex = do87Hex + do97Hex + do8eHex;
-  const lcHex = (doBodyHex.length / 2).toString(16).padStart(2, '0');
-  const smApduHex = `0C${ins.toString(16).padStart(2, '0')}${p1.toString(16).padStart(2, '0')}${p2.toString(16).padStart(2, '0')}${lcHex}${doBodyHex}00`;
+        const doBodyHex = do87Hex + do97Hex + do8eHex;
+        const lcHex = (doBodyHex.length / 2).toString(16).padStart(2, '0');
+        const smApduHex = `0C${ins.toString(16).padStart(2, '0')}${p1.toString(16).padStart(2, '0')}${p2.toString(16).padStart(2, '0')}${lcHex}${doBodyHex}00`;
 
-  const respHex = await rawTransceive(smApduHex);
-  if (!respHex) throw new Error('Чип не ответил');
+        const respHex = await rawTransceive(smApduHex);
+        if (!respHex) throw new Error('Чип не ответил');
 
-  const status = respHex.slice(-4);
-  if (status !== '9000') {
-    throw new Error(`Статус чипа: ${status}`);
-  }
+        const status = respHex.slice(-4);
+        if (status !== '9000') {
+          throw new Error(`Статус чипа: ${status}`);
+        }
 
-  // 7. Инкремент SSC для ответа
-  for (let i = 7; i >= 0; i--) {
-    bacSsc[i]++;
-    if (bacSsc[i] !== 0) break;
-  }
+        for (let i = 7; i >= 0; i--) {
+          bacSsc[i]++;
+          if (bacSsc[i] !== 0) break;
+        }
 
-  // 8. Разбор и расшифровка DO87 из ответа
-  const respDataHex = respHex.slice(0, -4);
-  const dos = parseDoTags(respDataHex);
-  
-  let plainDataHex = '';
-  if (dos['87']) {
-    let encPayload = dos['87'];
-    if (encPayload.startsWith('01')) {
-      encPayload = encPayload.slice(2); // Пропускаем индикатор 01
-    }
-    
-    // Расшифровка сессионным ключом
-    const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encPayload), new Uint8Array(8));
-    
-    // Удаление дополнения ISO 9797 Method 2
-    let unpaddedLen = decBytes.length;
-    while (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x00) unpaddedLen--;
-    if (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x80) unpaddedLen--;
-    
-    plainDataHex = bytesToHex(decBytes.slice(0, unpaddedLen));
-  }
+        const respDataHex = respHex.slice(0, -4);
+        const dos = parseDoTags(respDataHex);
+        
+        let plainDataHex = '';
+        if (dos['87']) {
+          let encPayload = dos['87'];
+          if (encPayload.startsWith('01')) {
+            encPayload = encPayload.slice(2);
+          }
+          
+          const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encPayload), new Uint8Array(8));
+          
+          let unpaddedLen = decBytes.length;
+          while (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x00) unpaddedLen--;
+          if (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x80) unpaddedLen--;
+          
+          plainDataHex = bytesToHex(decBytes.slice(0, unpaddedLen));
+        }
 
-  return plainDataHex;
-}
+        return plainDataHex;
+      }
 
-      // ---- Main Read ----
       async function readPassport() {
         const mrzInput = document.getElementById('ep-mrz').value.trim();
         if (!mrzInput) { epAppend('❌ Введи 2-ю строку MRZ'); return; }
@@ -1517,7 +1579,6 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
         epAppend('==== ePassport Read ====');
         epAppend(`MRZ: ${mrzInput}`);
 
-        // Parse MRZ
         let parsed;
         try {
           parsed = parseMRZ(mrzInput);
@@ -1530,19 +1591,15 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
           return;
         }
 
-        bacSeqSend = 0; bacSeqRecv = 0; bacSsc = null;
+        bacSsc = null;
 
-        // SELECT applet once (before key trials)
-        let selectedAid;
         try {
-          const result = await epSelectOrSkip();
-          selectedAid = result;
+          await epSelectOrSkip();
         } catch (e) {
           epAppend(`❌ SELECT: ${e.message}`);
           return;
         }
 
-        // Try both key derivations
         const mrzVariants = [
           { label: 'без контрольных цифр', mrzInfo: parsed.mrzNoChecks },
           { label: 'с контрольными цифрами', mrzInfo: parsed.mrzWithChecks },
@@ -1551,11 +1608,9 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
 
         for (const variant of mrzVariants) {
           epAppend(`\n— Попытка ${variant.label}: "${variant.mrzInfo}" —`);
-          // Show SHA-1 hash
           const hash = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(variant.mrzInfo));
           epAppend(`SHA-1: ${bytesToHex(new Uint8Array(hash))}`);
 
-          // Derive keys
           try {
             const keys = await deriveBacKeys(variant.mrzInfo);
             epAppend(`Kenc: ${keys.kenc}`);
@@ -1578,7 +1633,6 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
         }
 
         epAppend('\n💡 Не удалось аутентифицироваться ни с одним вариантом ключей');
-        epAppend('💡 Проверь MRZ: скопируй 2-ю строку без пробелов');
       }
 
       async function epSelectAndChallenge() {
@@ -1600,8 +1654,6 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
       document.getElementById('btn-ep-dg2').addEventListener('click', async () => {
         try { await epReadDG(2, 'DG2'); } catch (e) { epAppend(`❌ DG2: ${e.message}`); }
       });
-      // Run DES self-test on load
-      setTimeout(() => desSelfTest(), 500);
 
       // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
 
@@ -1616,17 +1668,17 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
 
       document.getElementById('btn-contacts-share').addEventListener('click', () => {
         sdk.contacts.share({ text: "Привет! Заходи в моё мини-приложение." })
-          .then((res) => log(`Запрос на отправку успешно обработан`))
+          .then(() => log(`Запрос на отправку успешно обработан`))
           .catch((e) => log(`Ошибка отправки: ${e.message}`, 'error'));
       });
 
       document.getElementById('btn-contacts-invite').addEventListener('click', () => {
         sdk.contacts.invite({ text: "Присоединяйся к игре в моей комнате!" })
-          .then((res) => log(`Запрос на приглашение успешно обработан`))
+          .then(() => log(`Запрос на приглашение успешно обработан`))
           .catch((e) => log(`Ошибка приглашения: ${e.message}`, 'error'));
       });
 
-      // ================= ОСТАЛЬНЫЕ КНОПКИ =================
+      // ================= СИСТЕМНЫЕ КНОПКИ И ХРАНИЛИЩЕ =================
 
       document.getElementById('btn-expand').addEventListener('click', () => sdk.expand());
       document.getElementById('btn-collapse').addEventListener('click', () => sdk.collapse());
@@ -1726,6 +1778,18 @@ async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
         sdk.multiplayer.leaveRoom()
           .then(() => log(`Мультиплеер: Сессия покинута`))
           .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-mp-send-fast').addEventListener('click', () => {
+        sdk.multiplayer.send('player_move', { x: 10, y: 25 }, { transient: true })
+          .then(res => log(`Быстрое событие отправлено: ${JSON.stringify(res)}`))
+          .catch(e => log(`Мультиплеер Event Error: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-mp-update-state').addEventListener('click', () => {
+        sdk.multiplayer.updateState({ score: 100, health: 95 })
+          .then(res => log(`Состояние игры обновлено: ${JSON.stringify(res)}`))
+          .catch(e => log(`Мультиплеер State Error: ${e.message}`, 'error'));
       });
 
       // Голосовой чат
