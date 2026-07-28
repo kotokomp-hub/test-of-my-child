@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, 60fps Video Camera, платежи)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, 60fps Camera, платежи)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
@@ -61,7 +61,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, 60fps HTML5 Камеры и Платежей</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, 60fps Камеры и Платежей</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -180,10 +180,10 @@
       <!-- ПЛАТЕЖИ И КАМЕРА (с 60fps HTML5 Video) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         
-        <!-- Блок Камеры с HTML5 Video (getUserMedia 60 FPS) -->
+        <!-- Блок Камеры с HTML5 Video (sdk.camera.getUserMedia 60 FPS) -->
         <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <div class="flex justify-between items-center">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Camera Stream (60 FPS)</h2>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Camera (getUserMedia 60 FPS)</h2>
             <span id="badge-camera-lens" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold">Выключена</span>
           </div>
 
@@ -192,7 +192,7 @@
             <video id="camera-preview-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
             <div id="camera-preview-placeholder" class="text-center p-3 text-slate-500 text-xs">
               <span class="block font-medium mb-1">Видеопоток выключен</span>
-              <span class="text-[10px] text-slate-600 block">Запустите «Задняя» или «Передняя» для прямой трансляции (60 FPS)</span>
+              <span class="text-[10px] text-slate-600 block">Нажмите «Задняя» или «Передняя» для трансляции в &lt;video&gt;</span>
             </div>
           </div>
 
@@ -201,15 +201,11 @@
             <div class="grid grid-cols-3 gap-1.5">
               <button id="btn-cam-back" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-1.5 rounded">Задняя</button>
               <button id="btn-cam-front" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded">Передняя</button>
-              <button id="btn-cam-stop" class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 font-medium py-1.5 rounded">Stop Stream</button>
+              <button id="btn-cam-stop" class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 font-medium py-1.5 rounded">Stop Video</button>
             </div>
 
-            <div class="grid grid-cols-2 gap-1.5 pt-1 border-t">
-              <button id="btn-camera-photo" class="border border-slate-200 hover:bg-slate-50 font-medium py-1 rounded">Сделать Фото</button>
-              <div class="bg-slate-50 px-2 py-1 rounded border text-[10px] flex justify-between items-center">
-                <span class="text-slate-500">Кадров (onFrame):</span>
-                <span id="val-camera-frames" class="font-bold text-indigo-600">0</span>
-              </div>
+            <div class="pt-1 border-t">
+              <button id="btn-camera-photo" class="w-full border border-slate-200 hover:bg-slate-50 font-medium py-1 rounded">Сделать Фото (takePhoto)</button>
             </div>
           </div>
         </section>
@@ -768,29 +764,25 @@
         log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
       });
 
-      // ================= УПРАВЛЕНИЕ 60FPS ВИДЕОКАМЕРОЙ И ПРЕВЬЮ =================
+      // ================= УПРАВЛЕНИЕ КАМЕРОЙ (sdk.camera.getUserMedia 60 FPS) =================
 
-      let cameraFrameCount = 0;
       let currentLocalStream = null;
 
       const videoEl = document.getElementById('camera-preview-video');
       const previewPlaceholder = document.getElementById('camera-preview-placeholder');
       const lensBadge = document.getElementById('badge-camera-lens');
 
-      let offscreenCanvas = null;
-      let offscreenCtx = null;
-
-      // Прямой запуск 60 FPS стрима с использованием getUserMedia
+      // Прямой запуск 60 FPS стрима с использованием sdk.camera.getUserMedia
       async function startCameraStream(lens = 'back') {
         stopCameraStream();
 
         const facingMode = lens === 'front' ? 'user' : { ideal: 'environment' };
 
         try {
-          log(`Запрос прямого видеопотока getUserMedia (lens: ${lens}, frameRate: 60)...`, 'sys');
+          log(`Запрос видеопотока через sdk.camera.getUserMedia (${lens}, 60 FPS)...`, 'sys');
           
-          // Вызов navigator.mediaDevices.getUserMedia с частотой 60 кадров/сек
-          currentLocalStream = await navigator.mediaDevices.getUserMedia({
+          // Захват видео через актуальный метод SDK с частотой 60 кадров/сек
+          currentLocalStream = await sdk.camera.getUserMedia({
             video: {
               facingMode: facingMode,
               frameRate: { ideal: 60, max: 60 }
@@ -807,24 +799,14 @@
             ? 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-semibold'
             : 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
 
-          log(`Видеопоток с частотой 60 FPS запущен в теге <video>!`, 'sys');
-
-          // Уведомление хоста через SDK
-          sdk.camera.startStream(lens).catch(e => log(`SDK startStream: ${e.message}`, 'warning'));
+          log(`Видеопоток с частотой 60 FPS успешно запущен!`, 'sys');
 
         } catch (err) {
-          log(`getUserMedia не доступен прямо: ${err.message}. Пробуем вызвать SDK...`, 'warning');
-          
-          // Фоллбэк через SDK startStream
-          sdk.camera.startStream(lens)
-            .then((res) => log(`Запущен поток через SDK: ${JSON.stringify(res)}`))
-            .catch((e) => log(`Ошибка выбора камеры: ${e.message}`, 'error'));
+          log(`Ошибка захвата видеопотока: ${err.message}`, 'error');
         }
       }
 
       function stopCameraStream() {
-        sdk.camera.stopStream();
-
         if (currentLocalStream) {
           currentLocalStream.getTracks().forEach(track => track.stop());
           currentLocalStream = null;
@@ -841,62 +823,15 @@
         lensBadge.className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
         videoEl.classList.add('hidden');
         previewPlaceholder.classList.remove('hidden');
-        log('Видеопоток камеры остановлен (stopStream).');
+        log('Видеопоток камеры остановлен.');
       }
 
-      // Слушатель кадров, отправляемых хостом через SDK (если задействована виртуальная камера)
-      sdk.camera.onFrame((frameData) => {
-        cameraFrameCount++;
-        document.getElementById('val-camera-frames').textContent = cameraFrameCount;
-
-        if (!frameData) return;
-
-        // Если хост возвращает прямой MediaStream
-        if (frameData instanceof MediaStream || (frameData.stream && frameData.stream instanceof MediaStream)) {
-          if (videoEl.srcObject !== (frameData.stream || frameData)) {
-            videoEl.srcObject = frameData.stream || frameData;
-          }
-          videoEl.classList.remove('hidden');
-          previewPlaceholder.classList.add('hidden');
-          return;
-        }
-
-        // Если кадры приходят покадрово (Base64)
-        let rawSrc = typeof frameData === 'string' 
-          ? frameData 
-          : (frameData.frame || frameData.image || frameData.data || '');
-
-        if (!rawSrc) return;
-
-        if (!rawSrc.startsWith('data:') && !rawSrc.startsWith('http')) {
-          rawSrc = 'data:image/jpeg;base64,' + rawSrc;
-        }
-
-        const img = new Image();
-        img.onload = () => {
-          if (!offscreenCanvas) {
-            offscreenCanvas = document.createElement('canvas');
-            offscreenCtx = offscreenCanvas.getContext('2d');
-          }
-          offscreenCanvas.width = img.width || 640;
-          offscreenCanvas.height = img.height || 480;
-          offscreenCtx.drawImage(img, 0, 0);
-
-          if (!videoEl.srcObject && offscreenCanvas.captureStream) {
-            videoEl.srcObject = offscreenCanvas.captureStream(60);
-          }
-          videoEl.classList.remove('hidden');
-          previewPlaceholder.classList.add('hidden');
-        };
-        img.src = rawSrc;
-      });
-
-      // Нажатия на кнопки камер
+      // Кнопки управления видеопотоком
       document.getElementById('btn-cam-back').addEventListener('click', () => startCameraStream('back'));
       document.getElementById('btn-cam-front').addEventListener('click', () => startCameraStream('front'));
       document.getElementById('btn-cam-stop').addEventListener('click', () => stopCameraStream());
 
-      // Снимок фото
+      // Снимок фото через SDK
       document.getElementById('btn-camera-photo').addEventListener('click', () => {
         log('Запрос снимка с камеры (takePhoto)...', 'sys');
         sdk.camera.takePhoto()
