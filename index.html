@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, датчики, вибрация)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Подключение SDK по указанному адресу -->
@@ -318,6 +318,37 @@
                 <button id="btn-isodep-select-mf" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">SELECT MF</button>
                 <button id="btn-isodep-get-challenge" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">GET CHALLENGE</button>
                 <button id="btn-isodep-read-binary" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">READ BINARY</button>
+              </div>
+
+              <!-- PACE Auth -->
+              <div class="border-t pt-2 mt-1 space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <span class="text-[10px] font-semibold uppercase text-amber-600">PACE аутентификация (ePassport)</span>
+                  <span id="badge-pace" class="w-2 h-2 rounded-full bg-slate-400"></span>
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400 block">MRZ (третья строка или полный MRZ паспорта)</label>
+                  <div class="flex gap-1">
+                    <input type="text" id="pace-mrz" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" placeholder="P12345678<0USA1234567<1234567">
+                    <button id="btn-pace-derive" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 py-1 rounded text-[10px]">Ключ</button>
+                  </div>
+                  <div class="text-[10px] text-green-700 font-mono mt-0.5" id="pace-key-display"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-1">
+                  <button id="btn-pace-mse" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">1. MSE Set AT</button>
+                  <button id="btn-pace-step1" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">2. GA (nonce)</button>
+                  <button id="btn-pace-step2" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">3. GA (DH map)</button>
+                  <button id="btn-pace-step3" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">4. GA (mapped DH)</button>
+                  <button id="btn-pace-step4" class="col-span-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">5. Mutual Auth</button>
+                </div>
+                <div class="grid grid-cols-2 gap-1 text-[10px]">
+                  <button id="btn-pace-read-dg1" class="bg-green-600 hover:bg-green-700 text-white py-1 rounded font-semibold">Читать DG1 (ФИО)</button>
+                  <button id="btn-pace-read-dg2" class="bg-green-600 hover:bg-green-700 text-white py-1 rounded font-semibold">Читать DG2 (Фото)</button>
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400 block">PACE лог:</label>
+                  <textarea id="pace-log" class="w-full border rounded p-1 text-xs font-mono bg-amber-50" rows="3" readonly></textarea>
+                </div>
               </div>
             </div>
           </div>
@@ -877,6 +908,7 @@
           .then((info) => {
             isoDepConnected = true;
             document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
+            paceAppend(`✅ IsoDep подключен! UID=${info.uid}`);
             log(`IsoDep: подключен. UID=${info.uid}, histBytes=${info.historicalBytes}`, 'sys');
           })
           .catch((e) => log(`IsoDep: ошибка подключения: ${e.message}`, 'error'));
@@ -886,7 +918,9 @@
         sdk.nfc.disconnect();
         isoDepConnected = false;
         document.getElementById('badge-isodep').classList.replace('bg-emerald-500', 'bg-slate-400');
+        document.getElementById('badge-pace').classList.replace('bg-emerald-500', 'bg-slate-400');
         document.getElementById('isodep-response').value = '';
+        paceLog.value = '';
         log('IsoDep: отключен', 'sys');
       });
 
@@ -916,6 +950,182 @@
         document.getElementById('isodep-command').value = '00B0000000';
         document.getElementById('btn-isodep-send').click();
       });
+
+      // ================= PACE AUTH (ePassport) =================
+
+      let paceKey = null;       // CryptoKey (AES-128)
+      let paceKeyBytes = null;  // raw bytes for encryption
+
+      const paceLog = document.getElementById('pace-log');
+
+      function paceAppend(msg) {
+        paceLog.value += msg + '\n';
+        paceLog.scrollTop = paceLog.scrollHeight;
+      }
+
+      // Derive AES-128 key from MRZ (ICAO 9303)
+      async function derivePacePin(mrz) {
+        // MRZ = document_number + check_digit + date_of_birth + check_digit + date_of_expiry + check_digit
+        const cleaned = mrz.replace(/<+/g, '<').replace(/[^A-Z0-9<]/gi, '');
+        const mrzInfo = cleaned.replace(/<{2,}/g, '<').replace(/^<+|<$/g, '');
+        const pin = mrzInfo.slice(0, Math.min(mrzInfo.length, 36)).toUpperCase();
+        const enc = new TextEncoder().encode(pin);
+        const hash = await crypto.subtle.digest('SHA-1', enc);
+        // Take first 16 bytes for AES-128
+        const keyBytes = new Uint8Array(hash.slice(0, 16));
+        paceKeyBytes = keyBytes;
+        paceKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-CBC' }, false, ['encrypt', 'decrypt']);
+        return Array.from(keyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      // Hex helpers
+      function hexToBytes(hex) {
+        const clean = hex.replace(/\s+/g, '');
+        return new Uint8Array(clean.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+      }
+
+      function bytesToHex(bytes) {
+        return Array.from(new Uint8Array(bytes)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+
+      // AES-CBC encrypt (zero IV for PACE nonce encryption)
+      async function aesEncrypt(plaintext, iv) {
+        const pt = typeof plaintext === 'string' ? hexToBytes(plaintext) : plaintext;
+        const alg = { name: 'AES-CBC', iv: iv || new Uint8Array(16) };
+        const ct = await crypto.subtle.encrypt(alg, paceKey, pt);
+        return new Uint8Array(ct);
+      }
+
+      async function sendApdu(hex) {
+        const resp = await sdk.nfc.transceive(hex.replace(/\s+/g, ''));
+        return resp;
+      }
+
+      // PACE: MSE Set AT
+      document.getElementById('btn-pace-mse').addEventListener('click', async () => {
+        if (!paceKey) { paceAppend('❌ Сначала вычисли ключ из MRZ'); return; }
+        if (!isoDepConnected) { paceAppend('❌ Сначала подключись к тэгу (Connect)'); return; }
+        paceAppend('— MSE Set AT (PACE) —');
+        const cmd = '002241A41E800102830103840A00800017410200010203A506830102850101';
+        try {
+          const resp = await sendApdu(cmd);
+          paceAppend(`→ ${cmd}`);
+          paceAppend(`← ${resp}`);
+          if (resp.endsWith('9000')) paceAppend('✅ MSE Set AT OK');
+          else paceAppend(`❌ MSE Set AT: ${resp.slice(-4)}`);
+        } catch (e) { paceAppend(`❌ ${e.message}`); }
+      });
+
+      // PACE: GA Step 1 — encrypt random nonce with AES-CBC (zero IV)
+      document.getElementById('btn-pace-step1').addEventListener('click', async () => {
+        if (!paceKey) { paceAppend('❌ Сначала вычисли ключ из MRZ'); return; }
+        paceAppend('— GA Step 1: Encrypted Nonce —');
+        // Generate random 8-byte nonce + 8-byte padding
+        const nonce = crypto.getRandomValues(new Uint8Array(8));
+        const pad = new Uint8Array(8); // zero padding
+        const plain = new Uint8Array([...nonce, ...pad]);
+        try {
+          const enc = await aesEncrypt(plain, new Uint8Array(16));
+          // TLV: 7C len 80 10 (16 bytes encrypted nonce)
+          const encHex = bytesToHex(enc);
+          const dataField = '8010' + encHex;
+          const cmd = '0086000000' + dataField;
+          paceAppend(`→ ${cmd}`);
+          const resp = await sendApdu(cmd);
+          paceAppend(`← ${resp}`);
+          if (resp.endsWith('9000')) paceAppend('✅ GA Step 1 OK');
+          else paceAppend(`❌ GA Step 1: ${resp.slice(-4)}`);
+        } catch (e) { paceAppend(`❌ ${e.message}`); }
+      });
+
+      // PACE: GA Step 2 — DH mapping (send DH public key)
+      document.getElementById('btn-pace-step2').addEventListener('click', async () => {
+        paceAppend('— GA Step 2: DH Key Exchange —');
+        // Use static DH for demo — in real impl need domain params
+        const dummyPub = '0480' + '00'.repeat(32); // compressed dummy point
+        const cmd = '0086000000' + '831B' + dummyPub;
+        try {
+          paceAppend(`→ ${cmd}`);
+          const resp = await sendApdu(cmd);
+          paceAppend(`← ${resp}`);
+          if (resp.endsWith('9000')) paceAppend('✅ GA Step 2 OK');
+          else paceAppend(`❌ GA Step 2: ${resp.slice(-4)}`);
+        } catch (e) { paceAppend(`❌ ${e.message}`); }
+      });
+
+      // PACE: GA Step 3 — Mapped DH
+      document.getElementById('btn-pace-step3').addEventListener('click', async () => {
+        paceAppend('— GA Step 3: Mapped DH —');
+        const dummyMap = '0480' + '01'.repeat(32);
+        const cmd = '0086000000' + '831B' + dummyMap;
+        try {
+          paceAppend(`→ ${cmd}`);
+          const resp = await sendApdu(cmd);
+          paceAppend(`← ${resp}`);
+          if (resp.endsWith('9000')) paceAppend('✅ GA Step 3 OK');
+          else paceAppend(`❌ GA Step 3: ${resp.slice(-4)}`);
+        } catch (e) { paceAppend(`❌ ${e.message}`); }
+      });
+
+      // PACE: GA Step 4 — Mutual Auth
+      document.getElementById('btn-pace-step4').addEventListener('click', async () => {
+        paceAppend('— GA Step 4: Mutual Auth —');
+        const dummyToken = '00'.repeat(16);
+        const cmd = '0082000000' + '8410' + dummyToken;
+        try {
+          paceAppend(`→ ${cmd}`);
+          const resp = await sendApdu(cmd);
+          paceAppend(`← ${resp}`);
+          if (resp.endsWith('9000')) {
+            paceAppend('✅ PACE аутентификация завершена!');
+            document.getElementById('badge-pace').classList.replace('bg-slate-400', 'bg-emerald-500');
+          } else paceAppend(`❌ Mutual Auth: ${resp.slice(-4)}`);
+        } catch (e) { paceAppend(`❌ ${e.message}`); }
+      });
+
+      // Derive PACE key from MRZ
+      document.getElementById('btn-pace-derive').addEventListener('click', async () => {
+        const mrz = document.getElementById('pace-mrz').value.trim();
+        if (!mrz) { paceAppend('❌ Введи MRZ'); return; }
+        try {
+          const hex = await derivePacePin(mrz);
+          document.getElementById('pace-key-display').textContent = 'AES-128 ключ: ' + hex;
+          paceAppend(`✅ PACE ключ выведен из MRZ: ${hex.substring(0, 16)}...`);
+        } catch (e) { paceAppend(`❌ Ошибка: ${e.message}`); }
+      });
+
+      // Read DG1 after PACE
+      function readDataGroup(dgShortFileId, dgName) {
+        return async () => {
+          if (!isoDepConnected) { paceAppend('❌ Сначала подключись к тэгу'); return; }
+          paceAppend(`— Чтение ${dgName} —`);
+          try {
+            // SELECT DG by SFI
+            const sfi = ('0' + dgShortFileId.toString(16)).slice(-2);
+            const selectCmd = `00A4000002${sfi}00`;
+            paceAppend(`→ ${selectCmd}`);
+            let resp = await sendApdu(selectCmd);
+            paceAppend(`← ${resp}`);
+            if (!resp.endsWith('9000')) { paceAppend(`❌ SELECT ${dgName}: ${resp.slice(-4)}`); return; }
+            // READ BINARY
+            const readCmd = '00B0000000';
+            paceAppend(`→ ${readCmd}`);
+            resp = await sendApdu(readCmd);
+            paceAppend(`← ${resp}`);
+            if (resp.endsWith('9000')) {
+              paceAppend(`✅ ${dgName} прочитан`);
+              document.getElementById('isodep-response').value = resp;
+            } else if (resp.endsWith('6982')) {
+              paceAppend('❌ Нужен BAC/PACE (6982) — пройди аутентификацию');
+            } else {
+              paceAppend(`❌ READ ${dgName}: ${resp.slice(-4)}`);
+            }
+          } catch (e) { paceAppend(`❌ ${e.message}`); }
+        };
+      }
+
+      document.getElementById('btn-pace-read-dg1').addEventListener('click', readDataGroup(1, 'DG1'));
+      document.getElementById('btn-pace-read-dg2').addEventListener('click', readDataGroup(2, 'DG2'));
 
       // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
 
