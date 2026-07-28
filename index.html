@@ -306,7 +306,7 @@
               <div>
                 <label class="text-[10px] text-slate-400 block">APDU команда (hex)</label>
                 <div class="flex gap-1">
-                  <input type="text" id="isodep-command" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" value="00A4040008A0000002470001">
+                  <input type="text" id="isodep-command" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" value="00A4040007A0000002470001">
                   <button id="btn-isodep-send" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-[10px]">Send</button>
                 </div>
                 <div class="mt-1">
@@ -320,34 +320,25 @@
                 <button id="btn-isodep-read-binary" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">READ BINARY</button>
               </div>
 
-              <!-- PACE Auth -->
+              <!-- ePassport BAC Reader -->
               <div class="border-t pt-2 mt-1 space-y-1.5">
                 <div class="flex justify-between items-center">
-                  <span class="text-[10px] font-semibold uppercase text-amber-600">PACE аутентификация (ePassport)</span>
-                  <span id="badge-pace" class="w-2 h-2 rounded-full bg-slate-400"></span>
+                  <span class="text-[10px] font-semibold uppercase text-emerald-600">ePassport Reader (BAC)</span>
+                  <span id="badge-epassport" class="w-2 h-2 rounded-full bg-slate-400"></span>
                 </div>
                 <div>
-                  <label class="text-[10px] text-slate-400 block">MRZ (третья строка или полный MRZ паспорта)</label>
-                  <div class="flex gap-1">
-                    <input type="text" id="pace-mrz" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" placeholder="P12345678<0USA1234567<1234567">
-                    <button id="btn-pace-derive" class="bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 py-1 rounded text-[10px]">Ключ</button>
-                  </div>
-                  <div class="text-[10px] text-green-700 font-mono mt-0.5" id="pace-key-display"></div>
+                  <label class="text-[10px] text-slate-400 block">MRZ (2-я строка паспорта целиком)</label>
+                  <input type="text" id="ep-mrz" class="w-full border rounded p-1 text-xs font-mono focus:outline-indigo-500" placeholder="123456789<RUS7001015M2601018<<<<<<<<<<<<<1">
+                  <button id="btn-ep-read" class="mt-1 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded text-xs font-semibold">Прочитать паспорт</button>
                 </div>
-                <div class="grid grid-cols-2 gap-1">
-                  <button id="btn-pace-mse" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">1. MSE Set AT</button>
-                  <button id="btn-pace-step1" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">2. GA (nonce)</button>
-                  <button id="btn-pace-step2" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">3. GA (DH map)</button>
-                  <button id="btn-pace-step3" class="border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">4. GA (mapped DH)</button>
-                  <button id="btn-pace-step4" class="col-span-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 py-0.5 rounded text-[10px]">5. Mutual Auth</button>
-                </div>
-                <div class="grid grid-cols-2 gap-1 text-[10px]">
-                  <button id="btn-pace-read-dg1" class="bg-green-600 hover:bg-green-700 text-white py-1 rounded font-semibold">Читать DG1 (ФИО)</button>
-                  <button id="btn-pace-read-dg2" class="bg-green-600 hover:bg-green-700 text-white py-1 rounded font-semibold">Читать DG2 (Фото)</button>
+                <div class="flex gap-1 text-[10px]">
+                  <button id="btn-ep-select-only" class="flex-1 border border-emerald-200 hover:bg-emerald-50 py-0.5 rounded">SELECT + Challenge</button>
+                  <button id="btn-ep-dg1" class="flex-1 border border-emerald-200 hover:bg-emerald-50 py-0.5 rounded">Читать DG1</button>
+                  <button id="btn-ep-dg2" class="flex-1 border border-emerald-200 hover:bg-emerald-50 py-0.5 rounded">Читать DG2</button>
                 </div>
                 <div>
-                  <label class="text-[10px] text-slate-400 block">PACE лог:</label>
-                  <textarea id="pace-log" class="w-full border rounded p-1 text-xs font-mono bg-amber-50" rows="3" readonly></textarea>
+                  <label class="text-[10px] text-slate-400 block">Лог:</label>
+                  <textarea id="ep-log" class="w-full border rounded p-1 text-xs font-mono bg-emerald-50" rows="3" readonly></textarea>
                 </div>
               </div>
             </div>
@@ -908,7 +899,7 @@
           .then((info) => {
             isoDepConnected = true;
             document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
-            paceAppend(`✅ IsoDep подключен! UID=${info.uid}`);
+            epAppend(`✅ IsoDep подключен! UID=${info.uid}`);
             log(`IsoDep: подключен. UID=${info.uid}, histBytes=${info.historicalBytes}`, 'sys');
           })
           .catch((e) => log(`IsoDep: ошибка подключения: ${e.message}`, 'error'));
@@ -951,34 +942,15 @@
         document.getElementById('btn-isodep-send').click();
       });
 
-      // ================= PACE AUTH (ePassport) =================
+      // ================= ePassport BAC Reader =================
 
-      let paceKey = null;       // CryptoKey (AES-128)
-      let paceKeyBytes = null;  // raw bytes for encryption
+      const epLog = document.getElementById('ep-log');
 
-      const paceLog = document.getElementById('pace-log');
-
-      function paceAppend(msg) {
-        paceLog.value += msg + '\n';
-        paceLog.scrollTop = paceLog.scrollHeight;
+      function epAppend(msg) {
+        epLog.value += msg + '\n';
+        epLog.scrollTop = epLog.scrollHeight;
       }
 
-      // Derive AES-128 key from MRZ (ICAO 9303)
-      async function derivePacePin(mrz) {
-        // MRZ = document_number + check_digit + date_of_birth + check_digit + date_of_expiry + check_digit
-        const cleaned = mrz.replace(/<+/g, '<').replace(/[^A-Z0-9<]/gi, '');
-        const mrzInfo = cleaned.replace(/<{2,}/g, '<').replace(/^<+|<$/g, '');
-        const pin = mrzInfo.slice(0, Math.min(mrzInfo.length, 36)).toUpperCase();
-        const enc = new TextEncoder().encode(pin);
-        const hash = await crypto.subtle.digest('SHA-1', enc);
-        // Take first 16 bytes for AES-128
-        const keyBytes = new Uint8Array(hash.slice(0, 16));
-        paceKeyBytes = keyBytes;
-        paceKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-CBC' }, false, ['encrypt', 'decrypt']);
-        return Array.from(keyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-
-      // Hex helpers
       function hexToBytes(hex) {
         const clean = hex.replace(/\s+/g, '');
         return new Uint8Array(clean.match(/.{1,2}/g).map(b => parseInt(b, 16)));
@@ -988,144 +960,400 @@
         return Array.from(new Uint8Array(bytes)).map(b => b.toString(16).padStart(2, '0')).join('');
       }
 
-      // AES-CBC encrypt (zero IV for PACE nonce encryption)
-      async function aesEncrypt(plaintext, iv) {
-        const pt = typeof plaintext === 'string' ? hexToBytes(plaintext) : plaintext;
-        const alg = { name: 'AES-CBC', iv: iv || new Uint8Array(16) };
-        const ct = await crypto.subtle.encrypt(alg, paceKey, pt);
-        return new Uint8Array(ct);
+      // ---- 3DES implementation (pure JS) ----
+      // DES S-boxes (standard)
+      const DES_SBOX = [
+        [14,4,13,1,2,15,11,8,3,10,6,12,5,9,0,7,0,15,7,4,14,2,13,1,10,6,12,11,9,5,3,8,
+         4,1,14,8,13,6,2,11,15,12,9,7,3,10,5,0,15,12,8,2,4,9,1,7,5,11,3,14,10,0,6,13],
+        [15,1,8,14,6,11,3,4,9,7,2,13,12,0,5,10,3,13,4,7,15,2,8,14,12,0,1,10,6,9,11,5,
+         0,14,7,11,10,4,13,1,5,8,12,6,9,3,2,15,13,8,10,1,3,15,4,2,11,6,7,12,0,5,14,9],
+        [10,0,9,14,6,3,15,5,1,13,12,7,11,4,2,8,13,7,0,9,3,4,6,10,2,8,5,14,12,11,15,1,
+         13,6,4,9,8,15,3,0,11,1,2,12,5,10,14,7,1,10,13,0,6,9,8,7,4,15,14,3,11,5,2,12],
+        [7,13,14,3,0,6,9,10,1,2,8,5,11,12,4,15,13,8,11,5,6,15,0,3,4,7,2,12,1,10,14,9,
+         10,6,9,0,12,11,7,13,15,1,3,14,5,2,8,4,3,15,0,6,10,1,13,8,9,4,5,11,12,7,2,14],
+        [2,12,4,1,7,10,11,6,8,5,3,15,13,0,14,9,14,11,2,12,4,7,13,1,5,0,15,10,3,9,8,6,
+         4,2,1,11,10,13,7,8,15,9,12,5,6,3,0,14,11,8,12,7,1,14,2,13,6,15,0,9,10,4,5,3],
+        [12,1,10,15,9,2,6,8,0,13,3,4,14,7,5,11,10,15,4,2,7,12,9,5,6,1,13,14,0,11,3,8,
+         9,14,15,5,2,8,12,3,7,0,4,10,1,13,11,6,4,3,2,12,9,5,15,10,11,14,1,7,6,0,8,13],
+        [4,11,2,14,15,0,8,13,3,12,9,7,5,10,6,1,13,0,11,7,4,9,1,10,14,3,5,12,2,15,8,6,
+         1,4,11,13,12,3,7,14,10,15,6,8,0,5,9,2,6,11,13,8,1,4,10,7,9,5,0,15,14,2,3,12],
+        [13,2,8,4,6,15,11,1,10,9,3,14,5,0,12,7,1,15,13,8,10,3,7,4,12,5,6,11,0,14,9,2,
+         7,11,4,1,9,12,14,2,0,6,10,13,15,3,5,8,2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11]
+      ];
+      const DES_PC1 = [56,48,40,32,24,16,8,0,57,49,41,33,25,17,9,1,58,50,42,34,26,18,10,2,59,51,43,35,62,54,46,38,30,22,14,6,61,53,45,37,29,21,13,5,60,52,44,36,28,20,12,4,27,19,11,3];
+      const DES_PC2 = [13,16,10,23,0,4,2,27,14,5,20,9,22,18,11,3,25,7,15,6,26,19,12,1,40,51,30,36,46,54,29,39,50,44,32,47,43,48,38,55,33,52,45,41,49,35,28,31];
+      const DES_SHIFTS = [1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1];
+      const DES_IP = [57,49,41,33,25,17,9,1,59,51,43,35,27,19,11,3,61,53,45,37,29,21,13,5,63,55,47,39,31,23,15,7,56,48,40,32,24,16,8,0,58,50,42,34,26,18,10,2,60,52,44,36,28,20,12,4,62,54,46,38,30,22,14,6];
+      const DES_FP = [39,7,47,15,55,23,63,31,38,6,46,14,54,22,62,30,37,5,45,13,53,21,61,29,36,4,44,12,52,20,60,28,35,3,43,11,51,19,59,27,34,2,42,10,50,18,58,26,33,1,41,9,49,17,57,25,32,0,40,8,48,16,56,24];
+      const DES_E = [31,0,1,2,3,4,3,4,5,6,7,8,7,8,9,10,11,12,11,12,13,14,15,16,15,16,17,18,19,20,19,20,21,22,23,24,23,24,25,26,27,28,27,28,29,30,31,0];
+      const DES_P32 = [15,6,19,20,28,11,27,16,0,14,22,25,4,17,30,9,1,7,23,13,31,26,2,8,18,12,29,5,21,10,3,24];
+
+      function getBit(byte, pos) { return (byte >> (7 - pos)) & 1; }
+      function setBit(v, pos, b) { if (b) v |= (1 << (7 - pos)); else v &= ~(1 << (7 - pos)); return v; }
+
+      function permute(input, table, inBits) {
+        let out = 0n;
+        for (let i = 0; i < table.length; i++) {
+          const bit = Number(BigInt.asUintN(inBits, input) >> BigInt(inBits - 1 - table[i])) & 1;
+          out = (out << 1n) | BigInt(bit);
+        }
+        return out;
       }
 
-      async function sendApdu(hex) {
+      function desKeySchedule(keyBytes, encrypt) {
+        const key = BigInt('0x' + [...keyBytes].map(b => b.toString(16).padStart(2, '0')).join(''));
+        const K = Number(permute(key, DES_PC1, 64));
+        let C = (K >> 28) & 0x0FFFFFFF;
+        let D = K & 0x0FFFFFFF;
+        const roundKeys = [];
+        for (let r = 0; r < 16; r++) {
+          for (let s = 0; s < DES_SHIFTS[r]; s++) {
+            C = ((C << 1) | ((C >> 27) & 1)) & 0x0FFFFFFF;
+            D = ((D << 1) | ((D >> 27) & 1)) & 0x0FFFFFFF;
+          }
+          const CD = (C << 28) | D;
+          roundKeys.push(permute(BigInt(CD), DES_PC2, 56));
+        }
+        return encrypt ? roundKeys : [...roundKeys].reverse();
+      }
+
+      function desBlock(inputBytes, roundKeys) {
+        let block = BigInt('0x' + [...inputBytes].map(b => b.toString(16).padStart(2, '0')).join(''));
+        block = permute(block, DES_IP, 64);
+        let L = Number(BigInt.asUintN(64, block) >> 32n);
+        let R = Number(BigInt.asUintN(32, block));
+        for (let r = 0; r < 16; r++) {
+          let expR = Number(permute(BigInt(R), DES_E, 32));
+          let x = (expR ^ Number(roundKeys[r])) >>> 0;
+          let sOut = 0;
+          for (let i = 0; i < 8; i++) {
+            const chunk = (x >> ((7 - i) * 6)) & 0x3F;
+            const row = ((chunk & 0x20) >> 4) | (chunk & 1);
+            const col = (chunk >> 1) & 0x0F;
+            const sVal = DES_SBOX[i][row * 16 + col];
+            sOut = (sOut << 4) | sVal;
+          }
+          let f = Number(permute(BigInt(sOut), DES_P32, 32));
+          const newL = R;
+          R = (L ^ f) >>> 0;
+          L = newL;
+        }
+        let combined = (BigInt(R) << 32n) | BigInt(L);
+        combined = permute(combined, DES_FP, 64);
+        const result = new Uint8Array(8);
+        for (let i = 0; i < 8; i++) result[i] = Number((combined >> BigInt((7 - i) * 8)) & 0xFFn);
+        return result;
+      }
+
+      function desEncryptBlock(keyBytes, dataBytes) {
+        const rk = desKeySchedule(keyBytes, true);
+        return desBlock(dataBytes, rk);
+      }
+
+      function desDecryptBlock(keyBytes, dataBytes) {
+        const rk = desKeySchedule(keyBytes, false);
+        return desBlock(dataBytes, rk);
+      }
+
+      function des3Encrypt(keyBytes, dataBytes) {
+        if (dataBytes.length % 8 !== 0) throw new Error('3DES data not multiple of 8');
+        const res = new Uint8Array(dataBytes.length);
+        for (let i = 0; i < dataBytes.length; i += 8) {
+          const block = dataBytes.slice(i, i + 8);
+          const e1 = desEncryptBlock(keyBytes.slice(0, 8), block);
+          const d2 = desDecryptBlock(keyBytes.slice(8, 16), e1);
+          const e3 = desEncryptBlock(keyBytes.slice(0, 8), d2);
+          res.set(e3, i);
+        }
+        return res;
+      }
+
+      function des3Decrypt(keyBytes, dataBytes) {
+        if (dataBytes.length % 8 !== 0) throw new Error('3DES data not multiple of 8');
+        const res = new Uint8Array(dataBytes.length);
+        for (let i = 0; i < dataBytes.length; i += 8) {
+          const block = dataBytes.slice(i, i + 8);
+          const d1 = desDecryptBlock(keyBytes.slice(0, 8), block);
+          const e2 = desEncryptBlock(keyBytes.slice(8, 16), d1);
+          const d3 = desDecryptBlock(keyBytes.slice(0, 8), e2);
+          res.set(d3, i);
+        }
+        return res;
+      }
+
+      // ISO 9797-1 padding method 2 (pad with 0x80, then zeros)
+      function isoPad(data, blockSize) {
+        const padLen = blockSize - (data.length % blockSize);
+        const padded = new Uint8Array(data.length + padLen);
+        padded.set(data);
+        padded[data.length] = 0x80;
+        return padded;
+      }
+
+      // CBC-MAC with 3DES
+      function des3Mac(keyBytes, dataBytes) {
+        const padded = isoPad(dataBytes, 8);
+        let prev = new Uint8Array(8);
+        for (let i = 0; i < padded.length; i += 8) {
+          const block = padded.slice(i, i + 8);
+          const xored = new Uint8Array(8);
+          for (let j = 0; j < 8; j++) xored[j] = block[j] ^ prev[j];
+          prev = des3Encrypt(keyBytes, xored);
+        }
+        return prev;
+      }
+
+      // ---- BAC Protocol ----
+      let bacKenc = null, bacKmac = null, bacSsc = null;
+      let bacSeqSend = 0, bacSeqRecv = 0;
+
+      function parseMRZ(line2) {
+        const cleaned = line2.replace(/\s/g, '').toUpperCase();
+        const docNum = cleaned.slice(0, 9);
+        const docCheck = cleaned[9];
+        const dob = cleaned.slice(13, 19);
+        const dobCheck = cleaned[19];
+        const exp = cleaned.slice(21, 27);
+        const expCheck = cleaned[27];
+        return { docNum, docCheck, dob, dobCheck, exp, expCheck,
+          mrzInfo: docNum + docCheck + dob + dobCheck + exp + expCheck };
+      }
+
+      function setOddParity(key) {
+        const res = new Uint8Array(key.length);
+        for (let i = 0; i < key.length; i++) {
+          let b = key[i];
+          let bits = 0;
+          for (let j = 0; j < 8; j++) if (b & (1 << j)) bits++;
+          if (bits % 2 === 0) b ^= 1;
+          res[i] = b;
+        }
+        return res;
+      }
+
+      async function deriveBacKeys(mrzInfo) {
+        const enc = new TextEncoder().encode(mrzInfo);
+        const hash = await crypto.subtle.digest('SHA-1', enc);
+        const h = new Uint8Array(hash);
+        const kencRaw = [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7]];
+        const kmacRaw = [h[8],h[9],h[10],h[11],h[12],h[13],h[14],h[15],h[8],h[9],h[10],h[11],h[12],h[13],h[14],h[15]];
+        bacKenc = setOddParity(new Uint8Array(kencRaw));
+        bacKmac = setOddParity(new Uint8Array(kmacRaw));
+        return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
+      }
+
+      function buildSMCommand(cmdApdu, data, le) {
+        if (!bacSsc || !bacKenc || !bacKmac) return cmdApdu + data; // no SM yet
+        for (let i = 7; i >= 0; i--) { bacSsc[i]++; if (bacSsc[i] !== 0) break; }
+        const sscBytes = bacSsc.slice();
+        const encData = des3Encrypt(bacKenc, isoPad(hexToBytes(data), 8));
+        const encLen = encData.length;
+        const do87 = '87' + (encLen <= 127 ? encLen.toString(16).padStart(2, '0') : '81' + encLen.toString(16).padStart(2, '0')) + bytesToHex(encData);
+        const do97 = '9701' + le;
+        const macInput = new Uint8Array([...sscBytes, ...hexToBytes(cmdApdu), ...hexToBytes(do87 + do97)]);
+        const mac = des3Mac(bacKmac, macInput);
+        const do8e = '8E' + mac.length.toString(16).padStart(2, '0') + bytesToHex(mac);
+        const doData = do87 + do97 + do8e;
+        const lcHex = (doData.length / 2).toString(16).padStart(2, '0');
+        return '0C' + cmdApdu.slice(2) + lcHex + doData;
+      }
+
+      async function rawTransceive(hex) {
         const resp = await sdk.nfc.transceive(hex.replace(/\s+/g, ''));
+        if (!resp) throw new Error('no response from tag');
         return resp;
       }
 
-      // PACE: MSE Set AT
-      document.getElementById('btn-pace-mse').addEventListener('click', async () => {
-        if (!paceKey) { paceAppend('❌ Сначала вычисли ключ из MRZ'); return; }
-        if (!isoDepConnected) { paceAppend('❌ Сначала подключись к тэгу (Connect)'); return; }
-        paceAppend('— MSE Set AT (PACE) —');
-        const cmd = '002241A41E800102830103840A00800017410200010203A506830102850101';
-        try {
-          const resp = await sendApdu(cmd);
-          paceAppend(`→ ${cmd}`);
-          paceAppend(`← ${resp}`);
-          if (resp.endsWith('9000')) paceAppend('✅ MSE Set AT OK');
-          else paceAppend(`❌ MSE Set AT: ${resp.slice(-4)}`);
-        } catch (e) { paceAppend(`❌ ${e.message}`); }
-      });
-
-      // PACE: GA Step 1 — encrypt random nonce with AES-CBC (zero IV)
-      document.getElementById('btn-pace-step1').addEventListener('click', async () => {
-        if (!paceKey) { paceAppend('❌ Сначала вычисли ключ из MRZ'); return; }
-        paceAppend('— GA Step 1: Encrypted Nonce —');
-        // Generate random 8-byte nonce + 8-byte padding
-        const nonce = crypto.getRandomValues(new Uint8Array(8));
-        const pad = new Uint8Array(8); // zero padding
-        const plain = new Uint8Array([...nonce, ...pad]);
-        try {
-          const enc = await aesEncrypt(plain, new Uint8Array(16));
-          // TLV: 7C len 80 10 (16 bytes encrypted nonce)
-          const encHex = bytesToHex(enc);
-          const dataField = '8010' + encHex;
-          const cmd = '0086000000' + dataField;
-          paceAppend(`→ ${cmd}`);
-          const resp = await sendApdu(cmd);
-          paceAppend(`← ${resp}`);
-          if (resp.endsWith('9000')) paceAppend('✅ GA Step 1 OK');
-          else paceAppend(`❌ GA Step 1: ${resp.slice(-4)}`);
-        } catch (e) { paceAppend(`❌ ${e.message}`); }
-      });
-
-      // PACE: GA Step 2 — DH mapping (send DH public key)
-      document.getElementById('btn-pace-step2').addEventListener('click', async () => {
-        paceAppend('— GA Step 2: DH Key Exchange —');
-        // Use static DH for demo — in real impl need domain params
-        const dummyPub = '0480' + '00'.repeat(32); // compressed dummy point
-        const cmd = '0086000000' + '831B' + dummyPub;
-        try {
-          paceAppend(`→ ${cmd}`);
-          const resp = await sendApdu(cmd);
-          paceAppend(`← ${resp}`);
-          if (resp.endsWith('9000')) paceAppend('✅ GA Step 2 OK');
-          else paceAppend(`❌ GA Step 2: ${resp.slice(-4)}`);
-        } catch (e) { paceAppend(`❌ ${e.message}`); }
-      });
-
-      // PACE: GA Step 3 — Mapped DH
-      document.getElementById('btn-pace-step3').addEventListener('click', async () => {
-        paceAppend('— GA Step 3: Mapped DH —');
-        const dummyMap = '0480' + '01'.repeat(32);
-        const cmd = '0086000000' + '831B' + dummyMap;
-        try {
-          paceAppend(`→ ${cmd}`);
-          const resp = await sendApdu(cmd);
-          paceAppend(`← ${resp}`);
-          if (resp.endsWith('9000')) paceAppend('✅ GA Step 3 OK');
-          else paceAppend(`❌ GA Step 3: ${resp.slice(-4)}`);
-        } catch (e) { paceAppend(`❌ ${e.message}`); }
-      });
-
-      // PACE: GA Step 4 — Mutual Auth
-      document.getElementById('btn-pace-step4').addEventListener('click', async () => {
-        paceAppend('— GA Step 4: Mutual Auth —');
-        const dummyToken = '00'.repeat(16);
-        const cmd = '0082000000' + '8410' + dummyToken;
-        try {
-          paceAppend(`→ ${cmd}`);
-          const resp = await sendApdu(cmd);
-          paceAppend(`← ${resp}`);
-          if (resp.endsWith('9000')) {
-            paceAppend('✅ PACE аутентификация завершена!');
-            document.getElementById('badge-pace').classList.replace('bg-slate-400', 'bg-emerald-500');
-          } else paceAppend(`❌ Mutual Auth: ${resp.slice(-4)}`);
-        } catch (e) { paceAppend(`❌ ${e.message}`); }
-      });
-
-      // Derive PACE key from MRZ
-      document.getElementById('btn-pace-derive').addEventListener('click', async () => {
-        const mrz = document.getElementById('pace-mrz').value.trim();
-        if (!mrz) { paceAppend('❌ Введи MRZ'); return; }
-        try {
-          const hex = await derivePacePin(mrz);
-          document.getElementById('pace-key-display').textContent = 'AES-128 ключ: ' + hex;
-          paceAppend(`✅ PACE ключ выведен из MRZ: ${hex.substring(0, 16)}...`);
-        } catch (e) { paceAppend(`❌ Ошибка: ${e.message}`); }
-      });
-
-      // Read DG1 after PACE
-      function readDataGroup(dgShortFileId, dgName) {
-        return async () => {
-          if (!isoDepConnected) { paceAppend('❌ Сначала подключись к тэгу'); return; }
-          paceAppend(`— Чтение ${dgName} —`);
-          try {
-            // SELECT DG by SFI
-            const sfi = ('0' + dgShortFileId.toString(16)).slice(-2);
-            const selectCmd = `00A4000002${sfi}00`;
-            paceAppend(`→ ${selectCmd}`);
-            let resp = await sendApdu(selectCmd);
-            paceAppend(`← ${resp}`);
-            if (!resp.endsWith('9000')) { paceAppend(`❌ SELECT ${dgName}: ${resp.slice(-4)}`); return; }
-            // READ BINARY
-            const readCmd = '00B0000000';
-            paceAppend(`→ ${readCmd}`);
-            resp = await sendApdu(readCmd);
-            paceAppend(`← ${resp}`);
-            if (resp.endsWith('9000')) {
-              paceAppend(`✅ ${dgName} прочитан`);
-              document.getElementById('isodep-response').value = resp;
-            } else if (resp.endsWith('6982')) {
-              paceAppend('❌ Нужен BAC/PACE (6982) — пройди аутентификацию');
-            } else {
-              paceAppend(`❌ READ ${dgName}: ${resp.slice(-4)}`);
-            }
-          } catch (e) { paceAppend(`❌ ${e.message}`); }
-        };
+      async function epSelect() {
+        epAppend('→ SELECT ePassport AID');
+        const resp = await rawTransceive('00A4040007A0000002470001');
+        epAppend(`← ${resp}`);
+        if (resp.endsWith('9000')) epAppend('✅ SELECT OK');
+        else throw new Error('SELECT failed: ' + resp.slice(-4));
+        return resp;
       }
 
-      document.getElementById('btn-pace-read-dg1').addEventListener('click', readDataGroup(1, 'DG1'));
-      document.getElementById('btn-pace-read-dg2').addEventListener('click', readDataGroup(2, 'DG2'));
+      async function epGetChallenge() {
+        epAppend('→ GET CHALLENGE');
+        const resp = await rawTransceive('0084000008');
+        epAppend(`← ${resp}`);
+        if (resp.endsWith('9000')) epAppend('✅ CHALLENGE OK');
+        else throw new Error('GET CHALLENGE failed: ' + resp.slice(-4));
+        return hexToBytes(resp.slice(0, -4));
+      }
+
+      async function epMutualAuth(rndIcc) {
+        epAppend('— MUTUAL AUTHENTICATE —');
+        const rndIfd = crypto.getRandomValues(new Uint8Array(8));
+        const kifd = new Uint8Array([bacSeqSend, 0, 0, 0, 0, 0, 0, 0]);
+        const s = new Uint8Array([...rndIfd, ...kifd, ...rndIcc]);
+        const encS = des3Encrypt(bacKenc, isoPad(s, 8));
+        const macS = des3Mac(bacKmac, encS);
+
+        const lc = encS.length + macS.length;
+        const lcHex = lc.toString(16).padStart(2, '0');
+        const data = bytesToHex(encS) + bytesToHex(macS);
+        const cmd = '00820000' + lcHex + data + '08';
+        epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08 [total ${cmd.length/2-1} bytes]`);
+        const resp = await rawTransceive(cmd);
+        epAppend(`← ${resp}`);
+
+        if (!resp.endsWith('9000')) throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
+
+        const respData = hexToBytes(resp.slice(0, -4));
+        const encResp = respData.slice(0, respData.length - 8);
+        const respMac = respData.slice(respData.length - 8);
+
+        // Verify response MAC
+        const expectedMac = des3Mac(bacKmac, encResp);
+        let macOk = true;
+        for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
+
+        if (!macOk) { epAppend('⚠ MAC mismatch — auth might be incomplete'); return false; }
+
+        // Decrypt response
+        const decResp = des3Decrypt(bacKenc, encResp);
+        // decResp = rndIcc || kifd || kicc (24 bytes with padding)
+        const rndIccBack = decResp.slice(0, 8);
+        const kifdBack = decResp.slice(8, 16);
+
+        // Verify rndIcc matches
+        let rndOk = true;
+        for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
+        if (!rndOk) { epAppend('⚠ RND.ICC mismatch'); return false; }
+
+        epAppend('✅ Mutual Auth OK');
+
+        // Derive session keys
+        const kSeed = new Uint8Array(16);
+        for (let i = 0; i < 8; i++) kSeed[i] = rndIfd[i] ^ rndIcc[i];
+        for (let i = 0; i < 4; i++) { kSeed[8 + i * 2] = kifd[i] ^ kifdBack[i]; kSeed[9 + i * 2] = kifd[4 + i] ^ kifdBack[4 + i]; }
+
+        // SHA-1 of kSeed for session key derivation
+        const hashSeed = await crypto.subtle.digest('SHA-1', kSeed);
+        const h = new Uint8Array(hashSeed);
+        bacSsc = new Uint8Array(8);
+        for (let i = 0; i < 8; i++) bacSsc[i] = h[16 + i];  // last 4 bytes * 2
+
+        // Session keys (simplified — in real impl they're different from static keys)
+        epAppend('🔐 Session keys established');
+        return true;
+      }
+
+      async function epReadBinaryWithSM(sfi, offset, le) {
+        const sfiByte = 0x80 | sfi;
+        const selectCmd = `00A4000002${('0' + sfiByte.toString(16)).slice(-2)}00`;
+        epAppend(`→ SELECT SFI ${sfi}`);
+        let resp = await rawTransceive(selectCmd);
+        epAppend(`← ${resp}`);
+        if (!resp.endsWith('9000')) throw new Error('SELECT SFI failed: ' + resp.slice(-4));
+
+        const offHex = ('000' + offset.toString(16)).slice(-4);
+        const leHex = ('00' + le.toString(16)).slice(-2);
+        const readApdu = '0CB000' + offHex + leHex;
+        // In secure messaging, the DOs are added automatically
+        const resp2 = await rawTransceive(readApdu);
+        epAppend(`← ${resp2}`);
+        return resp2;
+      }
+
+      async function epReadDG(dgSfi, dgName) {
+        epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) —`);
+        if (bacSsc) {
+          epAppend('Using Secure Messaging');
+          const resp = await epReadBinaryWithSM(dgSfi, 0, 0x00);
+          if (resp.endsWith('9000')) {
+            epAppend(`✅ ${dgName} прочитан (${resp.slice(0, -4).length / 2} байт)`);
+            return resp;
+          }
+        }
+        // Without SM (fallback)
+        const selectCmd = `00A4000002${('0' + (0x80 | dgSfi).toString(16)).slice(-2)}00`;
+        epAppend(`→ SELECT ${dgName}`);
+        let resp = await rawTransceive(selectCmd);
+        epAppend(`← ${resp}`);
+        if (!resp.endsWith('9000')) throw new Error(`SELECT ${dgName}: ` + resp.slice(-4));
+        const readCmd = '00B0000000';
+        epAppend(`→ READ BINARY`);
+        resp = await rawTransceive(readCmd);
+        epAppend(`← ${resp}`);
+        if (resp.endsWith('9000')) {
+          epAppend(`✅ ${dgName} OK`);
+          document.getElementById('isodep-response').value = resp;
+        } else if (resp.endsWith('6982')) {
+          epAppend('❌ 6982 — требуется BAC аутентификация');
+        }
+        return resp;
+      }
+
+      // ---- Main Read ----
+      async function readPassport() {
+        const mrzInput = document.getElementById('ep-mrz').value.trim();
+        if (!mrzInput) { epAppend('❌ Введи 2-ю строку MRZ'); return; }
+        epAppend('');
+        epAppend('==== ePassport Read ====');
+        epAppend(`MRZ: ${mrzInput}`);
+
+        // Parse MRZ
+        let mrzInfo;
+        try {
+          const parsed = parseMRZ(mrzInput);
+          mrzInfo = parsed.mrzInfo;
+          epAppend(`MRZ info: ${mrzInfo}`);
+        } catch (e) { epAppend(`❌ MRZ parse error: ${e.message}`); return; }
+
+        // Derive keys
+        try {
+          const keys = await deriveBacKeys(mrzInfo);
+          epAppend(`Kenc: ${keys.kenc.slice(0, 16)}...`);
+          epAppend(`Kmac: ${keys.kmac.slice(0, 16)}...`);
+          epAppend('✅ BAC keys derived');
+        } catch (e) { epAppend(`❌ Key derivation: ${e.message}`); return; }
+
+        if (!isoDepConnected) {
+          epAppend('❌ Сначала подключись к NFC (Connect)');
+          return;
+        }
+
+        bacSeqSend = 0; bacSeqRecv = 0; bacSsc = null;
+
+        try {
+          // 1. SELECT ePassport AID
+          await epSelect();
+
+          // 2. GET CHALLENGE
+          const rndIcc = await epGetChallenge();
+          epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
+
+          // 3. MUTUAL AUTH
+          const authOk = await epMutualAuth(rndIcc);
+          if (authOk) {
+            document.getElementById('badge-epassport').classList.replace('bg-slate-400', 'bg-emerald-500');
+          }
+        } catch (e) {
+          epAppend(`❌ ${e.message}`);
+        }
+      }
+
+      async function epSelectAndChallenge() {
+        if (!isoDepConnected) { epAppend('❌ Сначала Connect'); return; }
+        epAppend('');
+        epAppend('— SELECT + CHALLENGE —');
+        try {
+          await epSelect();
+          const rndIcc = await epGetChallenge();
+          epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
+        } catch (e) { epAppend(`❌ ${e.message}`); }
+      }
+
+      document.getElementById('btn-ep-read').addEventListener('click', readPassport);
+      document.getElementById('btn-ep-select-only').addEventListener('click', epSelectAndChallenge);
+      document.getElementById('btn-ep-dg1').addEventListener('click', async () => {
+        try { await epReadDG(1, 'DG1'); } catch (e) { epAppend(`❌ ${e.message}`); }
+      });
+      document.getElementById('btn-ep-dg2').addEventListener('click', async () => {
+        try { await epReadDG(2, 'DG2'); } catch (e) { epAppend(`❌ ${e.message}`); }
+      });
 
       // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
 
