@@ -1070,15 +1070,32 @@
         return res;
       }
 
-      function des3Decrypt(keyBytes, dataBytes) {
+      function des3EncryptCBC(keyBytes, dataBytes, iv) {
         if (dataBytes.length % 8 !== 0) throw new Error('3DES data not multiple of 8');
         const res = new Uint8Array(dataBytes.length);
+        let prev = iv || new Uint8Array(8);
         for (let i = 0; i < dataBytes.length; i += 8) {
           const block = dataBytes.slice(i, i + 8);
-          const d1 = desDecryptBlock(keyBytes.slice(0, 8), block);
-          const e2 = desEncryptBlock(keyBytes.slice(8, 16), d1);
-          const d3 = desDecryptBlock(keyBytes.slice(0, 8), e2);
-          res.set(d3, i);
+          const xored = new Uint8Array(8);
+          for (let j = 0; j < 8; j++) xored[j] = block[j] ^ prev[j];
+          const enc = des3EncryptBlock(keyBytes, xored);
+          res.set(enc, i);
+          prev = enc;
+        }
+        return res;
+      }
+
+      function des3DecryptCBC(keyBytes, dataBytes, iv) {
+        if (dataBytes.length % 8 !== 0) throw new Error('3DES data not multiple of 8');
+        const res = new Uint8Array(dataBytes.length);
+        let prev = iv || new Uint8Array(8);
+        for (let i = 0; i < dataBytes.length; i += 8) {
+          const block = dataBytes.slice(i, i + 8);
+          const dec = des3DecryptBlock(keyBytes, block);
+          const xored = new Uint8Array(8);
+          for (let j = 0; j < 8; j++) xored[j] = dec[j] ^ prev[j];
+          res.set(xored, i);
+          prev = block;
         }
         return res;
       }
@@ -1100,7 +1117,7 @@
           const block = padded.slice(i, i + 8);
           const xored = new Uint8Array(8);
           for (let j = 0; j < 8; j++) xored[j] = block[j] ^ prev[j];
-          prev = des3Encrypt(keyBytes, xored);
+          prev = des3EncryptBlock(keyBytes, xored);
         }
         return prev;
       }
@@ -1148,7 +1165,7 @@
         if (!bacSsc || !bacKenc || !bacKmac) return cmdApdu + data; // no SM yet
         for (let i = 7; i >= 0; i--) { bacSsc[i]++; if (bacSsc[i] !== 0) break; }
         const sscBytes = bacSsc.slice();
-        const encData = des3Encrypt(bacKenc, isoPad(hexToBytes(data), 8));
+        const encData = des3EncryptCBC(bacKenc, isoPad(hexToBytes(data), 8), new Uint8Array(8));
         const encLen = encData.length;
         const do87 = '87' + (encLen <= 127 ? encLen.toString(16).padStart(2, '0') : '81' + encLen.toString(16).padStart(2, '0')) + bytesToHex(encData);
         const do97 = '9701' + le;
@@ -1240,7 +1257,7 @@
         const rndIfd = crypto.getRandomValues(new Uint8Array(8));
         const kifd = new Uint8Array([bacSeqSend, 0, 0, 0, 0, 0, 0, 0]);
         const s = new Uint8Array([...rndIfd, ...kifd, ...rndIcc]);
-        const encS = des3Encrypt(bacKenc, isoPad(s, 8));
+        const encS = des3EncryptCBC(bacKenc, isoPad(s, 8), new Uint8Array(8));
         const macS = des3Mac(bacKmac, encS);
 
         const lc = encS.length + macS.length;
@@ -1264,8 +1281,8 @@
 
         if (!macOk) { epAppend('⚠ MAC mismatch — auth might be incomplete'); return false; }
 
-        // Decrypt response
-        const decResp = des3Decrypt(bacKenc, encResp);
+        // 3. Decrypt response with CBC
+        const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
         // decResp = rndIcc || kifd || kicc (24 bytes with padding)
         const rndIccBack = decResp.slice(0, 8);
         const kifdBack = decResp.slice(8, 16);
