@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (Gyroscope 3D Cube)</title>
+  <title>NajiMiniApp SDK Demo (с поддержкой вибрации)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Подключение SDK по указанному адресу -->
@@ -43,7 +43,6 @@
       font-size: 12px;
       backface-visibility: visible;
     }
-    /* Позиционирование граней куба в 3D пространстве */
     .cube__face--front  { transform: rotateY(  0deg) translateZ(50px); }
     .cube__face--right  { transform: rotateY( 90deg) translateZ(50px); background: rgba(236, 72, 153, 0.15); border-color: #ec4899; color: #db2777; }
     .cube__face--back   { transform: rotateY(180deg) translateZ(50px); }
@@ -61,7 +60,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK и 3D-визуализации гироскопа</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков и вибрации</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -156,7 +155,7 @@
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, API -->
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, API -->
     <div class="space-y-6 md:col-span-2">
       
       <!-- Логирование событий -->
@@ -298,6 +297,44 @@
         </section>
       </div>
 
+      <!-- ВИБРАЦИЯ (ВЫЗОВ НОВОГО МОДУЛЯ VIBRATOR) & КОНТАКТЫ -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <!-- Блок Вибрации -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <div class="flex justify-between items-center">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Вибрация (Vibrator)</h2>
+            <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">Haptics</span>
+          </div>
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block text-slate-500 mb-0.5">Произвольная длительность (мс)</label>
+              <div class="flex gap-1">
+                <input type="number" id="vibrate-duration" class="border border-slate-200 rounded p-1.5 w-24 focus:outline-indigo-500" value="200" min="10" max="2000">
+                <button id="btn-vibrate-custom" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded flex-1">Вибрировать</button>
+              </div>
+            </div>
+            <div class="pt-2 border-t">
+              <label class="block text-slate-500 mb-1">Быстрые шаблоны (Presets)</label>
+              <div class="grid grid-cols-3 gap-1">
+                <button id="btn-vibrate-short" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded font-medium">Легкий (50)</button>
+                <button id="btn-vibrate-medium" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded font-medium">Средний (200)</button>
+                <button id="btn-vibrate-long" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded font-medium">Сильный (500)</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Модуль контактов (Для баланса сетки) -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Контакты (Contacts)</h2>
+          <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+            <button id="btn-contacts-list" class="bg-indigo-50 text-indigo-700 font-medium py-2 rounded border border-indigo-100 hover:bg-indigo-100">Список контактов</button>
+            <button id="btn-contacts-share" class="border border-slate-200 hover:bg-slate-50 py-2 rounded">Поделиться</button>
+            <button id="btn-contacts-invite" class="col-span-2 border border-slate-200 hover:bg-slate-50 py-2 rounded">Пригласить в комнату</button>
+          </div>
+        </section>
+      </div>
+
       <!-- Блоки Мультиплеера и Звука -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         
@@ -388,11 +425,7 @@
     let cubeRotZ = 0;
     const cubeEl = document.getElementById('gyro-cube');
 
-    // Функция обновления трансформации куба
     function updateCubeTransform(x, y, z) {
-      // Накапливаем изменения или задаем абсолютные значения.
-      // Так как гироскопы часто возвращают скорость вращения (rad/s или deg/s),
-      // мы прибавляем её к текущему углу для непрерывного движения.
       cubeRotX += x * 3; 
       cubeRotY += y * 3;
       cubeRotZ += z * 3;
@@ -549,7 +582,6 @@
         document.getElementById('val-gyro-y').textContent = y.toFixed(2);
         document.getElementById('val-gyro-z').textContent = z.toFixed(2);
 
-        // Вращаем 3D-Кубик при изменении значений гироскопа
         updateCubeTransform(x, y, z);
       });
 
@@ -618,7 +650,7 @@
           .catch((e) => log(`Ошибка запроса акселерометра: ${e.message}`, 'error'));
       });
 
-      // Эмуляция работы датчиков (для локального тестирования в браузере)
+      // Эмуляция датчиков
       let mockInterval = null;
       document.getElementById('btn-mock-sensors').addEventListener('click', () => {
         if (mockInterval) {
@@ -637,7 +669,6 @@
         log('Запущено непрерывное движение...', 'sys');
         
         mockInterval = setInterval(() => {
-          // Имитируем плавное изменение угловых скоростей гироскопа
           const gX = (Math.sin(Date.now() / 400) * 1.5);
           const gY = (Math.cos(Date.now() / 500) * 2.0);
           const gZ = (Math.sin(Date.now() / 600) * 1.0);
@@ -648,9 +679,8 @@
             payload: { x: gX, y: gY, z: gZ }
           }, "*");
 
-          // Имитируем легкую вибрацию и гравитацию акселерометра
           const aX = (Math.random() * 0.4);
-          const aY = -9.8 + (Math.random() * 0.4); // Сила тяжести
+          const aY = -9.8 + (Math.random() * 0.4);
           const aZ = (Math.random() * 0.4);
 
           window.postMessage({
@@ -659,6 +689,53 @@
             payload: { x: aX, y: aY, z: aZ }
           }, "*");
         }, 100);
+      });
+
+      // ================= УПРАВЛЕНИЕ ВИБРАЦИЕЙ (VIBRATOR) =================
+
+      document.getElementById('btn-vibrate-custom').addEventListener('click', () => {
+        const durationInput = document.getElementById('vibrate-duration');
+        const duration = parseInt(durationInput.value, 10) || 200;
+        sdk.vibrator.vibrate(duration);
+        log(`Отправлен вызов вибрации: ${duration} мс`, 'sys');
+      });
+
+      document.getElementById('btn-vibrate-short').addEventListener('click', () => {
+        sdk.vibrator.vibrate(50);
+        log('Отправлен вызов короткой вибрации (50 мс)', 'sys');
+      });
+
+      document.getElementById('btn-vibrate-medium').addEventListener('click', () => {
+        sdk.vibrator.vibrate(200);
+        log('Отправлен вызов средней вибрации (200 мс)', 'sys');
+      });
+
+      document.getElementById('btn-vibrate-long').addEventListener('click', () => {
+        sdk.vibrator.vibrate(500);
+        log('Отправлен вызов сильной вибрации (500 мс)', 'sys');
+      });
+
+      // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
+
+      document.getElementById('btn-contacts-list').addEventListener('click', () => {
+        sdk.contacts.list()
+          .then((contacts) => {
+            log(`Контакты получены: ${contacts.length} шт.`);
+            console.log(contacts);
+          })
+          .catch((e) => log(`Ошибка получения контактов: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-contacts-share').addEventListener('click', () => {
+        sdk.contacts.share({ text: "Привет! Заходи в моё мини-приложение." })
+          .then((res) => log(`Запрос на отправку успешно обработан`))
+          .catch((e) => log(`Ошибка отправки: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-contacts-invite').addEventListener('click', () => {
+        sdk.contacts.invite({ text: "Присоединяйся к игре в моей комнате!" })
+          .then((res) => log(`Запрос на приглашение успешно обработан`))
+          .catch((e) => log(`Ошибка приглашения: ${e.message}`, 'error'));
       });
 
       // ================= ОСТАЛЬНЫЕ КНОПКИ =================
