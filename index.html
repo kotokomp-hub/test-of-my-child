@@ -1004,17 +1004,17 @@
 
       function desKeySchedule(keyBytes, encrypt) {
         const key = BigInt('0x' + [...keyBytes].map(b => b.toString(16).padStart(2, '0')).join(''));
-        const K = Number(permute(key, DES_PC1, 64));
-        let C = (K >> 28) & 0x0FFFFFFF;
-        let D = K & 0x0FFFFFFF;
+        const K = permute(key, DES_PC1, 64);
+        let C = Number(K >> 28n);
+        let D = Number(K & 0xFFFFFFFn);
         const roundKeys = [];
         for (let r = 0; r < 16; r++) {
           for (let s = 0; s < DES_SHIFTS[r]; s++) {
             C = ((C << 1) | ((C >> 27) & 1)) & 0x0FFFFFFF;
             D = ((D << 1) | ((D >> 27) & 1)) & 0x0FFFFFFF;
           }
-          const CD = (C << 28) | D;
-          roundKeys.push(permute(BigInt(CD), DES_PC2, 56));
+          const CD = (BigInt(C) << 28n) | BigInt(D);
+          roundKeys.push(permute(CD, DES_PC2, 56));
         }
         return encrypt ? roundKeys : [...roundKeys].reverse();
       }
