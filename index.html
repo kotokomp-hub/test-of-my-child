@@ -1070,6 +1070,18 @@
         return res;
       }
 
+      function des3EncryptBlock(keyBytes, dataBytes) {
+        const e1 = desEncryptBlock(keyBytes.slice(0, 8), dataBytes);
+        const d2 = desDecryptBlock(keyBytes.slice(8, 16), e1);
+        return desEncryptBlock(keyBytes.slice(0, 8), d2);
+      }
+
+      function des3DecryptBlock(keyBytes, dataBytes) {
+        const d1 = desDecryptBlock(keyBytes.slice(0, 8), dataBytes);
+        const e2 = desEncryptBlock(keyBytes.slice(8, 16), d1);
+        return desDecryptBlock(keyBytes.slice(0, 8), e2);
+      }
+
       function des3EncryptCBC(keyBytes, dataBytes, iv) {
         if (dataBytes.length % 8 !== 0) throw new Error('3DES data not multiple of 8');
         const res = new Uint8Array(dataBytes.length);
