@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, камера, видеозапись, платежи)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, камера, превью передней/задней камеры, платежи)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
@@ -61,7 +61,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, Камеры, Видеозаписи и Платежей</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, Камеры (Передняя/Задняя) и Платежей</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -180,37 +180,59 @@
       <!-- ПЛАТЕЖИ И КАМЕРА -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         
-        <!-- Камера, Сканер, Запись и Поток -->
+        <!-- Блок Камеры с Живым Превью -->
         <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <div class="flex justify-between items-center">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Камера & Видео</h2>
-            <span id="badge-camera-stream" class="w-2 h-2 rounded-full bg-slate-400" title="Статус стрима"></span>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Камера & Live Stream</h2>
+            <span id="badge-camera-lens" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold">Выключена</span>
           </div>
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <button id="btn-camera-photo" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded">Фото</button>
-            <button id="btn-camera-qr" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-1.5 rounded">Сканер QR</button>
-            <button id="btn-camera-video" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-1.5 rounded">Запись видео</button>
-          </div>
-          <div class="border-t pt-2 space-y-1.5 text-xs">
-            <span class="block text-[10px] text-slate-400 uppercase font-semibold">Потоковое видео (Camera Stream)</span>
-            <div class="grid grid-cols-2 gap-2">
-              <button id="btn-camera-stream-start" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-medium py-1 rounded">Start Stream</button>
-              <button id="btn-camera-stream-stop" class="border border-rose-200 text-rose-600 hover:bg-rose-50 font-medium py-1 rounded">Stop Stream</button>
+
+          <!-- Живой Экран Превью -->
+          <div class="relative w-full h-44 bg-slate-950 rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center">
+            <img id="camera-preview-img" class="w-full h-full object-cover hidden" alt="Camera Stream Preview">
+            <div id="camera-preview-placeholder" class="text-center p-3 text-slate-500 text-xs">
+              <span class="block font-medium mb-1">Превью камеры неактивно</span>
+              <span class="text-[10px] text-slate-600 block">Нажмите «Задняя» или «Передняя (Selfie)» для запуска видеопотока</span>
             </div>
-            <div class="bg-slate-50 p-1.5 rounded border text-[10px] flex justify-between items-center">
-              <span class="text-slate-500">Получено кадров (cameraFrame):</span>
-              <span id="val-camera-frames" class="font-bold text-indigo-600">0</span>
+          </div>
+
+          <!-- Управление Стримом и Камерами -->
+          <div class="space-y-2 text-xs">
+            <div class="grid grid-cols-3 gap-1.5">
+              <button id="btn-cam-back" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-1.5 rounded">Задняя</button>
+              <button id="btn-cam-front" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded">Передняя</button>
+              <button id="btn-cam-stop" class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 font-medium py-1.5 rounded">Stop Stream</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-1.5 pt-1 border-t">
+              <button id="btn-camera-photo" class="border border-slate-200 hover:bg-slate-50 font-medium py-1 rounded">Сделать Фото</button>
+              <div class="bg-slate-50 px-2 py-1 rounded border text-[10px] flex justify-between items-center">
+                <span class="text-slate-500">Кадров (onFrame):</span>
+                <span id="val-camera-frames" class="font-bold text-indigo-600">0</span>
+              </div>
             </div>
           </div>
         </section>
 
         <!-- Платежная система -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Платежи (Payments)</h2>
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <button id="btn-pay-sparks" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-1.5 rounded font-medium">Sparks Invoice</button>
-            <button id="btn-pay-crypto" class="bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 py-1.5 rounded font-medium">Crypto Request</button>
-            <button id="btn-pay-solana" class="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 py-1.5 rounded font-medium">Solana Pay</button>
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
+          <div class="space-y-3">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Платежи (Payments)</h2>
+            <p class="text-xs text-slate-500">Создание инвойсов и проведения крипто-транзакций через интерфейсы хоста.</p>
+            <div class="grid grid-cols-1 gap-2 text-xs">
+              <button id="btn-pay-sparks" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
+                <span>Sparks Invoice</span>
+                <span class="text-[10px] bg-amber-200/50 px-1.5 py-0.5 rounded">100 Sparks</span>
+              </button>
+              <button id="btn-pay-crypto" class="bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
+                <span>Crypto Request</span>
+                <span class="text-[10px] bg-blue-200/50 px-1.5 py-0.5 rounded">10 USDT</span>
+              </button>
+              <button id="btn-pay-solana" class="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
+                <span>Solana Payment</span>
+                <span class="text-[10px] bg-purple-200/50 px-1.5 py-0.5 rounded">0.1 SOL</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -746,54 +768,77 @@
         log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
       });
 
-      // ================= УПРАВЛЕНИЕ КАМЕРОЙ (ФОТО, QR, STREAM, VIDEO) =================
+      // ================= УПРАВЛЕНИЕ КАМЕРОЙ И ПРЕВЬЮ =================
 
       let cameraFrameCount = 0;
+      const previewImg = document.getElementById('camera-preview-img');
+      const previewPlaceholder = document.getElementById('camera-preview-placeholder');
+      const lensBadge = document.getElementById('badge-camera-lens');
 
-      // Обработка потокового кадра с камеры
+      // Обработка поступающих кадров с камеры и их рендеринг в окно превью
       sdk.camera.onFrame((frameData) => {
         cameraFrameCount++;
         document.getElementById('val-camera-frames').textContent = cameraFrameCount;
-        if (cameraFrameCount % 30 === 0) {
-          log(`Камера: Получено 30 кадров. Последний кадр: ${JSON.stringify(frameData).slice(0, 50)}...`);
+
+        if (!frameData) return;
+
+        // Извлечение изображения из структуры ответа
+        let rawSrc = typeof frameData === 'string' 
+          ? frameData 
+          : (frameData.frame || frameData.image || frameData.data || '');
+
+        if (!rawSrc) return;
+
+        // Формирование корректного Data URL для тега <img>
+        if (!rawSrc.startsWith('data:') && !rawSrc.startsWith('http')) {
+          rawSrc = 'data:image/jpeg;base64,' + rawSrc;
         }
+
+        previewImg.src = rawSrc;
+        previewImg.classList.remove('hidden');
+        previewPlaceholder.classList.add('hidden');
       });
 
+      // Кнопка вызова снимка фото
       document.getElementById('btn-camera-photo').addEventListener('click', () => {
-        log('Запрос снимка с камеры...', 'sys');
+        log('Запрос снимка с камеры (takePhoto)...', 'sys');
         sdk.camera.takePhoto()
           .then((res) => log(`Фото получено: ${JSON.stringify(res)}`))
           .catch((e) => log(`Ошибка снимка камеры: ${e.message}`, 'error'));
       });
 
-      document.getElementById('btn-camera-qr').addEventListener('click', () => {
-        log('Запуск сканера QR-кодов...', 'sys');
-        sdk.camera.scanQr()
-          .then((res) => log(`Сканирован QR: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка сканирования QR: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-camera-video').addEventListener('click', () => {
-        log('Запуск записи видео с камеры (startVideo)...', 'sys');
-        sdk.camera.startVideo()
-          .then((res) => log(`Запись видео завершена: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка записи видео: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-camera-stream-start').addEventListener('click', () => {
-        log('Запуск видеопотока с камеры (startStream)...', 'sys');
-        sdk.camera.startStream()
+      // Запуск стрима ЗАДНЕЙ камеры
+      document.getElementById('btn-cam-back').addEventListener('click', () => {
+        log('Запуск потока: Задняя камера (startStream("back"))...', 'sys');
+        sdk.camera.startStream('back')
           .then((res) => {
-            document.getElementById('badge-camera-stream').classList.replace('bg-slate-400', 'bg-emerald-500');
-            log(`Видеопоток с камеры запущен: ${JSON.stringify(res)}`);
+            lensBadge.textContent = 'Задняя';
+            lensBadge.className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
+            log(`Стрим задней камеры запущен: ${JSON.stringify(res)}`);
           })
-          .catch((e) => log(`Ошибка запуска видеопотока: ${e.message}`, 'error'));
+          .catch((e) => log(`Ошибка запуска задней камеры: ${e.message}`, 'error'));
       });
 
-      document.getElementById('btn-camera-stream-stop').addEventListener('click', () => {
+      // Запуск стрима ПОЛЬЗОВАТЕЛЬСКОЙ / ПЕРЕДНЕЙ камеры (Selfie)
+      document.getElementById('btn-cam-front').addEventListener('click', () => {
+        log('Запуск потока: Передняя камера (startStream("front"))...', 'sys');
+        sdk.camera.startStream('front')
+          .then((res) => {
+            lensBadge.textContent = 'Передняя (Selfie)';
+            lensBadge.className = 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-semibold';
+            log(`Стрим передней камеры запущен: ${JSON.stringify(res)}`);
+          })
+          .catch((e) => log(`Ошибка запуска передней камеры: ${e.message}`, 'error'));
+      });
+
+      // Остановка стрима видеопотока
+      document.getElementById('btn-cam-stop').addEventListener('click', () => {
         sdk.camera.stopStream();
-        document.getElementById('badge-camera-stream').classList.replace('bg-emerald-500', 'bg-slate-400');
-        log('Видеопоток с камеры остановлен (stopStream).');
+        lensBadge.textContent = 'Выключена';
+        lensBadge.className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
+        previewImg.classList.add('hidden');
+        previewPlaceholder.classList.remove('hidden');
+        log('Видеопоток камеры остановлен (stopStream).');
       });
 
       // ================= УПРАВЛЕНИЕ ПЛАТЕЖАМИ =================
