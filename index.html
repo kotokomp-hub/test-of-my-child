@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (с поддержкой вибрации)</title>
+  <title>NajiMiniApp SDK Demo (с поддержкой NFC, датчиков и вибрации)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Подключение SDK по указанному адресу -->
   <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
   <style>
     .scrollable-console {
-      max-height: 200px;
+      max-height: 220px;
       overflow-y: auto;
       font-family: monospace;
     }
@@ -60,7 +60,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков и вибрации</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации и NFC</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -155,7 +155,7 @@
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, API -->
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, API -->
     <div class="space-y-6 md:col-span-2">
       
       <!-- Логирование событий -->
@@ -257,6 +257,81 @@
         </div>
       </section>
 
+      <!-- NFC & ВИБРАЦИЯ -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <!-- Блок NFC (Near Field Communication) -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+          <div class="flex justify-between items-center">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">NFC Бесконтактная связь</h2>
+            <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">NFC Module</span>
+          </div>
+          <div class="text-xs space-y-2">
+            <div class="bg-slate-50 p-2 rounded border grid grid-cols-2 gap-1 font-medium">
+              <div>Доступен: <span id="val-nfc-available" class="text-indigo-600">-</span></div>
+              <div>Включен: <span id="val-nfc-enabled" class="text-indigo-600">-</span></div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-1">
+              <button id="btn-nfc-check" class="bg-slate-800 hover:bg-slate-900 text-white py-1 rounded">Проверить</button>
+              <button id="btn-nfc-cancel" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Cancel</button>
+            </div>
+
+            <div class="border-t pt-2 space-y-2">
+              <button id="btn-nfc-read" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded font-semibold">Читать тэг (Read)</button>
+              
+              <div class="space-y-0.5">
+                <label class="text-[10px] text-slate-400 block">Данные для записи/шаринга</label>
+                <input type="text" id="nfc-text-input" class="w-full border rounded p-1 text-slate-800 focus:outline-indigo-500" value="Naji NFC Text Data">
+              </div>
+
+              <div class="grid grid-cols-2 gap-1.5">
+                <button id="btn-nfc-write" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Записать (Write)</button>
+                <button id="btn-nfc-share" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Share Payload</button>
+              </div>
+              <button id="btn-nfc-stop-share" class="w-full text-rose-600 bg-rose-50 border border-rose-100 py-1 rounded hover:bg-rose-100">Остановить Share</button>
+            </div>
+
+            <button id="btn-mock-nfc-read" class="w-full bg-slate-100 border border-slate-200 text-slate-600 py-1 rounded hover:bg-slate-200 text-[10px]">Симулировать чтение NFC тэга</button>
+          </div>
+        </section>
+
+        <!-- Блок Вибрации & Контакты -->
+        <div class="space-y-6">
+          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex justify-between items-center">
+              <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Вибрация (Vibrator)</h2>
+              <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">Haptics</span>
+            </div>
+            <div class="space-y-3 text-xs">
+              <div>
+                <label class="block text-slate-500 mb-0.5">Произвольная длительность (мс)</label>
+                <div class="flex gap-1">
+                  <input type="number" id="vibrate-duration" class="border border-slate-200 rounded p-1.5 w-24 focus:outline-indigo-500" value="200" min="10" max="2000">
+                  <button id="btn-vibrate-custom" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded flex-1">Вибрировать</button>
+                </div>
+              </div>
+              <div class="pt-2 border-t">
+                <label class="block text-slate-500 mb-1">Быстрые шаблоны (Presets)</label>
+                <div class="grid grid-cols-3 gap-1 text-[10px]">
+                  <button id="btn-vibrate-short" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Легкий (50)</button>
+                  <button id="btn-vibrate-medium" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Средний (200)</button>
+                  <button id="btn-vibrate-long" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Сильный (500)</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Контакты (Contacts)</h2>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <button id="btn-contacts-list" class="bg-indigo-50 text-indigo-700 font-medium py-1.5 rounded border border-indigo-100 hover:bg-indigo-100">Список</button>
+              <button id="btn-contacts-share" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Поделиться</button>
+              <button id="btn-contacts-invite" class="col-span-2 border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Пригласить в комнату</button>
+            </div>
+          </section>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <!-- Блок Локального хранилища (Storage) -->
         <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -293,44 +368,6 @@
               <button id="btn-ui-copy" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Copy text</button>
               <button id="btn-ui-link" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded text-blue-600 font-medium">Open Link</button>
             </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- ВИБРАЦИЯ (ВЫЗОВ НОВОГО МОДУЛЯ VIBRATOR) & КОНТАКТЫ -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <!-- Блок Вибрации -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <div class="flex justify-between items-center">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Вибрация (Vibrator)</h2>
-            <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">Haptics</span>
-          </div>
-          <div class="space-y-3 text-xs">
-            <div>
-              <label class="block text-slate-500 mb-0.5">Произвольная длительность (мс)</label>
-              <div class="flex gap-1">
-                <input type="number" id="vibrate-duration" class="border border-slate-200 rounded p-1.5 w-24 focus:outline-indigo-500" value="200" min="10" max="2000">
-                <button id="btn-vibrate-custom" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded flex-1">Вибрировать</button>
-              </div>
-            </div>
-            <div class="pt-2 border-t">
-              <label class="block text-slate-500 mb-1">Быстрые шаблоны (Presets)</label>
-              <div class="grid grid-cols-3 gap-1">
-                <button id="btn-vibrate-short" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded font-medium">Легкий (50)</button>
-                <button id="btn-vibrate-medium" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded font-medium">Средний (200)</button>
-                <button id="btn-vibrate-long" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded font-medium">Сильный (500)</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Модуль контактов (Для баланса сетки) -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Контакты (Contacts)</h2>
-          <div class="grid grid-cols-2 gap-2 text-xs pt-1">
-            <button id="btn-contacts-list" class="bg-indigo-50 text-indigo-700 font-medium py-2 rounded border border-indigo-100 hover:bg-indigo-100">Список контактов</button>
-            <button id="btn-contacts-share" class="border border-slate-200 hover:bg-slate-50 py-2 rounded">Поделиться</button>
-            <button id="btn-contacts-invite" class="col-span-2 border border-slate-200 hover:bg-slate-50 py-2 rounded">Пригласить в комнату</button>
           </div>
         </section>
       </div>
@@ -713,6 +750,93 @@
       document.getElementById('btn-vibrate-long').addEventListener('click', () => {
         sdk.vibrator.vibrate(500);
         log('Отправлен вызов сильной вибрации (500 мс)', 'sys');
+      });
+
+      // ================= УПРАВЛЕНИЕ NFC =================
+
+      // Слушатель события получения данных с NFC-тэга
+      sdk.nfc.onTagRead((tag) => {
+        log(`Событие 'nfcTagRead': Данные тэга -> ${JSON.stringify(tag)}`, 'sys');
+      });
+
+      // Проверка доступности NFC
+      document.getElementById('btn-nfc-check').addEventListener('click', () => {
+        Promise.all([sdk.nfc.isAvailable(), sdk.nfc.isEnabled()])
+          .then(([available, enabled]) => {
+            document.getElementById('val-nfc-available').textContent = available ? 'Да' : 'Нет';
+            document.getElementById('val-nfc-enabled').textContent = enabled ? 'Да' : 'Нет';
+            log(`Статус NFC проверен: Доступен = ${available}, Включен = ${enabled}`);
+          })
+          .catch((e) => log(`Ошибка проверки NFC: ${e.message}`, 'error'));
+      });
+
+      // Отмена текущей операции NFC
+      document.getElementById('btn-nfc-cancel').addEventListener('click', () => {
+        sdk.nfc.cancel();
+        log('Отправлена команда отмены NFC (Cancel)');
+      });
+
+      // Чтение тэга
+      document.getElementById('btn-nfc-read').addEventListener('click', () => {
+        log('Режим чтения NFC запущен. Поднесите тэг...');
+        sdk.nfc.read()
+          .then((res) => {
+            log(`Результат чтения NFC: ${JSON.stringify(res)}`);
+          })
+          .catch((e) => log(`Ошибка чтения NFC: ${e.message}`, 'error'));
+      });
+
+      // Запись на тэг
+      document.getElementById('btn-nfc-write').addEventListener('click', () => {
+        const textValue = document.getElementById('nfc-text-input').value;
+        const records = [
+          {
+            recordType: "text",
+            mediaType: "text/plain",
+            payload: textValue
+          }
+        ];
+        log(`Запуск записи на NFC-тэг. Данные: "${textValue}"`);
+        sdk.nfc.write(records)
+          .then((res) => {
+            log(`Запись NFC успешно завершена`);
+          })
+          .catch((e) => log(`Ошибка записи NFC: ${e.message}`, 'error'));
+      });
+
+      // Шеринг payload по NFC
+      document.getElementById('btn-nfc-share').addEventListener('click', () => {
+        const textValue = document.getElementById('nfc-text-input').value;
+        sdk.nfc.sharePayload(textValue)
+          .then(() => log(`Запущен шеринг payload по NFC: "${textValue}"`))
+          .catch((e) => log(`Ошибка запуска шеринга NFC: ${e.message}`, 'error'));
+      });
+
+      // Остановка шеринга
+      document.getElementById('btn-nfc-stop-share').addEventListener('click', () => {
+        sdk.nfc.stopShare();
+        log('Шеринг payload по NFC остановлен');
+      });
+
+      // Эмуляция чтения тэга (для браузера)
+      document.getElementById('btn-mock-nfc-read').addEventListener('click', () => {
+        const textValue = document.getElementById('nfc-text-input').value;
+        window.postMessage({
+          type: "NAJI_EVENT",
+          eventName: "nfcTagRead",
+          payload: {
+            id: "04:5F:12:8A:BC:3D:E0",
+            techList: ["android.nfc.tech.Ndef", "android.nfc.tech.NfcA"],
+            records: [
+              {
+                recordType: "text",
+                mediaType: "text/plain",
+                payload: textValue
+              }
+            ]
+          }
+        }, "*");
+        log('Симуляция: событие чтения NFC тэга отправлено.', 'sys');
       });
 
       // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
