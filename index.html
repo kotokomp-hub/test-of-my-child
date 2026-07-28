@@ -1017,19 +1017,52 @@
         padded[data.length] = 0x80;
         return padded;
       }
+      function desEncryptBlock(key8Bytes, data8Bytes) {
+  const key = bytesToWA(key8Bytes);
+  const data = bytesToWA(data8Bytes);
+  const iv = CryptoJS.enc.Hex.parse('0000000000000000');
+  const enc = CryptoJS.DES.encrypt(data, key, {
+    mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
+  });
+  return waToBytes(enc.ciphertext);
+}
+
+function desDecryptBlock(key8Bytes, data8Bytes) {
+  const key = bytesToWA(key8Bytes);
+  const data = bytesToWA(data8Bytes);
+  const iv = CryptoJS.enc.Hex.parse('0000000000000000');
+  const dec = CryptoJS.DES.decrypt({ ciphertext: data, salt: null }, key, {
+    mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
+  });
+  return waToBytes(dec);
+}
 
       // CBC-MAC with 3DES
-      function des3Mac(keyBytes, dataBytes) {
-        const padded = isoPad(dataBytes, 8);
-        const key = bytesToWA(keyBytes);
-        const data = bytesToWA(padded);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const enc = CryptoJS.TripleDES.encrypt(data, key, {
-          mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        const ct = enc.ciphertext.toString(CryptoJS.enc.Hex);
-        return hexToBytes(ct.slice(-16));
-      }
+      function des3Mac(key16Bytes, dataBytes) {
+  const k1 = key16Bytes.slice(0, 8);
+  const k2 = key16Bytes.slice(8, 16);
+  const padded = isoPad(dataBytes, 8); // Дополнение ISO 9797-1 method 2 (0x80 ...)
+
+  let y = new Uint8Array(8); // Начальный вектор IV = 0000000000000000
+
+  // ЭТАП 1: Проход Single DES CBC по всем блокам с помощью K1
+  for (let i = 0; i < padded.length; i += 8) {
+    const block = padded.slice(i, i + 8);
+    const xorBlock = new Uint8Array(8);
+    for (let j = 0; j < 8; j++) {
+      xorBlock[j] = block[j] ^ y[j];
+    }
+    y = desEncryptBlock(k1, xorBlock);
+  }
+
+  // ЭТАП 2: Расшифровка с помощью K2
+  const y2 = desDecryptBlock(k2, y);
+
+  // ЭТАП 3: Зашифровка с помощью K1
+  const mac = desEncryptBlock(k1, y2);
+
+  return mac; // Строго 8 байт MAC
+}
 
       // ---- BAC Protocol ----
       let bacKenc = null, bacKmac = null, bacSsc = null;
@@ -1078,21 +1111,21 @@
         return res;
       }
 
-      async function deriveBacKeys(mrzInfo) {
+async function deriveBacKeys(mrzInfo) {
   const enc = new TextEncoder().encode(mrzInfo);
   
-  // Шаг 1: Kseed = SHA-1(MRZ)[0..15]
+  // Kseed = SHA-1(MRZ)[0..15]
   const hash = await crypto.subtle.digest('SHA-1', enc);
   const kSeed = new Uint8Array(hash).slice(0, 16);
 
-  // Шаг 2: Генерация Kenc с добавлением счётчика 00000001
+  // Kenc = SHA-1(Kseed || 00000001)[0..15]
   const dEnc = new Uint8Array(20);
   dEnc.set(kSeed, 0);
   dEnc.set([0x00, 0x00, 0x00, 0x01], 16);
   const hashEnc = new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc));
   bacKenc = setOddParity(hashEnc.slice(0, 16));
 
-  // Шаг 3: Генерация Kmac с добавлением счётчика 00000002
+  // Kmac = SHA-1(Kseed || 00000002)[0..15]
   const dMac = new Uint8Array(20);
   dMac.set(kSeed, 0);
   dMac.set([0x00, 0x00, 0x00, 0x02], 16);
@@ -1193,22 +1226,22 @@
         return hexToBytes(resp.slice(0, -4));
       }
 
-      async function epMutualAuth(rndIcc) {
+async function epMutualAuth(rndIcc) {
   epAppend('— MUTUAL AUTHENTICATE —');
   
   const rndIfd = crypto.getRandomValues(new Uint8Array(8));
   const kifd = crypto.getRandomValues(new Uint8Array(16)); // K.IFD = 16 случайных байт
 
-  // Вектор S (32 байта) по спецификации: RND.IFD (8) || RND.ICC (8) || K.IFD (16)
+  // Строго 32 байта: RND.IFD (8B) || RND.ICC (8B) || K.IFD (16B)
   const s = new Uint8Array(32);
   s.set(rndIfd, 0);
   s.set(rndIcc, 8);
   s.set(kifd, 16);
 
-  // Шифрование вектора S с помощью 3DES CBC (IV = 0)
+  // Шифрование S с помощью 3DES-CBC (IV = 0)
   const encS = des3EncryptCBC(bacKenc, s, new Uint8Array(8));
   
-  // Расчет ISO/IEC 9797-1 MAC Alg 3 по шифротексту encS
+  // Расчет правильного Retail MAC (ISO 9797-1 Alg 3)
   const macS = des3Mac(bacKmac, encS);
 
   const data = bytesToHex(encS) + bytesToHex(macS); // 32 + 8 = 40 байт (0x28)
@@ -1219,7 +1252,9 @@
   const resp = await rawTransceive(cmd);
   epAppend(`← ${resp}`);
 
-  if (!resp.endsWith('9000')) throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
+  if (!resp.endsWith('9000')) {
+    throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
+  }
 
   const respData = hexToBytes(resp.slice(0, -4));
   const encResp = respData.slice(0, respData.length - 8);
@@ -1230,7 +1265,10 @@
   let macOk = true;
   for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
 
-  if (!macOk) { epAppend('⚠ MAC mismatch — auth incomplete'); return false; }
+  if (!macOk) { 
+    epAppend('⚠ MAC ответа не совпал'); 
+    return false; 
+  }
 
   // Расшифровка ответа чипа
   const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
@@ -1241,27 +1279,28 @@
   // Проверка совпадения RND.ICC
   let rndOk = true;
   for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
-  if (!rndOk) { epAppend('⚠ RND.ICC mismatch'); return false; }
+  if (!rndOk) { 
+    epAppend('⚠ RND.ICC не совпал'); 
+    return false; 
+  }
 
-  epAppend('✅ Mutual Auth OK');
+  epAppend('✅ Mutual Auth OK!');
 
-  // Расчет SSC (Send Sequence Counter) и сессионных ключей
+  // Установка SSC (Send Sequence Counter) и сессионных ключей Kenc/Kmac
   const kSeed = new Uint8Array(16);
   for (let i = 0; i < 16; i++) kSeed[i] = kifd[i] ^ kicc[i];
 
-  // Создание сессионного SSC из RND.ICC[4..7] и RND.IFD[4..7]
   bacSsc = new Uint8Array(8);
   bacSsc.set(rndIcc.slice(4, 8), 0);
   bacSsc.set(rndIfd.slice(4, 8), 4);
 
-  // Пересчет сессионных Kenc и Kmac из kSeed
   const dEnc = new Uint8Array(20); dEnc.set(kSeed, 0); dEnc.set([0,0,0,1], 16);
   bacKenc = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc)).slice(0, 16));
 
   const dMac = new Uint8Array(20); dMac.set(kSeed, 0); dMac.set([0,0,0,2], 16);
   bacKmac = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dMac)).slice(0, 16));
 
-  epAppend('🔐 Сессионные ключи и Secure Messaging успешно установлены!');
+  epAppend('🔐 Сессия установлена. Переход в Secure Messaging.');
   return true;
 }
 
