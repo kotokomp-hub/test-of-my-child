@@ -791,12 +791,12 @@
         const textValue = document.getElementById('nfc-text-input').value;
         const records = [
           {
-            recordType: "text",
-            mediaType: "text/plain",
+            tnf: 1,
+            type: "T",
             payload: textValue
           }
         ];
-        log(`Запуск записи на NFC-тэг. Данные: "${textValue}"`);
+        log(`Запуск записи на NFC-тэг. Данные: "${textValue}"`, 'sys');
         sdk.nfc.write(records)
           .then((res) => {
             log(`Запись NFC успешно завершена`);
