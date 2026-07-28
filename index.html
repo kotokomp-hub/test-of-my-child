@@ -1079,16 +1079,28 @@
       }
 
       async function deriveBacKeys(mrzInfo) {
-        const enc = new TextEncoder().encode(mrzInfo);
-        const hash = await crypto.subtle.digest('SHA-1', enc);
-        const h = new Uint8Array(hash);
-        // ICAO: Kenc = h[0..7]||h[0..7] (16 bytes), Kmac = h[8..15]||h[8..15] (16 bytes)
-        const kencRaw = [...h.slice(0, 8), ...h.slice(0, 8)];
-        const kmacRaw = [...h.slice(8, 16), ...h.slice(8, 16)];
-        bacKenc = setOddParity(new Uint8Array(kencRaw));
-        bacKmac = setOddParity(new Uint8Array(kmacRaw));
-        return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
-      }
+  const enc = new TextEncoder().encode(mrzInfo);
+  
+  // Шаг 1: Kseed = SHA-1(MRZ)[0..15]
+  const hash = await crypto.subtle.digest('SHA-1', enc);
+  const kSeed = new Uint8Array(hash).slice(0, 16);
+
+  // Шаг 2: Генерация Kenc с добавлением счётчика 00000001
+  const dEnc = new Uint8Array(20);
+  dEnc.set(kSeed, 0);
+  dEnc.set([0x00, 0x00, 0x00, 0x01], 16);
+  const hashEnc = new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc));
+  bacKenc = setOddParity(hashEnc.slice(0, 16));
+
+  // Шаг 3: Генерация Kmac с добавлением счётчика 00000002
+  const dMac = new Uint8Array(20);
+  dMac.set(kSeed, 0);
+  dMac.set([0x00, 0x00, 0x00, 0x02], 16);
+  const hashMac = new Uint8Array(await crypto.subtle.digest('SHA-1', dMac));
+  bacKmac = setOddParity(hashMac.slice(0, 16));
+
+  return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
+}
 
       function buildSMCommand(cmdApdu, data, le) {
         if (!bacSsc || !bacKenc || !bacKmac) return cmdApdu + data; // no SM yet
@@ -1182,62 +1194,76 @@
       }
 
       async function epMutualAuth(rndIcc) {
-        epAppend('— MUTUAL AUTHENTICATE —');
-        const rndIfd = crypto.getRandomValues(new Uint8Array(8));
-        const kifd = new Uint8Array([bacSeqSend, 0, 0, 0, 0, 0, 0, 0]);
-        const s = new Uint8Array([...rndIfd, ...kifd, ...rndIcc]);
-        const encS = des3EncryptCBC(bacKenc, isoPad(s, 8), new Uint8Array(8));
-        const macS = des3Mac(bacKmac, encS);
+  epAppend('— MUTUAL AUTHENTICATE —');
+  
+  const rndIfd = crypto.getRandomValues(new Uint8Array(8));
+  const kifd = crypto.getRandomValues(new Uint8Array(16)); // K.IFD = 16 случайных байт
 
-        const lc = encS.length + macS.length;
-        const lcHex = lc.toString(16).padStart(2, '0');
-        const data = bytesToHex(encS) + bytesToHex(macS);
-        const cmd = '00820000' + lcHex + data + '08';
-        epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08 [total ${cmd.length/2-1} bytes]`);
-        const resp = await rawTransceive(cmd);
-        epAppend(`← ${resp}`);
+  // Вектор S (32 байта) по спецификации: RND.IFD (8) || RND.ICC (8) || K.IFD (16)
+  const s = new Uint8Array(32);
+  s.set(rndIfd, 0);
+  s.set(rndIcc, 8);
+  s.set(kifd, 16);
 
-        if (!resp.endsWith('9000')) throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
+  // Шифрование вектора S с помощью 3DES CBC (IV = 0)
+  const encS = des3EncryptCBC(bacKenc, s, new Uint8Array(8));
+  
+  // Расчет ISO/IEC 9797-1 MAC Alg 3 по шифротексту encS
+  const macS = des3Mac(bacKmac, encS);
 
-        const respData = hexToBytes(resp.slice(0, -4));
-        const encResp = respData.slice(0, respData.length - 8);
-        const respMac = respData.slice(respData.length - 8);
+  const data = bytesToHex(encS) + bytesToHex(macS); // 32 + 8 = 40 байт (0x28)
+  const lcHex = (data.length / 2).toString(16).padStart(2, '0');
+  const cmd = '00820000' + lcHex + data + '08';
+  
+  epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08`);
+  const resp = await rawTransceive(cmd);
+  epAppend(`← ${resp}`);
 
-        // Verify response MAC
-        const expectedMac = des3Mac(bacKmac, encResp);
-        let macOk = true;
-        for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
+  if (!resp.endsWith('9000')) throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
 
-        if (!macOk) { epAppend('⚠ MAC mismatch — auth might be incomplete'); return false; }
+  const respData = hexToBytes(resp.slice(0, -4));
+  const encResp = respData.slice(0, respData.length - 8);
+  const respMac = respData.slice(respData.length - 8);
 
-        // 3. Decrypt response with CBC
-        const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
-        // decResp = rndIcc || kifd || kicc (24 bytes with padding)
-        const rndIccBack = decResp.slice(0, 8);
-        const kifdBack = decResp.slice(8, 16);
+  // Проверка MAC ответа чипа
+  const expectedMac = des3Mac(bacKmac, encResp);
+  let macOk = true;
+  for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
 
-        // Verify rndIcc matches
-        let rndOk = true;
-        for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
-        if (!rndOk) { epAppend('⚠ RND.ICC mismatch'); return false; }
+  if (!macOk) { epAppend('⚠ MAC mismatch — auth incomplete'); return false; }
 
-        epAppend('✅ Mutual Auth OK');
+  // Расшифровка ответа чипа
+  const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
+  const rndIccBack = decResp.slice(0, 8);
+  const kifdBack = decResp.slice(8, 16);
+  const kicc = decResp.slice(16, 32);
 
-        // Derive session keys
-        const kSeed = new Uint8Array(16);
-        for (let i = 0; i < 8; i++) kSeed[i] = rndIfd[i] ^ rndIcc[i];
-        for (let i = 0; i < 4; i++) { kSeed[8 + i * 2] = kifd[i] ^ kifdBack[i]; kSeed[9 + i * 2] = kifd[4 + i] ^ kifdBack[4 + i]; }
+  // Проверка совпадения RND.ICC
+  let rndOk = true;
+  for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
+  if (!rndOk) { epAppend('⚠ RND.ICC mismatch'); return false; }
 
-        // SHA-1 of kSeed for session key derivation
-        const hashSeed = await crypto.subtle.digest('SHA-1', kSeed);
-        const h = new Uint8Array(hashSeed);
-        bacSsc = new Uint8Array(8);
-        for (let i = 0; i < 8; i++) bacSsc[i] = h[16 + i];  // last 4 bytes * 2
+  epAppend('✅ Mutual Auth OK');
 
-        // Session keys (simplified — in real impl they're different from static keys)
-        epAppend('🔐 Session keys established');
-        return true;
-      }
+  // Расчет SSC (Send Sequence Counter) и сессионных ключей
+  const kSeed = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) kSeed[i] = kifd[i] ^ kicc[i];
+
+  // Создание сессионного SSC из RND.ICC[4..7] и RND.IFD[4..7]
+  bacSsc = new Uint8Array(8);
+  bacSsc.set(rndIcc.slice(4, 8), 0);
+  bacSsc.set(rndIfd.slice(4, 8), 4);
+
+  // Пересчет сессионных Kenc и Kmac из kSeed
+  const dEnc = new Uint8Array(20); dEnc.set(kSeed, 0); dEnc.set([0,0,0,1], 16);
+  bacKenc = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc)).slice(0, 16));
+
+  const dMac = new Uint8Array(20); dMac.set(kSeed, 0); dMac.set([0,0,0,2], 16);
+  bacKmac = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dMac)).slice(0, 16));
+
+  epAppend('🔐 Сессионные ключи и Secure Messaging успешно установлены!');
+  return true;
+}
 
       async function epReadBinaryWithSM(sfi, offset, le) {
         const sfiByte = 0x80 | sfi;
