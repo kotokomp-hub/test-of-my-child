@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, камера, превью передней/задней камеры, платежи)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, камера, HTML5 Video Превью, платежи)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
@@ -61,7 +61,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, Камеры (Передняя/Задняя) и Платежей</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, Video-Камеры и Платежей</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -177,22 +177,22 @@
         </div>
       </section>
 
-      <!-- ПЛАТЕЖИ И КАМЕРА -->
+      <!-- ПЛАТЕЖИ И КАМЕРА (с HTML5 Video) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
         
-        <!-- Блок Камеры с Живым Превью -->
+        <!-- Блок Камеры с HTML5 Video Превью -->
         <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <div class="flex justify-between items-center">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Камера & Live Stream</h2>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Камера & Video Stream</h2>
             <span id="badge-camera-lens" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold">Выключена</span>
           </div>
 
-          <!-- Живой Экран Превью -->
+          <!-- Живой Экран Видеопревью (HTML5 <video>) -->
           <div class="relative w-full h-44 bg-slate-950 rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center">
-            <img id="camera-preview-img" class="w-full h-full object-cover hidden" alt="Camera Stream Preview">
+            <video id="camera-preview-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
             <div id="camera-preview-placeholder" class="text-center p-3 text-slate-500 text-xs">
-              <span class="block font-medium mb-1">Превью камеры неактивно</span>
-              <span class="text-[10px] text-slate-600 block">Нажмите «Задняя» или «Передняя (Selfie)» для запуска видеопотока</span>
+              <span class="block font-medium mb-1">HTML5 Video превью неактивно</span>
+              <span class="text-[10px] text-slate-600 block">Нажмите «Задняя» или «Передняя» для запуска трансляции в &lt;video&gt;</span>
             </div>
           </div>
 
@@ -768,38 +768,65 @@
         log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
       });
 
-      // ================= УПРАВЛЕНИЕ КАМЕРОЙ И ПРЕВЬЮ =================
+      // ================= УПРАВЛЕНИЕ КАМЕРОЙ И HTML5 VIDEO ПРЕВЬЮ =================
 
       let cameraFrameCount = 0;
-      const previewImg = document.getElementById('camera-preview-img');
+      const videoEl = document.getElementById('camera-preview-video');
       const previewPlaceholder = document.getElementById('camera-preview-placeholder');
       const lensBadge = document.getElementById('badge-camera-lens');
 
-      // Обработка поступающих кадров с камеры и их рендеринг в окно превью
+      let offscreenCanvas = null;
+      let offscreenCtx = null;
+
+      // Обработка кадров с камеры для отображения в теге <video>
       sdk.camera.onFrame((frameData) => {
         cameraFrameCount++;
         document.getElementById('val-camera-frames').textContent = cameraFrameCount;
 
         if (!frameData) return;
 
-        // Извлечение изображения из структуры ответа
+        // 1. Если хост напрямую возвращает объект MediaStream (WebRTC поток)
+        if (frameData instanceof MediaStream || (frameData.stream && frameData.stream instanceof MediaStream)) {
+          if (videoEl.srcObject !== (frameData.stream || frameData)) {
+            videoEl.srcObject = frameData.stream || frameData;
+          }
+          videoEl.classList.remove('hidden');
+          previewPlaceholder.classList.add('hidden');
+          return;
+        }
+
+        // 2. Если кадры передаются картинками (Base64 / Data URL / JPEG Chunk)
         let rawSrc = typeof frameData === 'string' 
           ? frameData 
           : (frameData.frame || frameData.image || frameData.data || '');
 
         if (!rawSrc) return;
 
-        // Формирование корректного Data URL для тега <img>
         if (!rawSrc.startsWith('data:') && !rawSrc.startsWith('http')) {
           rawSrc = 'data:image/jpeg;base64,' + rawSrc;
         }
 
-        previewImg.src = rawSrc;
-        previewImg.classList.remove('hidden');
-        previewPlaceholder.classList.add('hidden');
+        // Загружаем кадр и отрисовываем через Canvas в Video Stream тега <video>
+        const img = new Image();
+        img.onload = () => {
+          if (!offscreenCanvas) {
+            offscreenCanvas = document.createElement('canvas');
+            offscreenCtx = offscreenCanvas.getContext('2d');
+          }
+          offscreenCanvas.width = img.width || 640;
+          offscreenCanvas.height = img.height || 480;
+          offscreenCtx.drawImage(img, 0, 0);
+
+          if (!videoEl.srcObject && offscreenCanvas.captureStream) {
+            videoEl.srcObject = offscreenCanvas.captureStream(30);
+          }
+          videoEl.classList.remove('hidden');
+          previewPlaceholder.classList.add('hidden');
+        };
+        img.src = rawSrc;
       });
 
-      // Кнопка вызова снимка фото
+      // Снимок фото
       document.getElementById('btn-camera-photo').addEventListener('click', () => {
         log('Запрос снимка с камеры (takePhoto)...', 'sys');
         sdk.camera.takePhoto()
@@ -807,7 +834,7 @@
           .catch((e) => log(`Ошибка снимка камеры: ${e.message}`, 'error'));
       });
 
-      // Запуск стрима ЗАДНЕЙ камеры
+      // Запуск потока ЗАДНЕЙ камеры
       document.getElementById('btn-cam-back').addEventListener('click', () => {
         log('Запуск потока: Задняя камера (startStream("back"))...', 'sys');
         sdk.camera.startStream('back')
@@ -819,7 +846,7 @@
           .catch((e) => log(`Ошибка запуска задней камеры: ${e.message}`, 'error'));
       });
 
-      // Запуск стрима ПОЛЬЗОВАТЕЛЬСКОЙ / ПЕРЕДНЕЙ камеры (Selfie)
+      // Запуск потока ПЕРЕДНЕЙ камеры (Selfie)
       document.getElementById('btn-cam-front').addEventListener('click', () => {
         log('Запуск потока: Передняя камера (startStream("front"))...', 'sys');
         sdk.camera.startStream('front')
@@ -836,7 +863,15 @@
         sdk.camera.stopStream();
         lensBadge.textContent = 'Выключена';
         lensBadge.className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
-        previewImg.classList.add('hidden');
+        
+        if (videoEl.srcObject) {
+          if (typeof videoEl.srcObject.getTracks === 'function') {
+            videoEl.srcObject.getTracks().forEach(track => track.stop());
+          }
+          videoEl.srcObject = null;
+        }
+
+        videoEl.classList.add('hidden');
         previewPlaceholder.classList.remove('hidden');
         log('Видеопоток камеры остановлен (stopStream).');
       });
