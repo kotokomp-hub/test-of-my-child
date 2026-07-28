@@ -1061,7 +1061,8 @@
           exp: cleaned.slice(21, 27),
           expCheck: cleaned[27],
           mrzNoChecks: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27),
-          mrzWithChecks: cleaned.slice(0, 9) + cleaned[9] + cleaned.slice(13, 19) + cleaned[19] + cleaned.slice(21, 27) + cleaned[27]
+          mrzWithChecks: cleaned.slice(0, 9) + cleaned[9] + cleaned.slice(13, 19) + cleaned[19] + cleaned.slice(21, 27) + cleaned[27],
+          mrzFullLine: cleaned
         };
       }
 
@@ -1081,8 +1082,9 @@
         const enc = new TextEncoder().encode(mrzInfo);
         const hash = await crypto.subtle.digest('SHA-1', enc);
         const h = new Uint8Array(hash);
-        const kencRaw = [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7]];
-        const kmacRaw = [h[8],h[9],h[10],h[11],h[12],h[13],h[14],h[15],h[8],h[9],h[10],h[11],h[12],h[13],h[14],h[15]];
+        // ICAO: Kenc = h[0..7]||h[0..7] (16 bytes), Kmac = h[8..15]||h[8..15] (16 bytes)
+        const kencRaw = [...h.slice(0, 8), ...h.slice(0, 8)];
+        const kmacRaw = [...h.slice(8, 16), ...h.slice(8, 16)];
         bacKenc = setOddParity(new Uint8Array(kencRaw));
         bacKmac = setOddParity(new Uint8Array(kmacRaw));
         return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
@@ -1320,10 +1322,14 @@
         const mrzVariants = [
           { label: 'без контрольных цифр', mrzInfo: parsed.mrzNoChecks },
           { label: 'с контрольными цифрами', mrzInfo: parsed.mrzWithChecks },
+          { label: 'вся строка целиком', mrzInfo: parsed.mrzFullLine },
         ];
 
         for (const variant of mrzVariants) {
-          epAppend(`\n— Попытка ${variant.label}: ${variant.mrzInfo} —`);
+          epAppend(`\n— Попытка ${variant.label}: "${variant.mrzInfo}" —`);
+          // Show SHA-1 hash
+          const hash = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(variant.mrzInfo));
+          epAppend(`SHA-1: ${bytesToHex(new Uint8Array(hash))}`);
 
           // Derive keys
           try {
