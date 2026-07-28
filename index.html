@@ -1172,48 +1172,58 @@
         'A0000002472001',   // eMRTD
       ];
 
-      async function epSelectAll() {
-        for (const aid of EP_AIDS) {
-          const lc = aid.length / 2;
-          const lcHex = lc.toString(16).padStart(2, '0');
-          // Try with FCI (P2=0C — return ISO 7816-4 template)
-          const selectCmd = `00A4040C${lcHex}${aid}00`;
-          epAppend(`→ SELECT AID ${aid}`);
-          try {
-            const resp = await rawTransceive(selectCmd);
-            const sw = resp.slice(-4);
-            const data = resp.slice(0, -4);
-            if (data && data.length > 0) {
-              epAppend(`← FCI: ${data.slice(0, 120)}`);
-              // Try to parse 6F/84 tags
+      async function epGetCurrentApplet() {
+        // Send empty SELECT to see what's currently active
+        epAppend('→ Запрос текущего applet');
+        const resp = await rawTransceive('00A4040000');
+        epAppend(`← ${resp}`);
+        return resp;
+      }
+
+      async function epSelectOrSkip() {
+        // First check what's already selected
+        const current = await epGetCurrentApplet();
+        if (!current.endsWith('9000')) {
+          // No applet selected — try explicit SELECT
+          for (const p2 of ['00', '04', '0C']) {
+            for (const aid of EP_AIDS) {
+              const lc = aid.length / 2;
+              const lcHex = lc.toString(16).padStart(2, '0');
+              const cmd = `00A404${p2}${lcHex}${aid}`;
+              epAppend(`→ SELECT AID ${aid} P2=0x${p2}`);
+              try {
+                const resp = await rawTransceive(cmd);
+                epAppend(`← ${resp}`);
+                if (resp.endsWith('9000')) {
+                  epAppend(`✅ SELECT OK — AID: ${aid}`);
+                  return aid;
+                }
+              } catch (e) { epAppend(`← error: ${e.message}`); }
             }
-            epAppend(`← SW: ${sw}`);
-            if (resp.endsWith('9000')) {
-              epAppend(`✅ SELECT OK — AID: ${aid}`);
-              return { aid, resp };
-            }
-          } catch (e) {
-            epAppend(`← error: ${e.message}`);
+          }
+          throw new Error('Не удалось SELECT ни один ePassport AID');
+        }
+        // Parse AID from FCI template
+        const data = current.slice(0, -4);
+        // Look for 84 tag (AID) in the response
+        const aidMatch = data.match(/84([0-9a-f]{2})([0-9a-f]+)/i);
+        if (aidMatch) {
+          const aidLen = parseInt(aidMatch[1], 16) * 2;
+          const foundAid = aidMatch[2].slice(0, aidLen);
+          if (EP_AIDS.includes(foundAid.toUpperCase())) {
+            epAppend(`✅ Applet уже выбран: ${foundAid}`);
+            return foundAid.toUpperCase();
           }
         }
-        // Try without FCI (P2=00)
+        // Try to find any known AID in the data
         for (const aid of EP_AIDS) {
-          const lc = aid.length / 2;
-          const lcHex = lc.toString(16).padStart(2, '0');
-          const selectCmd = `00A40400${lcHex}${aid}`;
-          epAppend(`→ SELECT AID ${aid} (no FCI)`);
-          try {
-            const resp = await rawTransceive(selectCmd);
-            epAppend(`← ${resp}`);
-            if (resp.endsWith('9000')) {
-              epAppend(`✅ SELECT OK — AID: ${aid}`);
-              return { aid, resp };
-            }
-          } catch (e) {
-            epAppend(`← error: ${e.message}`);
+          if (data.toUpperCase().includes(aid)) {
+            epAppend(`✅ Найден AID в FCI: ${aid}`);
+            return aid;
           }
         }
-        throw new Error('НИ ОДИН AID не подошёл. Это точно ePassport?');
+        epAppend('⚠ Неизвестный applet — пробуем продолжить');
+        return null;
       }
 
       async function epGetChallenge() {
@@ -1361,8 +1371,9 @@
         bacSeqSend = 0; bacSeqRecv = 0; bacSsc = null;
 
         try {
-          // 1. Try SELECT with various ePassport AIDs
-          const { aid } = await epSelectAll();
+          // 1. Check current applet or SELECT ePassport
+          const aid = await epSelectOrSkip();
+          if (aid) epAppend(`Используется AID: ${aid}`);
 
           // 2. GET CHALLENGE
           const rndIcc = await epGetChallenge();
@@ -1387,7 +1398,7 @@
         epAppend('');
         epAppend('— SELECT + CHALLENGE —');
         try {
-          await epSelectAll();
+          await epSelectOrSkip();
           const rndIcc = await epGetChallenge();
           epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
         } catch (e) { epAppend(`❌ ${e.message}`); }
