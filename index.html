@@ -899,8 +899,10 @@
           .then((info) => {
             isoDepConnected = true;
             document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
-            epAppend(`✅ IsoDep подключен! UID=${info.uid}`);
             log(`IsoDep: подключен. UID=${info.uid}, histBytes=${info.historicalBytes}`, 'sys');
+            epAppend(`✅ IsoDep: UID=${info.uid}`);
+            if (info.historicalBytes) epAppend(`📋 HistBytes: ${info.historicalBytes.slice(0, 60)}...`);
+            if (info.tech) epAppend(`📋 Tech: ${info.tech.join(', ')}`);
           })
           .catch((e) => log(`IsoDep: ошибка подключения: ${e.message}`, 'error'));
       });
@@ -1164,13 +1166,54 @@
         return resp;
       }
 
-      async function epSelect() {
-        epAppend('→ SELECT ePassport AID');
-        const resp = await rawTransceive('00A4040007A0000002470001');
-        epAppend(`← ${resp}`);
-        if (resp.endsWith('9000')) epAppend('✅ SELECT OK');
-        else throw new Error('SELECT failed: ' + resp.slice(-4));
-        return resp;
+      const EP_AIDS = [
+        'A0000002470001',   // ICAO ePassport (standard)
+        'A0000002471001',   // ICAO ePassport alt
+        'A0000002472001',   // eMRTD
+      ];
+
+      async function epSelectAll() {
+        for (const aid of EP_AIDS) {
+          const lc = aid.length / 2;
+          const lcHex = lc.toString(16).padStart(2, '0');
+          // Try with FCI (P2=0C — return ISO 7816-4 template)
+          const selectCmd = `00A4040C${lcHex}${aid}00`;
+          epAppend(`→ SELECT AID ${aid}`);
+          try {
+            const resp = await rawTransceive(selectCmd);
+            const sw = resp.slice(-4);
+            const data = resp.slice(0, -4);
+            if (data && data.length > 0) {
+              epAppend(`← FCI: ${data.slice(0, 120)}`);
+              // Try to parse 6F/84 tags
+            }
+            epAppend(`← SW: ${sw}`);
+            if (resp.endsWith('9000')) {
+              epAppend(`✅ SELECT OK — AID: ${aid}`);
+              return { aid, resp };
+            }
+          } catch (e) {
+            epAppend(`← error: ${e.message}`);
+          }
+        }
+        // Try without FCI (P2=00)
+        for (const aid of EP_AIDS) {
+          const lc = aid.length / 2;
+          const lcHex = lc.toString(16).padStart(2, '0');
+          const selectCmd = `00A40400${lcHex}${aid}`;
+          epAppend(`→ SELECT AID ${aid} (no FCI)`);
+          try {
+            const resp = await rawTransceive(selectCmd);
+            epAppend(`← ${resp}`);
+            if (resp.endsWith('9000')) {
+              epAppend(`✅ SELECT OK — AID: ${aid}`);
+              return { aid, resp };
+            }
+          } catch (e) {
+            epAppend(`← error: ${e.message}`);
+          }
+        }
+        throw new Error('НИ ОДИН AID не подошёл. Это точно ePassport?');
       }
 
       async function epGetChallenge() {
@@ -1318,8 +1361,8 @@
         bacSeqSend = 0; bacSeqRecv = 0; bacSsc = null;
 
         try {
-          // 1. SELECT ePassport AID
-          await epSelect();
+          // 1. Try SELECT with various ePassport AIDs
+          const { aid } = await epSelectAll();
 
           // 2. GET CHALLENGE
           const rndIcc = await epGetChallenge();
@@ -1329,9 +1372,13 @@
           const authOk = await epMutualAuth(rndIcc);
           if (authOk) {
             document.getElementById('badge-epassport').classList.replace('bg-slate-400', 'bg-emerald-500');
+            epAppend('✅ Аутентификация пройдена. Теперь можно читать DG1/DG2');
           }
         } catch (e) {
           epAppend(`❌ ${e.message}`);
+          epAppend('💡 Попробуй: 1) Убедись что это ePassport, а не банк карта/транспорт');
+          epAppend('💡 2) Нажми сначала Connect в секции IsoDep, затем Read');
+          epAppend('💡 3) Или отправь команды вручную через поле APDU команда');
         }
       }
 
@@ -1340,7 +1387,7 @@
         epAppend('');
         epAppend('— SELECT + CHALLENGE —');
         try {
-          await epSelect();
+          await epSelectAll();
           const rndIcc = await epGetChallenge();
           epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
         } catch (e) { epAppend(`❌ ${e.message}`); }
