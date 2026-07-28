@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (с поддержкой NFC, датчиков и вибрации)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, датчики, вибрация)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Подключение SDK по указанному адресу -->
@@ -292,6 +292,34 @@
             </div>
 
             <button id="btn-mock-nfc-read" class="w-full bg-slate-100 border border-slate-200 text-slate-600 py-1 rounded hover:bg-slate-200 text-[10px]">Симулировать чтение NFC тэга</button>
+
+            <!-- IsoDep / APDU -->
+            <div class="border-t pt-3 mt-2 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">IsoDep / APDU (ePassport, банковские карты)</span>
+                <span id="badge-isodep" class="w-2 h-2 rounded-full bg-slate-400"></span>
+              </div>
+              <div class="grid grid-cols-2 gap-1">
+                <button id="btn-isodep-connect" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1 rounded font-semibold">Подключиться (Connect)</button>
+                <button id="btn-isodep-disconnect" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Отключить</button>
+              </div>
+              <div>
+                <label class="text-[10px] text-slate-400 block">APDU команда (hex)</label>
+                <div class="flex gap-1">
+                  <input type="text" id="isodep-command" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" value="00A4040008A0000002470001">
+                  <button id="btn-isodep-send" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-[10px]">Send</button>
+                </div>
+                <div class="mt-1">
+                  <label class="text-[10px] text-slate-400 block">Ответ:</label>
+                  <textarea id="isodep-response" class="w-full border rounded p-1 text-xs font-mono bg-slate-50" rows="2" readonly placeholder="здесь будет hex-ответ"></textarea>
+                </div>
+              </div>
+              <div class="grid grid-cols-3 gap-1 text-[10px]">
+                <button id="btn-isodep-select-mf" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">SELECT MF</button>
+                <button id="btn-isodep-get-challenge" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">GET CHALLENGE</button>
+                <button id="btn-isodep-read-binary" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">READ BINARY</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -837,6 +865,56 @@
           }
         }, "*");
         log('Симуляция: событие чтения NFC тэга отправлено.', 'sys');
+      });
+
+      // ================= IsoDep / APDU =================
+
+      let isoDepConnected = false;
+
+      document.getElementById('btn-isodep-connect').addEventListener('click', () => {
+        log('IsoDep: подключение к тэгу...', 'sys');
+        sdk.nfc.connectIsoDep()
+          .then((info) => {
+            isoDepConnected = true;
+            document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
+            log(`IsoDep: подключен. UID=${info.uid}, histBytes=${info.historicalBytes}`, 'sys');
+          })
+          .catch((e) => log(`IsoDep: ошибка подключения: ${e.message}`, 'error'));
+      });
+
+      document.getElementById('btn-isodep-disconnect').addEventListener('click', () => {
+        sdk.nfc.disconnect();
+        isoDepConnected = false;
+        document.getElementById('badge-isodep').classList.replace('bg-emerald-500', 'bg-slate-400');
+        document.getElementById('isodep-response').value = '';
+        log('IsoDep: отключен', 'sys');
+      });
+
+      document.getElementById('btn-isodep-send').addEventListener('click', () => {
+        const cmd = document.getElementById('isodep-command').value;
+        log(`IsoDep: отправка APDU: ${cmd}`, 'sys');
+        sdk.nfc.transceive(cmd)
+          .then((resp) => {
+            document.getElementById('isodep-response').value = resp;
+            log(`IsoDep: ответ: ${resp}`, 'sys');
+          })
+          .catch((e) => log(`IsoDep: ошибка: ${e.message}`, 'error'));
+      });
+
+      // Предустановленные APDU-команды
+      document.getElementById('btn-isodep-select-mf').addEventListener('click', () => {
+        document.getElementById('isodep-command').value = '00A40000023F00';
+        document.getElementById('btn-isodep-send').click();
+      });
+
+      document.getElementById('btn-isodep-get-challenge').addEventListener('click', () => {
+        document.getElementById('isodep-command').value = '00A4000002';
+        document.getElementById('btn-isodep-send').click();
+      });
+
+      document.getElementById('btn-isodep-read-binary').addEventListener('click', () => {
+        document.getElementById('isodep-command').value = '00B0000000';
+        document.getElementById('btn-isodep-send').click();
       });
 
       // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
