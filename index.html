@@ -1140,14 +1140,16 @@
 
       function parseMRZ(line2) {
         const cleaned = line2.replace(/\s/g, '').toUpperCase();
-        const docNum = cleaned.slice(0, 9);
-        const docCheck = cleaned[9];
-        const dob = cleaned.slice(13, 19);
-        const dobCheck = cleaned[19];
-        const exp = cleaned.slice(21, 27);
-        const expCheck = cleaned[27];
-        return { docNum, docCheck, dob, dobCheck, exp, expCheck,
-          mrzInfo: docNum + docCheck + dob + dobCheck + exp + expCheck };
+        return {
+          docNum: cleaned.slice(0, 9),
+          docCheck: cleaned[9],
+          dob: cleaned.slice(13, 19),
+          dobCheck: cleaned[19],
+          exp: cleaned.slice(21, 27),
+          expCheck: cleaned[27],
+          // ICAO 9303: MRZ info = doc_number + DOB + expiry (check digits NOT included)
+          mrzInfo: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27)
+        };
       }
 
       function setOddParity(key) {
