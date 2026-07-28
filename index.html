@@ -1321,34 +1321,166 @@ async function epMutualAuth(rndIcc) {
         return resp2;
       }
 
-      async function epReadDG(dgSfi, dgName) {
-        epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) —`);
-        if (bacSsc) {
-          epAppend('Using Secure Messaging');
-          const resp = await epReadBinaryWithSM(dgSfi, 0, 0x00);
-          if (resp.endsWith('9000')) {
-            epAppend(`✅ ${dgName} прочитан (${resp.slice(0, -4).length / 2} байт)`);
-            return resp;
-          }
-        }
-        // Without SM (fallback)
-        const selectCmd = `00A4000002${('0' + (0x80 | dgSfi).toString(16)).slice(-2)}00`;
-        epAppend(`→ SELECT ${dgName}`);
-        let resp = await rawTransceive(selectCmd);
-        epAppend(`← ${resp}`);
-        if (!resp.endsWith('9000')) throw new Error(`SELECT ${dgName}: ` + resp.slice(-4));
-        const readCmd = '00B0000000';
-        epAppend(`→ READ BINARY`);
-        resp = await rawTransceive(readCmd);
-        epAppend(`← ${resp}`);
-        if (resp.endsWith('9000')) {
-          epAppend(`✅ ${dgName} OK`);
-          document.getElementById('isodep-response').value = resp;
-        } else if (resp.endsWith('6982')) {
-          epAppend('❌ 6982 — требуется BAC аутентификация');
-        }
-        return resp;
-      }
+async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
+  if (!bacSsc || !bacKenc || !bacKmac) {
+    throw new Error('Сессия Secure Messaging не активна');
+  }
+
+  // 1. Инкремент SSC (8 байт счетчика)
+  for (let i = 7; i >= 0; i--) {
+    bacSsc[i]++;
+    if (bacSsc[i] !== 0) break;
+  }
+
+  const sscBytes = bacSsc.slice();
+
+  // 2. Формирование DO87 (если есть отправляемые данные)
+  let do87Hex = '';
+  if (dataHex && dataHex.length > 0) {
+    const paddedData = isoPad(hexToBytes(dataHex), 8);
+    const encData = des3EncryptCBC(bacKenc, paddedData, new Uint8Array(8));
+    const encHex = bytesToHex(encData);
+    const payloadHex = '01' + encHex; // 01 - индикатор дополнения
+    const payloadLen = payloadHex.length / 2;
+    const lenField = payloadLen < 0x80 
+      ? payloadLen.toString(16).padStart(2, '0') 
+      : '81' + payloadLen.toString(16).padStart(2, '0');
+    do87Hex = '87' + lenField + payloadHex;
+  }
+
+  // 3. Формирование DO97 (запрос длины ответа Le)
+  let do97Hex = '';
+  if (leHex !== null && leHex !== undefined && leHex !== '') {
+    do97Hex = '9701' + leHex.padStart(2, '0');
+  }
+
+  // 4. Маскированный заголовок (CLA=0C) для расчета MAC
+  const headerBytes = new Uint8Array([0x0C, ins, p1, p2]);
+  const paddedHeader = isoPad(headerBytes, 8);
+
+  // 5. Расчет Retail MAC over (SSC || Header || DO87 || DO97)
+  const macInput = new Uint8Array([
+    ...sscBytes,
+    ...paddedHeader,
+    ...hexToBytes(do87Hex),
+    ...hexToBytes(do97Hex)
+  ]);
+
+  const macBytes = des3Mac(bacKmac, macInput);
+  const do8eHex = '8E08' + bytesToHex(macBytes);
+
+  // 6. Сборка итоговой SM APDU
+  const doBodyHex = do87Hex + do97Hex + do8eHex;
+  const lcHex = (doBodyHex.length / 2).toString(16).padStart(2, '0');
+  const smApduHex = `0C${ins.toString(16).padStart(2, '0')}${p1.toString(16).padStart(2, '0')}${p2.toString(16).padStart(2, '0')}${lcHex}${doBodyHex}00`;
+
+  const respHex = await rawTransceive(smApduHex);
+  if (!respHex) throw new Error('Чип не ответил');
+
+  const status = respHex.slice(-4);
+  if (status !== '9000') {
+    throw new Error(`Ошибка SM (Статус: ${status})`);
+  }
+
+  // 7. Инкремент SSC для ответа чипа
+  for (let i = 7; i >= 0; i--) {
+    bacSsc[i]++;
+    if (bacSsc[i] !== 0) break;
+  }
+
+  const respDataHex = respHex.slice(0, -4);
+  
+  // 8. Извлечение и расшифровка DO87 из ответа
+  let plainDataHex = '';
+  if (respDataHex.startsWith('87')) {
+    let offset = 2;
+    let len = parseInt(respDataHex.slice(offset, offset + 2), 16);
+    offset += 2;
+    if (len & 0x80) {
+      const numBytes = len & 0x7F;
+      len = parseInt(respDataHex.slice(offset, offset + numBytes * 2), 16);
+      offset += numBytes * 2;
+    }
+    if (respDataHex.slice(offset, offset + 2) === '01') {
+      offset += 2;
+    }
+    const encRespDataHex = respDataHex.slice(offset, offset + (len - 1) * 2);
+    
+    // Расшифровка сессионным ключом Kenc
+    const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encRespDataHex), new Uint8Array(8));
+    
+    // Снятие дополнения ISO 9797 Method 2
+    let unpaddedLen = decBytes.length;
+    while (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x00) unpaddedLen--;
+    if (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x80) unpaddedLen--;
+    
+    plainDataHex = bytesToHex(decBytes.slice(0, unpaddedLen));
+  }
+
+  return plainDataHex;
+}
+      
+async function epReadDG(dgSfi, dgName) {
+  epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) в режиме Secure Messaging —`);
+  if (!bacSsc) {
+    epAppend('❌ Сначала пройдите аутентификацию (Read Passport)');
+    return;
+  }
+
+  try {
+    // 1. Читаем первые 4 байта заголовка файла для получения его длины (ASN.1 TLV)
+    const p1 = 0x80 | dgSfi; // 0x81 для DG1, 0x82 для DG2
+    const headerHex = await sendSmApdu(0xB0, p1, 0x00, '', '04');
+    
+    if (!headerHex || headerHex.length < 4) {
+      throw new Error('Не удалось получить заголовок файла');
+    }
+
+    // Парсинг длины файла из ASN.1 заголовка
+    let dgLen = 0;
+    const lenByte = parseInt(headerHex.slice(2, 4), 16);
+
+    if (lenByte < 0x80) {
+      dgLen = lenByte + 2;
+    } else if (lenByte === 0x81) {
+      const l2 = parseInt(headerHex.slice(4, 6), 16);
+      dgLen = l2 + 3;
+    } else if (lenByte === 0x82) {
+      const l2 = parseInt(headerHex.slice(4, 8), 16);
+      dgLen = l2 + 4;
+    }
+
+    epAppend(`📊 Размер ${dgName}: ${dgLen} байт`);
+
+    // 2. Чтение файла порциями по 128 байт
+    let fullDataHex = '';
+    let offset = 0;
+    const chunkSize = 128;
+
+    while (offset < dgLen) {
+      const readLen = Math.min(chunkSize, dgLen - offset);
+      const p1Offset = Math.floor(offset / 256);
+      const p2Offset = offset % 256;
+      
+      // Для первого блока передаем SFI в P1, для последующих - смещение
+      const actualP1 = (offset === 0) ? p1 : p1Offset;
+      const leHex = readLen.toString(16).padStart(2, '0');
+      
+      const chunk = await sendSmApdu(0xB0, actualP1, p2Offset, '', leHex);
+      fullDataHex += chunk;
+      offset += chunk.length / 2;
+      
+      epAppend(`⏳ Прочитано: ${offset} / ${dgLen} байт`);
+    }
+
+    epAppend(`✅ ${dgName} УСПЕШНО ПРОЧИТАН!`);
+    epAppend(`📄 HEX (${fullDataHex.length / 2} байт):\n${fullDataHex}`);
+    document.getElementById('isodep-response').value = fullDataHex;
+
+  } catch (e) {
+    epAppend(`❌ Ошибка чтения ${dgName}: ${e.message}`);
+  }
+}
 
       // ---- Main Read ----
       async function readPassport() {
