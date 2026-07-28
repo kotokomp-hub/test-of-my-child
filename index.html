@@ -1138,6 +1138,25 @@
       let bacKenc = null, bacKmac = null, bacSsc = null;
       let bacSeqSend = 0, bacSeqRecv = 0;
 
+      // DES self-test
+      function desSelfTest() {
+        // Test vector: key=01, data=01 → ciphertext should be something specific
+        const key = new Uint8Array([0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01]);
+        const data = new Uint8Array([0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01]);
+        try {
+          const enc = desEncryptBlock(key, data);
+          const hex = bytesToHex(enc);
+          // Known result: should be 0F 5B 2C 6D E4 7C 86 2E  or  8C A6 4D E9 C1 B1 23 A7 depending on implementation
+          epAppend(`🔬 DES test: ${bytesToHex(data)} → ${hex}`);
+          const dec = desDecryptBlock(key, enc);
+          const decHex = bytesToHex(dec);
+          epAppend(`🔬 DES decrypt: ${hex} → ${decHex}`);
+          if (decHex === bytesToHex(data)) epAppend('✅ DES self-test: OK');
+          else epAppend('❌ DES self-test: FAILED — decrypt mismatch');
+          return { enc: hex, dec: decHex };
+        } catch (e) { epAppend(`❌ DES test error: ${e.message}`); }
+      }
+
       function parseMRZ(line2) {
         const cleaned = line2.replace(/\s/g, '').toUpperCase();
         return {
@@ -1147,8 +1166,8 @@
           dobCheck: cleaned[19],
           exp: cleaned.slice(21, 27),
           expCheck: cleaned[27],
-          // ICAO 9303: MRZ info = doc_number + DOB + expiry (check digits NOT included)
-          mrzInfo: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27)
+          mrzNoChecks: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27),
+          mrzWithChecks: cleaned.slice(0, 9) + cleaned[9] + cleaned.slice(13, 19) + cleaned[19] + cleaned.slice(21, 27) + cleaned[27]
         };
       }
 
@@ -1379,20 +1398,12 @@
         epAppend(`MRZ: ${mrzInput}`);
 
         // Parse MRZ
-        let mrzInfo;
+        let parsed;
         try {
-          const parsed = parseMRZ(mrzInput);
-          mrzInfo = parsed.mrzInfo;
-          epAppend(`MRZ info: ${mrzInfo}`);
+          parsed = parseMRZ(mrzInput);
+          epAppend(`MRZ info (без чеков): ${parsed.mrzNoChecks}`);
+          epAppend(`MRZ info (с чеками): ${parsed.mrzWithChecks}`);
         } catch (e) { epAppend(`❌ MRZ parse error: ${e.message}`); return; }
-
-        // Derive keys
-        try {
-          const keys = await deriveBacKeys(mrzInfo);
-          epAppend(`Kenc: ${keys.kenc.slice(0, 16)}...`);
-          epAppend(`Kmac: ${keys.kmac.slice(0, 16)}...`);
-          epAppend('✅ BAC keys derived');
-        } catch (e) { epAppend(`❌ Key derivation: ${e.message}`); return; }
 
         if (!isoDepConnected) {
           epAppend('❌ Сначала подключись к NFC (Connect)');
@@ -1401,27 +1412,49 @@
 
         bacSeqSend = 0; bacSeqRecv = 0; bacSsc = null;
 
+        // SELECT applet once (before key trials)
+        let selectedAid;
         try {
-          // 1. Check current applet or SELECT ePassport
-          const aid = await epSelectOrSkip();
-          if (aid) epAppend(`Используется AID: ${aid}`);
-
-          // 2. GET CHALLENGE
-          const rndIcc = await epGetChallenge();
-          epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
-
-          // 3. MUTUAL AUTH
-          const authOk = await epMutualAuth(rndIcc);
-          if (authOk) {
-            document.getElementById('badge-epassport').classList.replace('bg-slate-400', 'bg-emerald-500');
-            epAppend('✅ Аутентификация пройдена. Теперь можно читать DG1/DG2');
-          }
+          const result = await epSelectOrSkip();
+          selectedAid = result;
         } catch (e) {
-          epAppend(`❌ ${e.message}`);
-          epAppend('💡 Попробуй: 1) Убедись что это ePassport, а не банк карта/транспорт');
-          epAppend('💡 2) Нажми сначала Connect в секции IsoDep, затем Read');
-          epAppend('💡 3) Или отправь команды вручную через поле APDU команда');
+          epAppend(`❌ SELECT: ${e.message}`);
+          return;
         }
+
+        // Try both key derivations
+        const mrzVariants = [
+          { label: 'без контрольных цифр', mrzInfo: parsed.mrzNoChecks },
+          { label: 'с контрольными цифрами', mrzInfo: parsed.mrzWithChecks },
+        ];
+
+        for (const variant of mrzVariants) {
+          epAppend(`\n— Попытка ${variant.label}: ${variant.mrzInfo} —`);
+
+          // Derive keys
+          try {
+            const keys = await deriveBacKeys(variant.mrzInfo);
+            epAppend(`Kenc: ${keys.kenc}`);
+            epAppend(`Kmac: ${keys.kmac}`);
+          } catch (e) { epAppend(`❌ Key derivation: ${e.message}`); continue; }
+
+          try {
+            const rndIcc = await epGetChallenge();
+            epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
+
+            const authOk = await epMutualAuth(rndIcc);
+            if (authOk) {
+              document.getElementById('badge-epassport').classList.replace('bg-slate-400', 'bg-emerald-500');
+              epAppend(`✅ Аутентификация пройдена! Ключи: ${variant.label}`);
+              return;
+            }
+          } catch (e) {
+            epAppend(`❌ ${e.message}`);
+          }
+        }
+
+        epAppend('\n💡 Не удалось аутентифицироваться ни с одним вариантом ключей');
+        epAppend('💡 Проверь MRZ: скопируй 2-ю строку без пробелов');
       }
 
       async function epSelectAndChallenge() {
@@ -1438,11 +1471,13 @@
       document.getElementById('btn-ep-read').addEventListener('click', readPassport);
       document.getElementById('btn-ep-select-only').addEventListener('click', epSelectAndChallenge);
       document.getElementById('btn-ep-dg1').addEventListener('click', async () => {
-        try { await epReadDG(1, 'DG1'); } catch (e) { epAppend(`❌ ${e.message}`); }
+        try { await epReadDG(1, 'DG1'); } catch (e) { epAppend(`❌ DG1: ${e.message}`); }
       });
       document.getElementById('btn-ep-dg2').addEventListener('click', async () => {
-        try { await epReadDG(2, 'DG2'); } catch (e) { epAppend(`❌ ${e.message}`); }
+        try { await epReadDG(2, 'DG2'); } catch (e) { epAppend(`❌ DG2: ${e.message}`); }
       });
+      // Run DES self-test on load
+      setTimeout(() => desSelfTest(), 500);
 
       // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
 
