@@ -805,83 +805,147 @@
 
       // Поиск и подключение к Mi Band 6
       document.getElementById('btn-miband-scan').addEventListener('click', async () => {
-        log('Запуск поиска Mi Band 6 через Bluetooth LE...', 'sys');
-        try {
-          // Инициализируем поиск через SDK (фильтрация по сервисам батареи и алерта)
-          const scanRes = await sdk.bluetooth.startScan({
-            services: ['0000180f-0000-1000-8000-00805f9b34fb', '00001802-0000-1000-8000-00805f9b34fb'],
-            namePrefix: 'Mi Smart Band'
-          });
+  log('Запуск реального поиска устройства по Bluetooth LE...', 'sys');
 
-          const deviceId = scanRes?.deviceId || scanRes?.id || 'MiBand6-77:88:99:AA';
-          log(`Устройство найдено: ${deviceId}. Подключение...`, 'sys');
+  try {
+    // 1. Проверяем поддержку Web Bluetooth API в браузере
+    if (navigator.bluetooth) {
+      log('Открытие системного диалога выбора Bluetooth устройств...', 'sys');
 
-          await sdk.bluetooth.connect(deviceId);
-          connectedMiBandId = deviceId;
-
-          document.getElementById('badge-miband-status').textContent = 'Подключен';
-          document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-          document.getElementById('val-miband-id').textContent = deviceId;
-
-          log(`Подключение к Mi Band 6 успешно установлено!`, 'sys');
-        } catch (err) {
-          log(`Ошибка подключения к Mi Band 6: ${err.message}`, 'error');
-        }
+      // Вызываем реальное сканирование Bluetooth вокруг
+      miBandDevice = await navigator.bluetooth.requestDevice({
+        filters: [
+          { namePrefix: 'Mi Smart Band' },
+          { namePrefix: 'Mi Band' },
+          { namePrefix: 'Xiaomi' }
+        ],
+        optionalServices: [
+          BLE_SERVICES.BATTERY_SERVICE,
+          BLE_SERVICES.IMMEDIATE_ALERT_SERVICE,
+          BLE_SERVICES.MI_BAND_CUSTOM_SERVICE
+        ]
       });
 
-      // Отключение устройства
-      document.getElementById('btn-miband-disconnect').addEventListener('click', () => {
-        sdk.bluetooth.stopScan();
-        connectedMiBandId = null;
-        document.getElementById('badge-miband-status').textContent = 'Отключен';
-        document.getElementById('badge-miband-status').className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
-        document.getElementById('val-miband-id').textContent = '-';
-        document.getElementById('val-miband-battery').textContent = '-';
-        log('Mi Band 6 отключен.');
+      log(`Выбрано устройство: ${miBandDevice.name} (ID: ${miBandDevice.id})`, 'sys');
+      log('Подключение к GATT серверу браслета...', 'sys');
+
+      miBandDevice.addEventListener('gattserverdisconnected', onMiBandDisconnected);
+      miBandGattServer = await miBandDevice.gatt.connect();
+
+      // Обновляем статус в интерфейсе
+      document.getElementById('badge-miband-status').textContent = 'Подключен (BLE)';
+      document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
+      document.getElementById('val-miband-id').textContent = miBandDevice.name || miBandDevice.id;
+
+      log(`Успешно подключено к физическому Mi Band 6!`, 'sys');
+
+      // Автоматически считываем заряд при успешном подключении
+      await getRealBatteryLevel();
+
+    } else {
+      // 2. Если браузер не поддерживает Web Bluetooth, пробуем через Naji SDK Bridge
+      log('Web Bluetooth недоступен, вызов через Naji SDK Bridge...', 'sys');
+      const scanRes = await sdk.bluetooth.startScan({
+        services: [BLE_SERVICES.BATTERY_SERVICE, BLE_SERVICES.IMMEDIATE_ALERT_SERVICE]
       });
+      const deviceId = scanRes?.deviceId || scanRes?.id;
+      await sdk.bluetooth.connect(deviceId);
+
+      document.getElementById('badge-miband-status').textContent = 'Подключен (SDK)';
+      document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
+      document.getElementById('val-miband-id').textContent = deviceId;
+    }
+
+  } catch (err) {
+    log(`Ошибка реального подключения BLE: ${err.message}`, 'error');
+  }
+});
+
+      async function getRealBatteryLevel() {
+  if (miBandGattServer && miBandGattServer.connected) {
+    try {
+      log('Чтение характеристики батареи (0x180F -> 0x2A19)...', 'sys');
+      const service = await miBandGattServer.getPrimaryService(BLE_SERVICES.BATTERY_SERVICE);
+      const characteristic = await service.getCharacteristic(BLE_SERVICES.BATTERY_LEVEL_CHAR);
+      const value = await characteristic.readValue();
+      const batteryPercent = value.getUint8(0);
+
+      document.getElementById('val-miband-battery').textContent = `${batteryPercent}%`;
+      log(`РЕАЛЬНЫЙ заряд батареи Mi Band 6: ${batteryPercent}%`, 'sys');
+    } catch (e) {
+      log(`Не удалось прочесть батарею напрямую: ${e.message}`, 'error');
+    }
+  } else {
+    // Через мост SDK
+    try {
+      const res = await sdk.bluetooth.sendRaw(document.getElementById('val-miband-id').textContent, {
+        service: BLE_SERVICES.BATTERY_SERVICE,
+        characteristic: BLE_SERVICES.BATTERY_LEVEL_CHAR,
+        action: 'read'
+      });
+      const val = typeof res === 'number' ? res : (res?.level || res?.value || '-');
+      document.getElementById('val-miband-battery').textContent = `${val}%`;
+      log(`Заряд батареи: ${val}%`, 'sys');
+    } catch (e) {
+      log(`Ошибка чтения батареи: ${e.message}`, 'error');
+    }
+  }
+}
 
       // Запрос заряда батареи (Battery Service: 0x180F -> 0x2A19)
-      document.getElementById('btn-miband-battery').addEventListener('click', async () => {
-        if (!connectedMiBandId) {
-          log('Сначала подключите Mi Band 6!', 'warning');
-          return;
-        }
+     document.getElementById('btn-miband-battery').addEventListener('click', getRealBatteryLevel);
 
-        log('Запрос уровня заряда батареи (Service 0x180F)...', 'sys');
-        try {
-          const res = await sdk.bluetooth.sendRaw(connectedMiBandId, {
-            service: '0000180f-0000-1000-8000-00805f9b34fb',
-            characteristic: '00002a19-0000-1000-8000-00805f9b34fb',
-            action: 'read'
-          });
-
-          let batteryVal = typeof res === 'number' ? res : (res?.level || res?.value || Math.floor(Math.random() * 20 + 75));
-          document.getElementById('val-miband-battery').textContent = `${batteryVal}%`;
-          log(`Заряд батареи Mi Band 6: ${batteryVal}%`, 'sys');
-        } catch (err) {
-          log(`Ошибка получения заряда батареи: ${err.message}`, 'error');
-        }
-      });
 
       // Вызов вибрации на браслете (Immediate Alert Service: 0x1802 -> 0x2A06, data: 0x02)
       document.getElementById('btn-miband-vibrate').addEventListener('click', async () => {
-        if (!connectedMiBandId) {
-          log('Сначала подключите Mi Band 6!', 'warning');
-          return;
-        }
+  log('Отправка реального сигнала вибрации на Mi Band 6...', 'sys');
 
-        log('Отправка команды вибрации на Mi Band 6 (Immediate Alert 0x1802 -> 0x2A06)...', 'sys');
-        try {
-          await sdk.bluetooth.sendRaw(connectedMiBandId, {
-            service: '00001802-0000-1000-8000-00805f9b34fb',
-            characteristic: '00002a06-0000-1000-8000-00805f9b34fb',
-            data: '02' // 0x02 = High Alert (Вибрация браслета)
-          });
-          log('Сигнал вибрации успешно отправлен на браслет!', 'sys');
-        } catch (err) {
-          log(`Ошибка отправки вибрации: ${err.message}`, 'error');
-        }
+  if (miBandGattServer && miBandGattServer.connected) {
+    try {
+      log('Запись байта 0x02 в Immediate Alert Service (0x1802 -> 0x2A06)...', 'sys');
+      const service = await miBandGattServer.getPrimaryService(BLE_SERVICES.IMMEDIATE_ALERT_SERVICE);
+      const characteristic = await service.getCharacteristic(BLE_SERVICES.ALERT_LEVEL_CHAR);
+      
+      // Записываем байт 0x02 (High Alert - вызвать вибрацию на браслете)
+      await characteristic.writeValue(new Uint8Array([0x02]));
+      log('Команда вибрации успешно отправлена на Mi Band 6!', 'sys');
+    } catch (e) {
+      log(`Ошибка отправки сигнала вибрации BLE: ${e.message}`, 'error');
+    }
+  } else {
+    // Через SDK
+    try {
+      const deviceId = document.getElementById('val-miband-id').textContent;
+      await sdk.bluetooth.sendRaw(deviceId, {
+        service: BLE_SERVICES.IMMEDIATE_ALERT_SERVICE,
+        characteristic: BLE_SERVICES.ALERT_LEVEL_CHAR,
+        data: '02'
       });
+      log('Сигнал вибрации отправлен через SDK.', 'sys');
+    } catch (e) {
+      log(`Ошибка отправки вибрации через SDK: ${e.message}`, 'error');
+    }
+  }
+});
+
+// Реальное отключение
+document.getElementById('btn-miband-disconnect').addEventListener('click', () => {
+  if (miBandDevice && miBandDevice.gatt.connected) {
+    miBandDevice.gatt.disconnect();
+  } else {
+    sdk.bluetooth.stopScan();
+  }
+  onMiBandDisconnected();
+});
+
+function onMiBandDisconnected() {
+  miBandGattServer = null;
+  document.getElementById('badge-miband-status').textContent = 'Отключен';
+  document.getElementById('badge-miband-status').className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
+  document.getElementById('val-miband-id').textContent = '-';
+  document.getElementById('val-miband-battery').textContent = '-';
+  log('Mi Band 6 был отключен.');
+}
 
       // Эмуляция/Mock для Mi Band 6 (если тестируете без реального устройства)
       document.getElementById('btn-mock-miband').addEventListener('click', () => {
