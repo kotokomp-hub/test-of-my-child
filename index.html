@@ -970,41 +970,53 @@ document.getElementById('btn-miband-scan').addEventListener('click', async () =>
 }
 
       // Запрос заряда батареи (Battery Service: 0x180F -> 0x2A19)
-     document.getElementById('btn-miband-battery').addEventListener('click', getRealBatteryLevel);
+     const MI_BAND_ID = 'D4:30:19:1A:FE:75'; // Ваш ID из логов
 
-
-      // Вызов вибрации на браслете (Immediate Alert Service: 0x1802 -> 0x2A06, data: 0x02)
-      document.getElementById('btn-miband-vibrate').addEventListener('click', async () => {
-  log('Отправка реального сигнала вибрации на Mi Band 6...', 'sys');
-
-  if (miBandGattServer && miBandGattServer.connected) {
-    try {
-      log('Запись байта 0x02 в Immediate Alert Service (0x1802 -> 0x2A06)...', 'sys');
-      const service = await miBandGattServer.getPrimaryService(BLE_SERVICES.IMMEDIATE_ALERT_SERVICE);
-      const characteristic = await service.getCharacteristic(BLE_SERVICES.ALERT_LEVEL_CHAR);
-      
-      // Записываем байт 0x02 (High Alert - вызвать вибрацию на браслете)
-      await characteristic.writeValue(new Uint8Array([0x02]));
-      log('Команда вибрации успешно отправлена на Mi Band 6!', 'sys');
-    } catch (e) {
-      log(`Ошибка отправки сигнала вибрации BLE: ${e.message}`, 'error');
-    }
-  } else {
-    // Через SDK
-    try {
-      const deviceId = document.getElementById('val-miband-id').textContent;
-      await sdk.bluetooth.sendRaw(deviceId, {
-        service: BLE_SERVICES.IMMEDIATE_ALERT_SERVICE,
-        characteristic: BLE_SERVICES.ALERT_LEVEL_CHAR,
-        data: '02'
-      });
-      log('Сигнал вибрации отправлен через SDK.', 'sys');
-    } catch (e) {
-      log(`Ошибка отправки вибрации через SDK: ${e.message}`, 'error');
-    }
+// 1. КНОПКА ВИБРАЦИИ (Правильная служба 00001802 и характеристика 00002a06)
+document.getElementById('btn-miband-vibrate').addEventListener('click', async () => {
+  log('Отправка команды вибрации в службу 00001802...', 'sys');
+  try {
+    await sdk.bluetooth.sendRaw(MI_BAND_ID, {
+      service: '00001802-0000-1000-8000-00805f9b34fb',       // Immediate Alert Service
+      characteristic: '00002a06-0000-1000-8000-00805f9b34fb',// Alert Level Characteristic
+      data: '02'                                            // 02 = Вибрация
+    });
+    log('Вибрация успешно отправлена на Mi Band 6!', 'sys');
+  } catch (err) {
+    log(`Ошибка вибрации: ${err.message}`, 'error');
   }
 });
 
+// 2. КНОПКА ЗАРЯДА (Служба 0000180f)
+document.getElementById('btn-miband-battery').addEventListener('click', async () => {
+  log('Запрос заряда в службу 0000180f...', 'sys');
+  try {
+    const res = await sdk.bluetooth.sendRaw(MI_BAND_ID, {
+      service: '0000180f-0000-1000-8000-00805f9b34fb',       // Battery Service
+      characteristic: '00002a19-0000-1000-8000-00805f9b34fb',// Battery Level
+      action: 'read'
+    });
+    
+    // Преобразуем ответ
+    let level = typeof res === 'number' ? res : (res?.level || res?.value);
+    document.getElementById('val-miband-battery').textContent = `${level}%`;
+    log(`Реальный заряд: ${level}%`, 'sys');
+  } catch (err) {
+    log(`Ошибка батареи: ${err.message}`, 'error');
+  }
+});
+
+// 3. ПОДКЛЮЧЕНИЕ С ЗАДЕРЖКОЙ 2.5 СЕКУНДЫ (чтобы не было "No services discovered yet")
+async function connectToMiBand(deviceId) {
+  log(`Подключение к ${deviceId}...`, 'sys');
+  await sdk.bluetooth.connect(deviceId);
+  
+  // Пауза 2.5 секунды, так как нативное сканирование служб занимает 1.85 сек (по вашим логам)
+  log('Ждем 2.5 сек, пока Android найдет 12 GATT-служб браслета...', 'sys');
+  await new Promise(r => setTimeout(r, 2500));
+  
+  log('Службы готовы к работе!', 'sys');
+}
 // Реальное отключение
 document.getElementById('btn-miband-disconnect').addEventListener('click', () => {
   if (miBandDevice && miBandDevice.gatt.connected) {
