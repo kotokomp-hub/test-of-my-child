@@ -3,22 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (BLE Mi Band 6, Датчики, NFC)</title>
+  <title>NajiMiniApp SDK Demo (BLE Mi Band 6)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <!-- Подключение SDK -->
   <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
   <style>
     .scrollable-console { max-height: 220px; overflow-y: auto; font-family: monospace; }
-    .scene { width: 100px; height: 100px; perspective: 300px; }
-    .cube { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); transition: transform 0.1s ease-out; }
-    .cube__face { position: absolute; width: 100px; height: 100px; border: 2px solid #6366f1; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #4f46e5; font-size: 12px; backface-visibility: visible; }
-    .cube__face--front  { transform: rotateY(  0deg) translateZ(50px); }
-    .cube__face--right  { transform: rotateY( 90deg) translateZ(50px); background: rgba(236, 72, 153, 0.15); border-color: #ec4899; color: #db2777; }
-    .cube__face--back   { transform: rotateY(180deg) translateZ(50px); }
-    .cube__face--left   { transform: rotateY(-90deg) translateZ(50px); background: rgba(236, 72, 153, 0.15); border-color: #ec4899; color: #db2777; }
-    .cube__face--top    { transform: rotateX( 90deg) translateZ(50px); background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #059669; }
-    .cube__face--bottom { transform: rotateX(-90deg) translateZ(50px); background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #059669; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
@@ -40,7 +31,7 @@
   </header>
 
   <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-    <!-- ЛЕВАЯ КОЛОНКА (Инфо) -->
+    <!-- ЛЕВАЯ КОЛОНКА -->
     <div class="space-y-6">
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div class="flex justify-between items-center mb-3">
@@ -58,8 +49,8 @@
         <div class="grid grid-cols-2 gap-2 text-xs">
           <button id="btn-expand" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Expand</button>
           <button id="btn-collapse" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Collapse</button>
-          <button id="btn-close" class="border border-rose-200 text-rose-600 hover:bg-rose-50 py-1.5 rounded">Close App</button>
           <button id="btn-ping" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Ping</button>
+          <button id="btn-close" class="border border-rose-200 text-rose-600 hover:bg-rose-50 py-1.5 rounded">Close App</button>
         </div>
       </section>
     </div>
@@ -86,6 +77,10 @@
           </h2>
           <span id="badge-ble" class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-semibold border border-slate-300">Отключено</span>
         </div>
+        
+        <div class="bg-yellow-50 text-yellow-800 text-[10px] p-2 rounded border border-yellow-200 mb-2">
+          <b>Важно:</b> Если браслет привязан к приложению Zepp Life, он может блокировать (отвечать ошибкой) на попытки прочитать заряд или включить вибрацию без AES Auth Key. SDK свои запросы отправляет исправно.
+        </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-2 text-xs">
@@ -95,7 +90,7 @@
                 <input type="text" id="input-ble-mac" value="D4:30:19:1A:FE:75" class="border border-blue-200 rounded px-1.5 py-0.5 text-xs font-mono w-36 text-right text-slate-800 focus:outline-blue-500 bg-blue-50">
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-500">Имя (опц.):</span> 
+                <span class="text-slate-500">Имя:</span> 
                 <span id="val-ble-name" class="font-bold text-slate-700">Mi Band 6</span>
               </div>
               <div class="flex justify-between items-center pt-2 border-t border-dashed mt-2">
@@ -113,55 +108,6 @@
             <div class="grid grid-cols-2 gap-2 pt-2 border-t">
               <button id="btn-ble-get-battery" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium py-2 rounded border border-emerald-200" disabled>Запросить заряд</button>
               <button id="btn-ble-vibrate" class="bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium py-2 rounded border border-purple-200" disabled>Повибрировать</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ДАТЧИКИ ДВИЖЕНИЯ -->
-      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
-        <div class="flex justify-between items-center border-b pb-2">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Датчики движения</h2>
-          <button id="btn-mock-sensors" class="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-1 rounded">Сэмулировать движение</button>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Гироскоп -->
-          <div class="bg-slate-50 p-3 rounded-lg border space-y-3 flex flex-col justify-between">
-            <div class="space-y-2">
-              <div class="flex justify-between items-center"><span class="text-xs font-bold text-slate-700 uppercase">Гироскоп</span><span id="badge-gyro" class="w-2 h-2 rounded-full bg-slate-400"></span></div>
-              <div class="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-                <div class="bg-white p-1 rounded border"><span class="block text-[10px] text-slate-400">X</span><span id="val-gyro-x" class="font-bold text-indigo-600">0.00</span></div>
-                <div class="bg-white p-1 rounded border"><span class="block text-[10px] text-slate-400">Y</span><span id="val-gyro-y" class="font-bold text-indigo-600">0.00</span></div>
-                <div class="bg-white p-1 rounded border"><span class="block text-[10px] text-slate-400">Z</span><span id="val-gyro-z" class="font-bold text-indigo-600">0.00</span></div>
-              </div>
-            </div>
-            <div class="flex justify-center py-4 bg-white rounded-lg border min-h-[140px]">
-              <div class="scene">
-                <div id="gyro-cube" class="cube">
-                  <div class="cube__face cube__face--front">Naji</div><div class="cube__face cube__face--back">Mini</div>
-                  <div class="cube__face cube__face--right">App</div><div class="cube__face cube__face--left">SDK</div>
-                  <div class="cube__face cube__face--top">Gyro</div><div class="cube__face cube__face--bottom">3D</div>
-                </div>
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-1 text-[10px] pt-1">
-              <button id="btn-gyro-start" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1 rounded">Start</button>
-              <button id="btn-gyro-stop" class="bg-slate-200 hover:bg-slate-300 py-1 rounded">Stop</button>
-            </div>
-          </div>
-          <!-- Акселерометр -->
-          <div class="bg-slate-50 p-3 rounded-lg border space-y-2 flex flex-col justify-between">
-            <div class="space-y-2">
-              <div class="flex justify-between items-center"><span class="text-xs font-bold text-slate-700 uppercase">Акселерометр</span><span id="badge-acc" class="w-2 h-2 rounded-full bg-slate-400"></span></div>
-              <div class="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-                <div class="bg-white p-1 rounded border"><span class="block text-[10px] text-slate-400">X</span><span id="val-acc-x" class="font-bold text-emerald-600">0.00</span></div>
-                <div class="bg-white p-1 rounded border"><span class="block text-[10px] text-slate-400">Y</span><span id="val-acc-y" class="font-bold text-emerald-600">0.00</span></div>
-                <div class="bg-white p-1 rounded border"><span class="block text-[10px] text-slate-400">Z</span><span id="val-acc-z" class="font-bold text-emerald-600">0.00</span></div>
-              </div>
-            </div>
-            <div class="grid grid-cols-2 gap-1 text-[10px] pt-1">
-              <button id="btn-acc-start" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1 rounded">Start</button>
-              <button id="btn-acc-stop" class="bg-slate-200 hover:bg-slate-300 py-1 rounded">Stop</button>
             </div>
           </div>
         </div>
@@ -185,18 +131,11 @@
       logContainer.scrollTop = logContainer.scrollHeight;
     }
 
-    // Для 3D Кубика
-    let cubeRotX = 0, cubeRotY = 0, cubeRotZ = 0;
-    function updateCubeTransform(x, y, z) {
-      cubeRotX += x * 3; cubeRotY += y * 3; cubeRotZ += z * 3;
-      document.getElementById('gyro-cube').style.transform = `rotateX(${cubeRotX}deg) rotateY(${cubeRotY}deg) rotateZ(${cubeRotZ}deg)`;
-    }
-
     window.addEventListener('DOMContentLoaded', () => {
       const sdk = window.NajiMiniApp;
 
       document.getElementById('btn-init').addEventListener('click', () => {
-        sdk.init().then((data) => {
+        sdk.init().then(() => {
           log('Инициализация успешна.');
           document.getElementById('status-indicator').classList.replace('bg-amber-500', 'bg-emerald-500');
           document.getElementById('btn-ready').removeAttribute('disabled');
@@ -208,53 +147,48 @@
       });
 
       // =========================================================
-      // УПРАВЛЕНИЕ BLUETOOTH (ПРЯМОЕ ПОДКЛЮЧЕНИЕ К MI BAND)
+      // УПРАВЛЕНИЕ BLUETOOTH (ПОЛНЫЕ 128-BIT UUID ДЛЯ НАДЁЖНОСТИ)
       // =========================================================
 
-      const UUID_BATTERY_SERVICE = "180f"; 
-      const UUID_BATTERY_CHAR = "2a19";    
-      const UUID_ALERT_SERVICE = "1802";   
-      const UUID_ALERT_CHAR = "2a06";      
+      // Стандартные BLE UUID (батарея и вибрация) в 128-битном формате
+      const UUID_BATTERY_SERVICE = "0000180f-0000-1000-8000-00805f9b34fb";
+      const UUID_BATTERY_CHAR    = "00002a19-0000-1000-8000-00805f9b34fb";
+      const UUID_ALERT_SERVICE   = "00001802-0000-1000-8000-00805f9b34fb";
+      const UUID_ALERT_CHAR      = "00002a06-0000-1000-8000-00805f9b34fb";
+
+      // Проприетарный Huami UUID для батареи (на случай, если стандартный заблокирован)
+      const UUID_HUAMI_SERVICE      = "0000fee0-0000-1000-8000-00805f9b34fb";
+      const UUID_HUAMI_BATTERY_CHAR = "00000006-0000-3512-2118-0009af100700";
 
       let activeBleDevice = null;
 
-      // Получить MAC-адрес из инпута без пробелов в верхнем регистре
       function getTargetMac() {
         return document.getElementById('input-ble-mac').value.trim().toUpperCase();
       }
 
-      // 1. Поиск устройства (опционально, так как есть прямое подключение)
       sdk.bluetooth.onDeviceFound((device) => {
         const targetMac = getTargetMac();
-        const currentId = (device.id || '').toUpperCase();
-
-        if (!activeBleDevice && currentId === targetMac) {
+        if (!activeBleDevice && (device.id || '').toUpperCase() === targetMac) {
           activeBleDevice = device;
-          document.getElementById('val-ble-name').textContent = device.name || 'Mi Band (Найден)';
-          
           sdk.bluetooth.stopScan();
-          log(`BLE: Целевое устройство [${targetMac}] найдено! Остановка сканирования.`, 'sys');
+          log(`BLE: Устройство [${targetMac}] найдено! Остановка сканирования.`, 'sys');
         }
       });
 
-      // 2. Обработчик статуса подключения
       sdk.bluetooth.onConnectionStateChanged((payload) => {
         const targetMac = getTargetMac();
-        
         if (payload.deviceId.toUpperCase() === targetMac) {
           const badge = document.getElementById('badge-ble');
           if (payload.connected) {
             badge.className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold border border-emerald-300';
             badge.textContent = 'Подключено';
-            log(`BLE: Успешное подключение к ${targetMac}!`, 'sys');
+            log(`BLE: Успешное подключение к ${targetMac}! Запрашиваем сервисы...`, 'sys');
             
-            // Открываем доступ к кнопкам управления
             document.getElementById('btn-ble-get-battery').removeAttribute('disabled');
             document.getElementById('btn-ble-vibrate').removeAttribute('disabled');
             
-            // После подключения запрашиваем сервисы
             sdk.bluetooth.discoverServices(payload.deviceId)
-              .then(() => log('BLE: Сервисы и характеристики обнаружены. Готово.'))
+              .then(() => log('BLE: Сервисы обнаружены.'))
               .catch(e => log(`BLE Services Error: ${e.message}`, 'error'));
               
           } else {
@@ -262,95 +196,81 @@
             badge.textContent = 'Отключено';
             log(`BLE: Устройство ${targetMac} отключено.`, 'warning');
             
-            // Блокируем кнопки
             document.getElementById('btn-ble-get-battery').setAttribute('disabled', 'true');
             document.getElementById('btn-ble-vibrate').setAttribute('disabled', 'true');
           }
         }
       });
 
-      // КНОПКА: Искать конкретный MAC
       document.getElementById('btn-ble-scan').addEventListener('click', () => {
         activeBleDevice = null;
-        log(`BLE: Запуск поиска устройства с MAC ${getTargetMac()}...`);
+        log(`BLE: Поиск устройства с MAC ${getTargetMac()}...`);
         sdk.bluetooth.startScan({ timeout: 15000 })
           .catch(e => log(`BLE Scan Error: ${e.message}`, 'error'));
       });
 
-      // КНОПКА: Прямое подключение (Без сканирования!)
       document.getElementById('btn-ble-connect').addEventListener('click', () => {
         const targetMac = getTargetMac();
-        if (!activeBleDevice) {
-           // Создаем заглушку устройства, если не искали его ранее
-           activeBleDevice = { id: targetMac, name: 'Mi Band 6' };
-        }
+        if (!activeBleDevice) activeBleDevice = { id: targetMac, name: 'Mi Band 6' };
         
         log(`BLE: Прямое подключение к MAC ${targetMac}...`);
-        
-        // Подключаемся напрямую к MAC
-        sdk.bluetooth.connect(targetMac)
-          .catch(e => log(`BLE Connect Error: ${e.message}`, 'error'));
+        sdk.bluetooth.connect(targetMac).catch(e => log(`BLE Connect Error: ${e.message}`, 'error'));
       });
 
-      // КНОПКА: Запросить заряд батареи
+      // Парсинг результата от разных нативных мостов
+      function parseBatteryData(res) {
+        if (typeof res === 'string') return parseInt(res, 16);
+        if (res && typeof res === 'object') {
+           if (res.data && Array.isArray(res.data)) return res.data[0];
+           if (res.value) return parseInt(res.value, 16);
+        }
+        return parseInt(res, 16) || 0;
+      }
+
       document.getElementById('btn-ble-get-battery').addEventListener('click', () => {
         const targetMac = getTargetMac();
-        log(`BLE: Запрос заряда (Сервис 180f, Характеристика 2a19)...`);
+        log(`BLE: Запрос заряда (Стандартный 180f)...`);
         
+        // 1. Пробуем стандартный метод
         sdk.bluetooth.readRaw(targetMac, UUID_BATTERY_SERVICE, UUID_BATTERY_CHAR)
           .then((res) => {
-            let batteryLvl = 0;
-            if (typeof res === 'string') batteryLvl = parseInt(res, 16);
-            else if (res && typeof res === 'object') {
-               if (res.data && Array.isArray(res.data)) batteryLvl = res.data[0];
-               else if (res.value) batteryLvl = parseInt(res.value, 16);
-               else batteryLvl = parseInt(res, 16) || 0;
-            }
+            const batteryLvl = parseBatteryData(res);
             document.getElementById('val-ble-battery').textContent = `${batteryLvl}%`;
             log(`BLE: Заряд батареи = ${batteryLvl}%`, 'sys');
           })
-          .catch(e => log(`BLE Battery Read Error: ${e.message}`, 'error'));
+          .catch(e => {
+            log(`BLE Battery (Standard) Error: ${e.message}. Пробуем Huami Service...`, 'warning');
+            
+            // 2. Если ошибка (блокировка), пробуем проприетарный метод Huami
+            sdk.bluetooth.readRaw(targetMac, UUID_HUAMI_SERVICE, UUID_HUAMI_BATTERY_CHAR)
+              .then((res) => {
+                const batteryLvl = parseBatteryData(res);
+                document.getElementById('val-ble-battery').textContent = `${batteryLvl}%`;
+                log(`BLE: Заряд батареи (Huami) = ${batteryLvl}%`, 'sys');
+              })
+              .catch(e2 => log(`BLE Battery (Huami) Error: ${e2.message}. Вероятно нужна AES авторизация (Auth Key).`, 'error'));
+          });
       });
 
-      // КНОПКА: Повибрировать браслетом
       document.getElementById('btn-ble-vibrate').addEventListener('click', () => {
         const targetMac = getTargetMac();
-        log(`BLE: Отправка команды на вибрацию (Alert 0x02)...`);
+        log(`BLE: Отправка команды на вибрацию...`);
         
+        // Нативные мосты принимают данные по-разному. 
+        // Передадим в объект все 3 популярные структуры для гарантии:
+        // Массив байт, Hex строку и Base64-строку
         const payload = {
           serviceUuid: UUID_ALERT_SERVICE,
           characteristicUuid: UUID_ALERT_CHAR,
-          value: "02" 
+          value: [2],         // Byte array
+          valueHex: "02",     // Hex 
+          valueBase64: "Ag==" // Base64 кодировка массива [0x02]
         };
         
         sdk.bluetooth.sendRaw(targetMac, payload)
-          .then(() => log('BLE: 📳 Команда вибрации успешно отправлена!', 'sys'))
-          .catch(e => log(`BLE Vibrate Error: ${e.message}`, 'error'));
+          .then(() => log('BLE: 📳 Команда вибрации успешно отправлена хосту!', 'sys'))
+          .catch(e => log(`BLE Vibrate Error: ${e.message}. Ограничение прошивки (Auth).`, 'error'));
       });
-
-      // =========================================================
-      // Гироскоп и Акселерометр
-      // =========================================================
-      sdk.gyroscope.onChange((data) => {
-        if (!data) return;
-        const x = Number(data.x || 0), y = Number(data.y || 0), z = Number(data.z || 0);
-        document.getElementById('val-gyro-x').textContent = x.toFixed(2);
-        document.getElementById('val-gyro-y').textContent = y.toFixed(2);
-        document.getElementById('val-gyro-z').textContent = z.toFixed(2);
-        updateCubeTransform(x, y, z);
-      });
-
-      sdk.accelerometer.onChange((data) => {
-        if (!data) return;
-        document.getElementById('val-acc-x').textContent = Number(data.x || 0).toFixed(2);
-        document.getElementById('val-acc-y').textContent = Number(data.y || 0).toFixed(2);
-        document.getElementById('val-acc-z').textContent = Number(data.z || 0).toFixed(2);
-      });
-
-      document.getElementById('btn-gyro-start').addEventListener('click', () => sdk.gyroscope.start());
-      document.getElementById('btn-gyro-stop').addEventListener('click', () => sdk.gyroscope.stop());
-      document.getElementById('btn-acc-start').addEventListener('click', () => sdk.accelerometer.start());
-      document.getElementById('btn-acc-stop').addEventListener('click', () => sdk.accelerometer.stop());
       
       document.getElementById('btn-clear-logs').addEventListener('click', () => logContainer.innerHTML = '');
     });
