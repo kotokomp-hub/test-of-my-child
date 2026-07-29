@@ -797,6 +797,15 @@ const BLE_SERVICES = {
         document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
       });
 
+      // Подписка на поток найденных Bluetooth устройств от хоста
+sdk.on('bluetoothDeviceFound', (device) => {
+  log(`[SDK Event] Найдено Bluetooth устройство: ${device.name || device.id}`, 'sys');
+  if (device.name && device.name.includes('Mi Smart Band')) {
+    log(`Автоматическое подключение к найденному Mi Band: ${device.id}...`, 'sys');
+    sdk.bluetooth.connect(device.id);
+  }
+});
+
       sdk.on('voiceParticipantsChanged', (participants) => {
         log(`Событие 'voiceParticipantsChanged'. Участников: ${participants.length}`);
         document.getElementById('val-voice-count').textContent = participants.length;
@@ -815,60 +824,60 @@ const BLE_SERVICES = {
       let connectedMiBandId = null;
 
       // Поиск и подключение к Mi Band 6
-      document.getElementById('btn-miband-scan').addEventListener('click', async () => {
-  log('Запуск реального поиска устройства по Bluetooth LE...', 'sys');
+document.getElementById('btn-miband-scan').addEventListener('click', async () => {
+  log('Отправка запроса поиска через Naji SDK (sdk.bluetooth.startScan)...', 'sys');
 
   try {
-    // 1. Проверяем поддержку Web Bluetooth API в браузере
-    if (navigator.bluetooth) {
-      log('Открытие системного диалога выбора Bluetooth устройств...', 'sys');
+    // 1. Пробуем вызвать поиск через SDK
+    const scanPromise = sdk.bluetooth.startScan({
+      services: ['0000180f-0000-1000-8000-00805f9b34fb', '00001802-0000-1000-8000-00805f9b34fb'],
+      namePrefix: 'Mi Smart Band'
+    });
 
-      // Вызываем реальное сканирование Bluetooth вокруг
-      miBandDevice = await navigator.bluetooth.requestDevice({
-        filters: [
-          { namePrefix: 'Mi Smart Band' },
-          { namePrefix: 'Mi Band' },
-          { namePrefix: 'Xiaomi' }
-        ],
-        optionalServices: [
-          BLE_SERVICES.BATTERY_SERVICE,
-          BLE_SERVICES.IMMEDIATE_ALERT_SERVICE,
-          BLE_SERVICES.MI_BAND_CUSTOM_SERVICE
-        ]
-      });
+    log('Ожидание ответа от Нативного Хоста Naji (BLUETOOTH_START_SCAN)...', 'sys');
+    
+    const result = await scanPromise;
+    log(`Ответ от Naji SDK получен: ${JSON.stringify(result)}`, 'sys');
 
-      log(`Выбрано устройство: ${miBandDevice.name} (ID: ${miBandDevice.id})`, 'sys');
-      log('Подключение к GATT серверу браслета...', 'sys');
-
-      miBandDevice.addEventListener('gattserverdisconnected', onMiBandDisconnected);
-      miBandGattServer = await miBandDevice.gatt.connect();
-
-      // Обновляем статус в интерфейсе
-      document.getElementById('badge-miband-status').textContent = 'Подключен (BLE)';
-      document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-      document.getElementById('val-miband-id').textContent = miBandDevice.name || miBandDevice.id;
-
-      log(`Успешно подключено к физическому Mi Band 6!`, 'sys');
-
-      // Автоматически считываем заряд при успешном подключении
-      await getRealBatteryLevel();
-
-    } else {
-      // 2. Если браузер не поддерживает Web Bluetooth, пробуем через Naji SDK Bridge
-      log('Web Bluetooth недоступен, вызов через Naji SDK Bridge...', 'sys');
-      const scanRes = await sdk.bluetooth.startScan({
-        services: [BLE_SERVICES.BATTERY_SERVICE, BLE_SERVICES.IMMEDIATE_ALERT_SERVICE]
-      });
-      const deviceId = scanRes?.deviceId || scanRes?.id;
-      await sdk.bluetooth.connect(deviceId);
-
-      document.getElementById('badge-miband-status').textContent = 'Подключен (SDK)';
-      document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-      document.getElementById('val-miband-id').textContent = deviceId;
+    const deviceId = result?.deviceId || result?.id || result?.address;
+    if (!deviceId) {
+      throw new Error('Хост не вернул ID найденного устройства');
     }
 
-  } catch (err) {
-    log(`Ошибка реального подключения BLE: ${err.message}`, 'error');
+    // Подключаемся через SDK
+    log(`Подключение к ${deviceId} через Naji SDK...`, 'sys');
+    await sdk.bluetooth.connect(deviceId);
+
+    document.getElementById('badge-miband-status').textContent = 'Подключен (Naji SDK)';
+    document.getElementById('badge-miband-status').className = 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-semibold';
+    document.getElementById('val-miband-id').textContent = deviceId;
+    log('Успешно подключено через Naji SDK!', 'sys');
+
+  } catch (sdkError) {
+    log(`Naji SDK не ответил или вернул ошибку: ${sdkError.message}`, 'warning');
+    log('Переключение на резервный прямый Web Bluetooth API браузера...', 'sys');
+
+    // 2. Резервный вариант (Web Bluetooth браузера), если SDK недоступен в текущем окружении
+    try {
+      if (!navigator.bluetooth) {
+        throw new Error('Web Bluetooth не поддерживается данным браузером');
+      }
+
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'Mi Smart Band' }, { namePrefix: 'Mi Band' }],
+        optionalServices: ['0000180f-0000-1000-8000-00805f9b34fb', '00001802-0000-1000-8000-00805f9b34fb']
+      });
+
+      miBandGattServer = await device.gatt.connect();
+
+      document.getElementById('badge-miband-status').textContent = 'Подключен (Web BLE)';
+      document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
+      document.getElementById('val-miband-id').textContent = device.name || device.id;
+      log('Подключено через резервный Web Bluetooth браузера!', 'sys');
+
+    } catch (webBleErr) {
+      log(`Ошибка подключения: ${webBleErr.message}`, 'error');
+    }
   }
 });
 
