@@ -182,7 +182,7 @@
         <div class="flex justify-between items-center border-b pb-2">
           <div>
             <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900 flex items-center gap-2">
-              <span class="text-red-600 font-bold">🍄 Bluetooth LEGO Super Mario</span>
+              <span class="text-red-600 font-bold">🍄 Bluetooth LEGO Super Mario (Move Hub)</span>
             </h2>
             <p class="text-[11px] text-slate-500">Интерактивный сканер сканирования цветов, штрихкодов, датчиков движения и костюма (71360 / 71387 / 71403)</p>
           </div>
@@ -231,10 +231,10 @@
           <!-- Жесты / Движение Марио -->
           <div class="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 flex flex-col justify-between items-center text-center">
             <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Движение / Состояние</span>
-            <div id="mario-pose-badge" class="my-2 text-2xl font-black text-indigo-400">
+            <div id="mario-pose-badge" class="my-2 text-sm font-black text-indigo-400">
               🚶 Стоит
             </div>
-            <span id="mario-pants-status" class="text-[10px] text-slate-400">Костюм: Обычные штаны</span>
+            <span id="mario-pants-status" class="text-[10px] text-amber-300 font-medium">Костюм: Стандартный</span>
           </div>
 
           <!-- Собранные Монетки / Заряд -->
@@ -258,17 +258,20 @@
           <div class="space-y-2 bg-slate-50 p-3 rounded-lg border">
             <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Активация Датчиков Фигурки</span>
             <div class="grid grid-cols-1 gap-1.5 text-[11px]">
+              <button id="btn-mario-sub-all" class="bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-2 rounded font-bold text-center">
+                ⚡ Включить Все Сенсоры Сразу
+              </button>
               <button id="btn-mario-sub-barcode" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-2 rounded font-medium text-left flex justify-between items-center">
-                <span>1. Включить Сканер Цвета / Тегов</span>
-                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 1/3</span>
+                <span>1. Сканер Цвета / Штрихкода</span>
+                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 1 (Mode 0 & 1)</span>
               </button>
               <button id="btn-mario-sub-motion" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-2 rounded font-medium text-left flex justify-between items-center">
-                <span>2. Включить Движение / Акселерометр</span>
-                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 0</span>
+                <span>2. Движение / Жесты</span>
+                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 0 (Mode 1)</span>
               </button>
               <button id="btn-mario-sub-pants" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-2 rounded font-medium text-left flex justify-between items-center">
-                <span>3. Включить Датчик Костюма</span>
-                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 2</span>
+                <span>3. Датчик Костюма (Pants)</span>
+                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 2 (Mode 0)</span>
               </button>
             </div>
           </div>
@@ -278,8 +281,12 @@
             <div>
               <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Команды и Эмуляция</span>
               <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
-                <button id="btn-mario-off" class="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 py-1.5 rounded font-medium">Выключить Марио</button>
-                <button id="btn-mario-mock-scan" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-1.5 rounded font-medium">Эмулировать Сканирование</button>
+                <button id="btn-mario-off" class="bg-rose-600 text-white hover:bg-rose-700 py-1.5 rounded font-bold shadow">
+                  ⏻ Выключить Питание
+                </button>
+                <button id="btn-mario-mock-scan" class="bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 py-1.5 rounded font-medium">
+                  Эмулировать Сканирование
+                </button>
               </div>
             </div>
 
@@ -287,7 +294,7 @@
             <div class="space-y-1 border-t pt-1.5">
               <label class="text-[10px] text-slate-500 block">RAW LWP3 Hex Команда</label>
               <div class="flex gap-1">
-                <input type="text" id="mario-raw-hex" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-red-500" value="0a004101000100000001" placeholder="HEX">
+                <input type="text" id="mario-raw-hex" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-red-500" value="04000202" placeholder="HEX">
                 <button id="btn-mario-send-raw" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-xs font-medium">Send</button>
               </div>
             </div>
@@ -908,10 +915,10 @@
           .then(() => {
             connectedDeviceId = deviceId;
             bleBadge.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-pulse';
-            log(`Подключено к LEGO Mario (${deviceId})!`, 'sys');
+            log(`Успешно подключено к LEGO Mario (${deviceId})!`, 'sys');
             
-            // Автоподписка на сенсоры при подключении
-            setTimeout(subscribeMarioSensors, 500);
+            // Автоматическая подписка на все сенсоры при подключении
+            setTimeout(subscribeAllMarioSensors, 500);
           })
           .catch((e) => {
             log(`Ошибка подключения: ${e.message}`, 'error');
@@ -936,41 +943,48 @@
         }
       }
 
-      // Подписка на уведомления сканера цветов и тегов (LWP3 Port Input Format Setup)
-      // Формат: 0a 00 41 <Port> <Mode> 01000000 01
-      function subscribeMarioSensors() {
-        log('Активация сканера штрихкодов и движения Марио...', 'sys');
-        // Port 1 & 3: Сканер штрихкодов и цвета
+      // Подписка на LWP3 уведомления всех сенсоров Марио
+      function subscribeAllMarioSensors() {
+        log('Включение подписки на все датчики LEGO Mario...', 'sys');
+        
+        // 1. Сканер штрихкодов / Цвета (Port 1, Mode 0 - TAG / Barcode)
         sendMarioHex('0a004101000100000001');
-        sendMarioHex('0a004103000100000001');
+        
+        // 2. Датчик Движения / Жестов (Port 0, Mode 1 - Gesture)
+        setTimeout(() => sendMarioHex('0a004100010100000001'), 200);
+        
+        // 3. Датчик Костюма / Штанов (Port 2, Mode 0 - Pants)
+        setTimeout(() => sendMarioHex('0a004102000100000001'), 400);
       }
 
+      document.getElementById('btn-mario-sub-all').addEventListener('click', subscribeAllMarioSensors);
+
       document.getElementById('btn-mario-sub-barcode').addEventListener('click', () => {
+        // Port 1: Mode 0 (Barcode/Tag) и Mode 1 (Color)
         sendMarioHex('0a004101000100000001');
-        sendMarioHex('0a004103000100000001');
       });
 
       document.getElementById('btn-mario-sub-motion').addEventListener('click', () => {
-        // Port 0: Акселерометр и Движение
-        sendMarioHex('0a004100000100000001');
+        // Port 0: Mode 1 (Жесты)
+        sendMarioHex('0a004100010100000001');
       });
 
       document.getElementById('btn-mario-sub-pants').addEventListener('click', () => {
-        // Port 2: Датчик Костюма / Штанов
+        // Port 2: Mode 0 (Идентификатор Костюма)
         sendMarioHex('0a004102000100000001');
       });
 
-      // Запрос уровня батареи (Hub Property 0x06)
+      // Запрос уровня батареи (Hub Property 0x06, Action 0x01 = Request)
       document.getElementById('btn-mario-req-battery').addEventListener('click', () => {
         sendMarioHex('0500010601');
-        // Эмуляция ответа если в демо
-        document.getElementById('mario-battery-val').textContent = '92%';
       });
 
-      // Выключение Марио (Hub Action 0x02, 0x01 = Disconnect)
+      // Полное выключение питания физического Марио (04000202 = VCC Power Off)
       document.getElementById('btn-mario-off').addEventListener('click', () => {
-        sendMarioHex('04000201');
-        log('Отправлена команда выключения Марио');
+        sendMarioHex('04000202');
+        setTimeout(() => sendMarioHex('04000201'), 300); // Disconnect
+        log('Отправлена команда полного выключения питания Марио (04000202)', 'sys');
+        bleBadge.className = 'w-3 h-3 rounded-full bg-slate-400';
       });
 
       // Ручная отправка RAW HEX
@@ -979,7 +993,7 @@
         sendMarioHex(raw);
       });
 
-      // 2. Обработка входящих данных от Марио (LWP3 Port Value Notifications)
+      // Обработка входящих BLE данных от Марио (LWP3 Messages)
       sdk.on('bluetoothDataReceived', (data) => {
         if (!data) return;
         const hex = typeof data === 'string' ? data.replace(/\s+/g, '') : '';
@@ -987,64 +1001,152 @@
         parseMarioPacket(hex);
       });
 
-      // Парсинг пакетов LWP3
+      // Точный ДЕКОДЕР LWP3 пакетов Марио
       function parseMarioPacket(hex) {
         if (!hex || hex.length < 8) return;
         
-        // Тип сообщения 0x45 (Port Value)
-        const msgType = hex.slice(4, 6);
-        const portId = hex.slice(6, 8);
+        const msgType = hex.slice(4, 6).toUpperCase();
 
+        // 0x45 = Port Value Update (Данные сенсоров)
         if (msgType === '45') {
-          const payload = hex.slice(8);
-          document.getElementById('mario-barcode-val').textContent = `Barcode Hex: ${payload}`;
+          const portId = hex.slice(6, 8).toUpperCase();
+          const payload = hex.slice(8); // Полезная нагрузка
 
-          // Распознавание типа покрытия / штрихкода
-          updateMarioSurfaceByPayload(payload);
+          if (portId === '01' || portId === '03') {
+            // Port 1 или 3: Сканер Цвета и Штрихкода
+            parseColorAndBarcodePayload(payload);
+          } else if (portId === '02') {
+            // Port 2: Датчик Костюма / Штанов
+            parsePantsPayload(payload);
+          } else if (portId === '00') {
+            // Port 0: Акселерометр / Движение / Жесты
+            parseMotionPayload(payload);
+          }
+        } 
+        // 0x01 = Hub Property Update (Например, уровень батареи)
+        else if (msgType === '01') {
+          const propId = hex.slice(6, 8);
+          if (propId === '06') { // Battery %
+            const batteryVal = parseInt(hex.slice(10, 12), 16);
+            document.getElementById('mario-battery-val').textContent = `${batteryVal}%`;
+            log(`Заряд батареи Марио: ${batteryVal}%`, 'sys');
+          }
         }
       }
 
-      // Обновление интерфейса при сканировании тегов / покрытий
-      function updateMarioSurfaceByPayload(hexPayload) {
+      // Декодер Поверхности / Штрихкода (Port 1)
+      function parseColorAndBarcodePayload(hexPayload) {
+        document.getElementById('mario-barcode-val').textContent = `Barcode Hex: ${hexPayload}`;
+        
+        // Преобразование Little-Endian UINT16
+        let val = 0;
+        if (hexPayload.length >= 4) {
+          const b0 = parseInt(hexPayload.slice(0, 2), 16);
+          const b1 = parseInt(hexPayload.slice(2, 4), 16);
+          val = b0 + (b1 * 256);
+        } else {
+          val = parseInt(hexPayload, 16);
+        }
+
         const card = document.getElementById('mario-surface-card');
         const text = document.getElementById('mario-surface-text');
 
-        // Пример декодирования цветовых кодов LEGO Mario
-        if (hexPayload.startsWith('01') || hexPayload.includes('0001')) {
+        // Идентификаторы цветов и специальных тегов LEGO Mario
+        if (val === 20 || hexPayload.startsWith('14')) { // 0x14 = 20 (Green)
           card.className = 'my-2 px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-sm shadow';
           text.textContent = '🟩 Трава (Grass)';
-        } else if (hexPayload.startsWith('02') || hexPayload.includes('0002')) {
-          card.className = 'my-2 px-4 py-2 rounded-lg bg-rose-600 text-white font-bold text-sm shadow';
-          text.textContent = '🔥 Лава (Lava / Red)';
+        } else if (val === 23 || hexPayload.startsWith('17')) { // 0x17 = 23 (Red)
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-rose-600 text-white font-bold text-sm shadow animate-pulse';
+          text.textContent = '🔥 Лава (Lava)';
           marioCoins = Math.max(0, marioCoins - 1);
-        } else if (hexPayload.startsWith('03') || hexPayload.includes('0003')) {
+        } else if (val === 24 || hexPayload.startsWith('18')) { // 0x18 = 24 (Blue)
           card.className = 'my-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm shadow';
           text.textContent = '🟦 Вода (Water)';
-        } else if (hexPayload.startsWith('04') || hexPayload.includes('0004')) {
+        } else if (val === 21 || hexPayload.startsWith('15')) { // 0x15 = 21 (Yellow)
           card.className = 'my-2 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 font-bold text-sm shadow';
           text.textContent = '🟨 Песок (Sand)';
-        } else {
-          card.className = 'my-2 px-4 py-2 rounded-lg bg-purple-600 text-white font-bold text-sm shadow animate-bounce';
-          text.textContent = '⭐ Штрихкод / Монетка!';
+        } else if (val === 26 || hexPayload.startsWith('1a')) { // 0x1A = 26 (Poison)
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-purple-700 text-white font-bold text-sm shadow';
+          text.textContent = '☠️ Яд (Poison)';
+        } else if (val === 37 || hexPayload.startsWith('25')) { // 0x25 = 37 (Brown)
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-amber-800 text-white font-bold text-sm shadow';
+          text.textContent = '🟫 Земля / Дерево';
+        } else if (val > 0) {
+          // Специальные штрихкоды
+          let tagTitle = `⭐ Штрихкод ID: ${val}`;
+          if (val === 1) tagTitle = '🏁 Стартовая Труба!';
+          if (val === 2) tagTitle = '🚩 Финишный Флаг!';
+          if (val === 14) tagTitle = '👾 Враг: Гумба';
+          if (val === 19) tagTitle = '❓ Блок со знаком ?';
+
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold text-sm shadow animate-bounce';
+          text.textContent = tagTitle;
           marioCoins += 1;
         }
 
         document.getElementById('mario-coins-count').textContent = marioCoins;
       }
 
-      // Кнопка симуляции сканирования (для теста без физической фигурки)
+      // Декодер Костюма / Штанов (Port 2)
+      function parsePantsPayload(hexPayload) {
+        const pantsId = parseInt(hexPayload.slice(0, 2), 16);
+        const pantsBadge = document.getElementById('mario-pants-status');
+
+        const pantsMap = {
+          0: '👖 Без штанов / Голый',
+          1: '🔴 Стандартный красные штаны',
+          2: '🔥 Огненный костюм (Fire)',
+          3: '🚁 Костюм-Пропеллер',
+          4: '🔨 Костюм Строителя',
+          5: '🐱 Костюм Кошки',
+          6: '🐸 Костюм Лягушки',
+          7: '🦝 Костюм Тануки',
+          8: '🐧 Костюм Пингвина',
+          9: '🐝 Костюм Пчелы'
+        };
+
+        const title = pantsMap[pantsId] || `Костюм ID: ${pantsId}`;
+        pantsBadge.textContent = `Костюм: ${title}`;
+        log(`Марио надел: ${title}`, 'sys');
+      }
+
+      // Декодер Движения и Жестов (Port 0)
+      function parseMotionPayload(hexPayload) {
+        const gestureId = parseInt(hexPayload.slice(0, 2), 16);
+        const poseBadge = document.getElementById('mario-pose-badge');
+
+        const gestureMap = {
+          0: '🚶 Стоит на ногах',
+          1: '💥 Удар / Встряска',
+          2: '🦘 Прыжок!',
+          3: '🛬 Приземление',
+          4: '🏃 Быстрый бег',
+          5: '✈️ Полет / Скольжение',
+          6: '📉 Падение!',
+          7: '😴 Спит / На спине',
+          8: '🙃 Вверх ногами!'
+        };
+
+        const title = gestureMap[gestureId] || `Жест ID: ${gestureId}`;
+        poseBadge.textContent = title;
+      }
+
+      // Кнопка симуляции сканирования
       let mockScanStep = 0;
       document.getElementById('btn-mario-mock-scan').addEventListener('click', () => {
-        const mockPayloads = ['000100', '000200', '000300', '000400', 'A5B200'];
-        const mockPoses = ['🏃 Бежит', '🦘 Прыжок!', '😴 Спит', '🔥 Огненный костюм'];
+        const mockPayloads = ['14', '17', '18', '15', '0100', '0200'];
+        const mockPants = ['01', '02', '03', '05'];
+        const mockPoses = ['02', '04', '06', '07', '08'];
         
         const payload = mockPayloads[mockScanStep % mockPayloads.length];
+        const pants = mockPants[mockScanStep % mockPants.length];
         const pose = mockPoses[mockScanStep % mockPoses.length];
         
-        updateMarioSurfaceByPayload(payload);
-        document.getElementById('mario-pose-badge').textContent = pose;
+        parseColorAndBarcodePayload(payload);
+        parsePantsPayload(pants);
+        parseMotionPayload(pose);
         
-        log(`[Mock] Марио отсканировал тег: ${payload}`, 'sys');
+        log(`[Mock] Симуляция отклика от Марио шаг ${mockScanStep + 1}`, 'sys');
         mockScanStep++;
       });
 
@@ -1301,26 +1403,6 @@
 
       const epLog = document.getElementById('ep-log');
       function epAppend(msg) { epLog.value += msg + '\n'; epLog.scrollTop = epLog.scrollHeight; }
-
-      function hexToBytes(hex) {
-        if (!hex) return new Uint8Array(0);
-        const clean = hex.replace(/\s+/g, '');
-        const match = clean.match(/.{1,2}/g);
-        return match ? new Uint8Array(match.map(b => parseInt(b, 16))) : new Uint8Array(0);
-      }
-
-      function bytesToHex(bytes) {
-        return Array.from(new Uint8Array(bytes || [])).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-
-      function parseMRZ(line2) {
-        const cleaned = line2.replace(/\s/g, '').toUpperCase();
-        return {
-          mrzNoChecks: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27),
-          mrzWithChecks: cleaned.slice(0, 9) + cleaned[9] + cleaned.slice(13, 19) + cleaned[19] + cleaned.slice(21, 27) + cleaned[27],
-          mrzFullLine: cleaned
-        };
-      }
 
       document.getElementById('btn-ep-read').addEventListener('click', async () => {
         const mrzInput = document.getElementById('ep-mrz').value.trim();
