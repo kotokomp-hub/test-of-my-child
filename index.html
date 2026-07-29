@@ -1221,6 +1221,11 @@
         document.getElementById('btn-isodep-send').click();
       });
 
+      // Подписка на найденные Bluetooth устройства от хоста
+sdk.on('bluetoothDeviceFound', (device) => {
+  log(`[Bluetooth] Найдено устройство: ${device.name || 'Unknown'} (${device.id}) RSSI: ${device.rssi}`, 'sys');
+});
+
       // ================= ePassport BAC Reader =================
 
       const epLog = document.getElementById('ep-log');
