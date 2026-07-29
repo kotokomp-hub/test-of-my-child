@@ -970,39 +970,66 @@ document.getElementById('btn-miband-scan').addEventListener('click', async () =>
 }
 
       // Запрос заряда батареи (Battery Service: 0x180F -> 0x2A19)
-     const MI_BAND_ID = 'D4:30:19:1A:FE:75'; // Ваш ID из логов
+const MI_BAND_ID = 'D4:30:19:1A:FE:75';
 
-// 1. КНОПКА ВИБРАЦИИ (Правильная служба 00001802 и характеристика 00002a06)
-document.getElementById('btn-miband-vibrate').addEventListener('click', async () => {
-  log('Отправка команды вибрации в службу 00001802...', 'sys');
+// Функция безопасного парсинга ответа от батареи (HEX, Number, Array или Base64)
+function parseBatteryLevel(response) {
+  log(`[RAW Battery Response]: ${JSON.stringify(response)} (тип: ${typeof response})`, 'sys');
+
+  if (typeof response === 'number') return response;
+  if (typeof response === 'string') {
+    // Если пришла HEX строка (например "55" -> 85%)
+    const parsedHex = parseInt(response.replace('0x', ''), 16);
+    if (!isNaN(parsedHex)) return parsedHex;
+  }
+  if (response && typeof response === 'object') {
+    if (response.value !== undefined) return parseBatteryLevel(response.value);
+    if (response.data !== undefined) return parseBatteryLevel(response.data);
+  }
+  return '??';
+}
+
+// 1. ЗАПРОС ЗАРЯДА БАТАРЕИ
+document.getElementById('btn-miband-battery').addEventListener('click', async () => {
+  log('Чтение батареи из службы 0000180f...', 'sys');
   try {
-    await sdk.bluetooth.sendRaw(MI_BAND_ID, {
-      service: '00001802-0000-1000-8000-00805f9b34fb',       // Immediate Alert Service
-      characteristic: '00002a06-0000-1000-8000-00805f9b34fb',// Alert Level Characteristic
-      data: '02'                                            // 02 = Вибрация
+    const rawRes = await sdk.bluetooth.sendRaw(MI_BAND_ID, {
+      service: '0000180f-0000-1000-8000-00805f9b34fb',
+      serviceUuid: '0000180f-0000-1000-8000-00805f9b34fb',
+      characteristic: '00002a19-0000-1000-8000-00805f9b34fb',
+      characteristicUuid: '00002a19-0000-1000-8000-00805f9b34fb',
+      action: 'read'
     });
-    log('Вибрация успешно отправлена на Mi Band 6!', 'sys');
+
+    const batteryLevel = parseBatteryLevel(rawRes);
+    document.getElementById('val-miband-battery').textContent = `${batteryLevel}%`;
+    log(`Заряд батареи успешно прочитан: ${batteryLevel}%`, 'sys');
+
   } catch (err) {
-    log(`Ошибка вибрации: ${err.message}`, 'error');
+    log(`Ошибка чтения батареи: ${err.message}`, 'error');
   }
 });
 
-// 2. КНОПКА ЗАРЯДА (Служба 0000180f)
-document.getElementById('btn-miband-battery').addEventListener('click', async () => {
-  log('Запрос заряда в службу 0000180f...', 'sys');
+// 2. ОТПРАВКА СИГНАЛА ВИБРАЦИИ
+document.getElementById('btn-miband-vibrate').addEventListener('click', async () => {
+  log('Отправка команды вибрации в службу 00001802...', 'sys');
   try {
-    const res = await sdk.bluetooth.sendRaw(MI_BAND_ID, {
-      service: '0000180f-0000-1000-8000-00805f9b34fb',       // Battery Service
-      characteristic: '00002a19-0000-1000-8000-00805f9b34fb',// Battery Level
-      action: 'read'
-    });
-    
-    // Преобразуем ответ
-    let level = typeof res === 'number' ? res : (res?.level || res?.value);
-    document.getElementById('val-miband-battery').textContent = `${level}%`;
-    log(`Реальный заряд: ${level}%`, 'sys');
+    // Дублируем ключи с Uuid и без, чтобы NajiGamepad точно прочитал нужный ключ
+    const payload = {
+      service: '00001802-0000-1000-8000-00805f9b34fb',
+      serviceUuid: '00001802-0000-1000-8000-00805f9b34fb',
+      characteristic: '00002a06-0000-1000-8000-00805f9b34fb',
+      characteristicUuid: '00002a06-0000-1000-8000-00805f9b34fb',
+      data: '02',
+      value: '02',
+      bytes: [2]
+    };
+
+    await sdk.bluetooth.sendRaw(MI_BAND_ID, payload);
+    log('Команда 0x02 отправлена! Проверьте вибрацию.', 'sys');
+
   } catch (err) {
-    log(`Ошибка батареи: ${err.message}`, 'error');
+    log(`Ошибка отправки вибрации: ${err.message}`, 'error');
   }
 });
 
