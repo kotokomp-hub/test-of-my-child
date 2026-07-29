@@ -3,12 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, 60fps Camera, платежи, Mi Band 6)</title>
-  <!-- Tailwind CSS для аккуратного оформления -->
+  <title>NajiMiniApp SDK Demo & Mi Band 6 Control</title>
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-  <!-- Подключение SDK по указанному адресу -->
-  <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
   <style>
     .scrollable-console {
       max-height: 220px;
@@ -16,7 +14,7 @@
       font-family: monospace;
     }
 
-    /* Стили для 3D-куба */
+    /* 3D-cube styles */
     .scene {
       width: 100px;
       height: 100px;
@@ -50,18 +48,571 @@
     .cube__face--left   { transform: rotateY(-90deg) translateZ(50px); background: rgba(236, 72, 153, 0.15); border-color: #ec4899; color: #db2777; }
     .cube__face--top    { transform: rotateX( 90deg) translateZ(50px); background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #059669; }
     .cube__face--bottom { transform: rotateX(-90deg) translateZ(50px); background: rgba(16, 185, 129, 0.15); border-color: #10b981; color: #059669; }
+
+    /* Mi Band Pulse Animation */
+    @keyframes bandPulse {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.8; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .vibrating {
+      animation: bandPulse 0.25s infinite;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
+
+  <script>
+    (function () {
+      if (window.NajiMiniApp) return;
+
+      function parseOriginCandidate(rawValue) {
+        if (!rawValue) return null;
+        try {
+          const parsed = new URL(rawValue, window.location.href);
+          if (!["http:", "https:", "capacitor:"].includes(parsed.protocol)) {
+            return null;
+          }
+          return parsed.origin;
+        } catch {
+          return null;
+        }
+      }
+
+      function resolveParentOrigins() {
+        const params = new URLSearchParams(window.location.search);
+        const candidates = [
+          params.get("__naji_parent_origin"),
+          document.referrer,
+          typeof window.location.ancestorOrigins?.[0] === "string" ? window.location.ancestorOrigins[0] : null
+        ];
+        const origins = [];
+        candidates.forEach((candidate) => {
+          const nextOrigin = parseOriginCandidate(candidate);
+          if (nextOrigin && !origins.includes(nextOrigin)) {
+            origins.push(nextOrigin);
+          }
+        });
+        return origins;
+      }
+
+      const PARENT_ORIGINS = resolveParentOrigins();
+      const PARENT_ORIGIN = PARENT_ORIGINS[0] || null;
+      const pending = new Map();
+      const listeners = new Map();
+      let reqCounter = 0;
+      let initData = null;
+      let isReady = false;
+      let gamepadsState = [];
+      let orientationState = null;
+      let multiplayerState = null;
+      let voiceState = null;
+      let gyroscopeState = null;
+      let accelerometerState = null;
+      let _debugEnabled = false;
+      const _debugLog = [];
+
+      function serializeBody(body) {
+        if (typeof FormData !== "undefined" && body instanceof FormData) {
+          return {
+            __najiBodyType: "form-data",
+            entries: Array.from(body.entries()).map(([key, value]) => ({ key, value }))
+          };
+        }
+        return body;
+      }
+
+      function _debugLogEntry(msg, data) {
+        if (!_debugEnabled) return;
+        const entry = { ts: Date.now(), msg: msg, data: data ? JSON.parse(JSON.stringify(data)) : null };
+        _debugLog.push(entry);
+        if (_debugLog.length > 200) _debugLog.shift();
+        console.log("[NajiMiniApp]", msg, data || "");
+      }
+
+      function emit(eventName, payload) {
+        if (_debugEnabled) _debugLogEntry("emit: " + eventName, payload);
+        const handlers = listeners.get(eventName);
+        if (!handlers) return;
+        handlers.forEach((handler) => {
+          try {
+            handler(payload);
+          } catch (error) {
+            console.error("[NajiMiniApp] listener error:", error);
+          }
+        });
+      }
+
+      function on(eventName, handler) {
+        const handlers = listeners.get(eventName) || new Set();
+        handlers.add(handler);
+        listeners.set(eventName, handlers);
+        return () => off(eventName, handler);
+      }
+
+      function off(eventName, handler) {
+        const handlers = listeners.get(eventName);
+        if (!handlers) return;
+        handlers.delete(handler);
+        if (handlers.size === 0) listeners.delete(eventName);
+      }
+
+      function createReqId() {
+        reqCounter += 1;
+        return "req_" + Date.now() + "_" + reqCounter;
+      }
+
+      function post(type, payload) {
+        const msg = { type, payload };
+        if (typeof window.NajiBridge !== "undefined" && window.NajiBridge) {
+          window.NajiBridge.postMessage(JSON.stringify(msg));
+          return;
+        }
+        if (!window.parent) return;
+        window.parent.postMessage(msg, "*");
+      }
+
+      function request(type, payload) {
+        return new Promise((resolve, reject) => {
+          const reqId = createReqId();
+          pending.set(reqId, { resolve, reject });
+          post(type, { ...(payload || {}), reqId });
+          setTimeout(() => {
+            const current = pending.get(reqId);
+            if (!current) return;
+            pending.delete(reqId);
+            reject(new Error("Mini App request timeout"));
+          }, 15000);
+        });
+      }
+
+      function setGamepads(nextGamepads) {
+        gamepadsState = Array.isArray(nextGamepads) ? nextGamepads : [];
+        if (initData && typeof initData === "object") {
+          initData = { ...initData, gamepads: gamepadsState };
+        }
+        return gamepadsState;
+      }
+
+      function setOrientation(nextOrientation) {
+        orientationState = nextOrientation && typeof nextOrientation === "object" ? nextOrientation : null;
+        if (initData && typeof initData === "object") {
+          initData = { ...initData, orientation: orientationState };
+        }
+        return orientationState;
+      }
+
+      function setMultiplayer(nextState) {
+        multiplayerState = nextState && typeof nextState === "object" ? nextState : null;
+        if (initData && typeof initData === "object") {
+          initData = { ...initData, multiplayer: multiplayerState };
+        }
+        return multiplayerState;
+      }
+
+      function setVoice(nextState) {
+        voiceState = nextState && typeof nextState === "object" ? nextState : null;
+        if (initData && typeof initData === "object") {
+          initData = { ...initData, voice: voiceState };
+        }
+        return voiceState;
+      }
+
+      function buildGamepadPayload(payload) {
+        const normalizedPayload = payload || {};
+        const nextGamepads = Array.isArray(normalizedPayload.gamepads) ? setGamepads(normalizedPayload.gamepads) : gamepadsState;
+        return {
+          ...normalizedPayload,
+          gamepads: nextGamepads,
+          primary: normalizedPayload.primary || nextGamepads[0] || null,
+          supported: typeof normalizedPayload.supported === "boolean"
+            ? normalizedPayload.supported
+            : Boolean(initData?.gamepadSupported)
+        };
+      }
+
+      window.addEventListener("message", (event) => {
+        if (window.parent && window.parent !== window && event.source !== window.parent) {
+          return;
+        }
+        if (PARENT_ORIGINS.length && !PARENT_ORIGINS.includes(event.origin)) {
+          return;
+        }
+        const data = event.data || {};
+        if (data.type === "NAJI_INIT_DATA") {
+          initData = data;
+          setGamepads(data.gamepads);
+          setOrientation(data.orientation);
+          setMultiplayer(data.multiplayer || null);
+          setVoice(data.voice || null);
+          emit("init", data);
+          emit("themeChanged", data.theme);
+          emit("walletChanged", data.wallet || null);
+          emit("orientationChanged", data.orientation || null);
+          emit("multiplayerStateChanged", data.multiplayer || null);
+          emit("voiceStateChanged", data.voice || null);
+          emit("voiceParticipantsChanged", data.voice?.participants || []);
+          emit("gamepadsChanged", buildGamepadPayload({ reason: "init", gamepads: data.gamepads, supported: data.gamepadSupported }));
+          return;
+        }
+
+        if (data.type === "NAJI_ASYNC_RESPONSE") {
+          const entry = pending.get(data.reqId);
+          if (!entry) return;
+          pending.delete(data.reqId);
+          if (data.error) {
+            entry.reject(new Error(data.error));
+          } else {
+            entry.resolve(data.result);
+          }
+          return;
+        }
+
+        if (data.type === "NAJI_EVENT") {
+          const isGamepadEvent = data.eventName === "gamepadsChanged"
+            || data.eventName === "gamepadConnected"
+            || data.eventName === "gamepadDisconnected";
+          if (data.eventName === "orientationChanged") {
+            setOrientation(data.payload);
+          }
+          if (data.eventName === "multiplayerStateChanged" || data.eventName === "multiplayerMatchFound") {
+            setMultiplayer(data.payload);
+          }
+          if (data.eventName === "voiceStateChanged") {
+            setVoice(data.payload);
+          }
+          if (data.eventName === "voiceParticipantsChanged") {
+            const nextVoiceState = { ...(voiceState || initData?.voice || {}), participants: Array.isArray(data.payload) ? data.payload : [] };
+            setVoice(nextVoiceState);
+          }
+          if (data.eventName === "launchParamsChanged") {
+            const nextStartParams = data.payload?.startParams || data.payload?.launchParams || null;
+            if (initData && typeof initData === "object") {
+              initData = { ...initData, startParams: nextStartParams, launchParams: nextStartParams };
+            }
+          }
+          if (data.eventName === "gyroscopeChanged") {
+            gyroscopeState = data.payload && typeof data.payload === "object" ? data.payload : null;
+          }
+          if (data.eventName === "accelerometerChanged") {
+            accelerometerState = data.payload && typeof data.payload === "object" ? data.payload : null;
+          }
+          emit(data.eventName, isGamepadEvent ? buildGamepadPayload(data.payload) : data.payload);
+          if (data.eventName === "backButtonClicked") emit("backButtonClicked", data.payload);
+          return;
+        }
+
+        if (data.type === "NAJI_WALLET_UPDATE") {
+          if (initData && typeof initData === "object") {
+            initData = { ...initData, wallet: data.wallet || null };
+          }
+          emit("walletChanged", data.wallet || null);
+          emit(data.type, data);
+          return;
+        }
+
+        if (data.type === "NATIVE_GAMEPADS_UPDATE") {
+          const rawGamepads = Array.isArray(data.gamepads) ? data.gamepads : [];
+          const prevIds = gamepadsState.map(function(g) { return g ? g.id : ""; });
+          const currIds = rawGamepads.map(function(g) { return g && g.id ? g.id : ""; });
+          for (var i = 0; i < rawGamepads.length; i++) {
+            if (prevIds.indexOf(currIds[i]) === -1 && currIds[i]) {
+              emit("gamepadConnected", { gamepad: rawGamepads[i], index: i });
+            }
+          }
+          for (var j = 0; j < gamepadsState.length; j++) {
+            if (gamepadsState[j] && currIds.indexOf(prevIds[j]) === -1) {
+              emit("gamepadDisconnected", { gamepad: gamepadsState[j], index: j });
+            }
+          }
+          setGamepads(rawGamepads);
+          emit("gamepadsChanged", buildGamepadPayload({ reason: "update", gamepads: rawGamepads }));
+          return;
+        }
+
+        if (typeof data.type === "string" && data.type.startsWith("NAJI_")) {
+          emit(data.type, data);
+        }
+      });
+
+      const sdk = {
+        init() {
+          if (initData) return Promise.resolve(initData);
+          return new Promise((resolve, reject) => {
+            const reqId = createReqId();
+            const unsubscribe = on("init", function handler(payload) {
+              pending.delete(reqId);
+              off("init", handler);
+              resolve(payload);
+            });
+
+            pending.set(reqId, {
+              resolve(result) {
+                off("init", unsubscribe);
+                pending.delete(reqId);
+                resolve(result);
+              },
+              reject(err) {
+                off("init", unsubscribe);
+                pending.delete(reqId);
+                reject(err);
+              }
+            });
+
+            post("NAJI_SDK_INIT", { reqId });
+
+            setTimeout(() => {
+              const entry = pending.get(reqId);
+              if (!entry) return;
+              pending.delete(reqId);
+              off("init", unsubscribe);
+              reject(new Error("Mini App init timeout — parent did not respond within 15s"));
+            }, 15000);
+          });
+        },
+
+        ready() {
+          if (isReady) return;
+          isReady = true;
+          post("APP_READY");
+        },
+
+        get initData() { return initData; },
+        get user() { return initData?.user || null; },
+        get theme() { return initData?.theme || "light"; },
+        get platform() { return initData?.platform || "web"; },
+        get parentOrigin() { return PARENT_ORIGIN; },
+        get permissions() { return initData?.permissions || {}; },
+        get sparks() { return initData?.sparks || { balance: 0 }; },
+        get gamepads() { return gamepadsState; },
+        get gamepadSupported() { return Boolean(initData?.gamepadSupported); },
+        get orientation() { return orientationState || initData?.orientation || null; },
+        get startParams() { return initData?.startParams || initData?.launchParams || null; },
+        get multiplayer() { return multiplayerState || initData?.multiplayer || null; },
+        get voice() { return voiceState || initData?.voice || null; },
+
+        on,
+        off,
+
+        requestContext() {
+          return request("GET_CONTEXT").then((ctx) => {
+            if (ctx && typeof ctx === "object") {
+              initData = { ...(initData || {}), ...ctx };
+              if (Array.isArray(ctx.gamepads)) setGamepads(ctx.gamepads);
+              if (ctx.orientation) setOrientation(ctx.orientation);
+            }
+            return ctx;
+          });
+        },
+
+        close() { post("NAJI_CLOSE_APP"); },
+        expand() { post("SET_FULLSCREEN_APP", { value: true }); },
+        collapse() { post("SET_FULLSCREEN_APP", { value: false }); },
+        setHeaderColor(color) { post("SET_HEADER_COLOR", { color }); },
+
+        backButton: {
+          show() { post("BACK_BUTTON_UPDATE", { visible: true }); },
+          hide() { post("BACK_BUTTON_UPDATE", { visible: false }); },
+          onClick(handler) { return on("backButtonClicked", handler); },
+        },
+
+        storage: {
+          get(key) { return request("STORAGE_GET", { key }); },
+          set(key, value) { return request("STORAGE_SET", { key, value }); },
+          remove(key) { return request("STORAGE_REMOVE", { key }); },
+          keys() { return request("STORAGE_KEYS"); },
+        },
+
+        api: {
+          request(path, options) {
+            const normalized = options || {};
+            return request("API_REQUEST", {
+              path,
+              method: normalized.method || "GET",
+              headers: normalized.headers || {},
+              body: serializeBody(normalized.body)
+            });
+          },
+        },
+
+        contacts: {
+          list(options) {
+            return request("MINIAPP_CONTACTS_GET", options || {}).then((result) => (
+              Array.isArray(result) ? result : (result?.contacts || [])
+            ));
+          },
+          get(options) { return this.list(options); },
+          inviteRoom(options) {
+            return request("MINIAPP_CONTACT_INVITE", { intent: "room_invite", ...(options || {}) });
+          },
+          share(options) { return request("MINIAPP_SHARE_TO_CONTACT", options || {}); },
+          invite(options) { return this.inviteRoom(options); },
+        },
+
+        ui: {
+          alert(message, options) { post("SHOW_ALERT", { message, ...(options || {}) }); },
+          toast(message, type) { return request("SHOW_TOAST", { message, type: type || "info" }); },
+          openLink(url) { return request("OPEN_LINK", { url }); },
+          copy(text) { return request("CLIPBOARD_WRITE", { text }); },
+        },
+
+        wallet: {
+          getState() { return request("GET_CONTEXT").then((ctx) => ctx.wallet || null); },
+          refresh() { post("NAJI_WALLET_STATE_REQUEST"); },
+        },
+
+        gamepad: {
+          get supported() { return Boolean(initData?.gamepadSupported); },
+          get state() { return gamepadsState; },
+          get primary() { return gamepadsState[0] || null; },
+          getState() { return request("GET_GAMEPADS").then((gamepads) => setGamepads(gamepads)); },
+          refresh() { return request("GET_GAMEPADS").then((gamepads) => setGamepads(gamepads)); },
+          onChange(handler) { return on("gamepadsChanged", handler); },
+          onConnect(handler) { return on("gamepadConnected", handler); },
+          onDisconnect(handler) { return on("gamepadDisconnected", handler); },
+        },
+
+        orientation: {
+          get state() { return orientationState || initData?.orientation || null; },
+          getState() { return request("GET_ORIENTATION").then((orientation) => setOrientation(orientation)); },
+          refresh() { return request("GET_ORIENTATION").then((orientation) => setOrientation(orientation)); },
+          onChange(handler) { return on("orientationChanged", handler); }
+        },
+
+        multiplayer: {
+          get state() { return multiplayerState || initData?.multiplayer || null; },
+          get currentRoom() { return (multiplayerState || initData?.multiplayer || {}).room || null; },
+          get queue() { return (multiplayerState || initData?.multiplayer || {}).queue || null; },
+          getState() { return request("MINIAPP_MULTIPLAYER_GET_STATE").then((state) => setMultiplayer(state)); },
+          createRoom(options) { return request("MINIAPP_MULTIPLAYER_CREATE_ROOM", options || {}).then((state) => setMultiplayer(state)); },
+          joinRoom(options) { return request("MINIAPP_MULTIPLAYER_JOIN_ROOM", options || {}).then((state) => setMultiplayer(state)); },
+          leaveRoom(options) { return request("MINIAPP_MULTIPLAYER_LEAVE_ROOM", options || {}).then((state) => setMultiplayer(state)); },
+          joinMatchmaking(options) { return request("MINIAPP_MULTIPLAYER_JOIN_MATCHMAKING", options || {}).then((state) => setMultiplayer(state)); },
+          leaveMatchmaking(options) { return request("MINIAPP_MULTIPLAYER_LEAVE_MATCHMAKING", options || {}).then((state) => setMultiplayer(state)); },
+          updateState(state, options) { return request("MINIAPP_MULTIPLAYER_UPDATE_STATE", { ...(options || {}), state: state || {} }).then((nextState) => setMultiplayer(nextState)); },
+          send(eventName, payload, options) {
+            const sendOptions = options || {};
+            if (sendOptions.transient || sendOptions.noAck || sendOptions.fireAndForget) {
+              post("MINIAPP_MULTIPLAYER_SEND_EVENT_FAST", {
+                ...sendOptions,
+                eventName,
+                payload: payload || {}
+              });
+              return Promise.resolve({ ok: true, transient: true, ts: Date.now() });
+            }
+            return request("MINIAPP_MULTIPLAYER_SEND_EVENT", {
+              ...sendOptions,
+              eventName,
+              payload: payload || {}
+            });
+          },
+          onChange(handler) { return on("multiplayerStateChanged", handler); },
+          onMatchFound(handler) { return on("multiplayerMatchFound", handler); },
+          onEvent(handler) { return on("multiplayerEvent", handler); }
+        },
+
+        voice: {
+          get state() { return voiceState || initData?.voice || null; },
+          get participants() { return (voiceState || initData?.voice || {}).participants || []; },
+          getState() { return request("MINIAPP_VOICE_GET_STATE").then((state) => setVoice(state)); },
+          join(options) { return request("MINIAPP_VOICE_JOIN", options || {}).then((state) => setVoice(state)); },
+          leave() { return request("MINIAPP_VOICE_LEAVE", {}).then((state) => setVoice(state)); },
+          setMuted(muted) { return request("MINIAPP_VOICE_SET_MUTED", { muted: !!muted }).then((state) => setVoice(state)); },
+          toggleMuted() {
+            const nextMuted = !Boolean((voiceState || initData?.voice || {}).muted);
+            return request("MINIAPP_VOICE_SET_MUTED", { muted: nextMuted }).then((state) => setVoice(state));
+          },
+          onChange(handler) { return on("voiceStateChanged", handler); },
+          onParticipantsChange(handler) { return on("voiceParticipantsChanged", handler); },
+          onParticipantJoined(handler) { return on("voiceParticipantJoined", handler); },
+          onParticipantLeft(handler) { return on("voiceParticipantLeft", handler); }
+        },
+
+        gyroscope: {
+          get state() { return gyroscopeState || null; },
+          getState() {
+            return request("GYROSCOPE_GET_STATE").then((data) => {
+              if (data && typeof data === "object") gyroscopeState = data;
+              return gyroscopeState;
+            });
+          },
+          start() { post("GYROSCOPE_START"); },
+          stop() { post("GYROSCOPE_STOP"); },
+          onChange(handler) { return on("gyroscopeChanged", handler); }
+        },
+
+        accelerometer: {
+          get state() { return accelerometerState || null; },
+          getState() {
+            return request("ACCELEROMETER_GET_STATE").then((data) => {
+              if (data && typeof data === "object") accelerometerState = data;
+              return accelerometerState;
+            });
+          },
+          start() { post("ACCELEROMETER_START"); },
+          stop() { post("ACCELEROMETER_STOP"); },
+          onChange(handler) { return on("accelerometerChanged", handler); }
+        },
+
+        vibrator: {
+          vibrate(duration) { post("VIBRATE", { duration: duration || 200 }); }
+        },
+
+        nfc: {
+          isAvailable() { return request("NFC_IS_AVAILABLE").then((r) => r && r.available); },
+          isEnabled() { return request("NFC_IS_ENABLED").then((r) => r && r.enabled); },
+          read() { return request("NFC_READ"); },
+          write(records) { return request("NFC_WRITE", { records: records || [] }); },
+          sharePayload(text) { return request("NFC_SHARE_PAYLOAD", { text: text || "" }); },
+          stopShare() { post("NFC_STOP_SHARE"); },
+          cancel() { post("NFC_CANCEL"); },
+          connectIsoDep() { return request("NFC_CONNECT_ISODEP"); },
+          transceive(command) { return request("NFC_TRANSCEIVE", { command: command || "" }); },
+          disconnect() { post("NFC_DISCONNECT_ISODEP"); },
+          onTagRead(handler) { return on("nfcTagRead", handler); }
+        },
+
+        /* Strictly using NMASDK Bluetooth methods */
+        bluetooth: {
+          startScan(options) { return request("BLUETOOTH_START_SCAN", options || {}); },
+          stopScan() { post("BLUETOOTH_STOP_SCAN"); },
+          connect(deviceId, options) { return request("BLUETOOTH_CONNECT", { deviceId, ...(options || {}) }); },
+          sendRaw(deviceId, data) { return request("BLUETOOTH_SEND_RAW", { deviceId, data }); },
+          discoverServices(deviceId) { return request("BLUETOOTH_DISCOVER_SERVICES", { deviceId }); },
+          subscribe(deviceId, serviceUuid, characteristicUuid) { return request("BLUETOOTH_SUBSCRIBE", { deviceId, serviceUuid, characteristicUuid }); },
+          unsubscribe(deviceId, serviceUuid, characteristicUuid) { return request("BLUETOOTH_UNSUBSCRIBE", { deviceId, serviceUuid, characteristicUuid }); },
+          readRaw(deviceId, serviceUuid, characteristicUuid) { return request("BLUETOOTH_READ_RAW", { deviceId, serviceUuid, characteristicUuid }); },
+          onData(handler) { return on("bluetoothDataReceived", handler); },
+          onDeviceFound(handler) { return on("bluetoothDeviceFound", handler); },
+          onConnectionStateChanged(handler) { return on("bluetoothConnectionStateChanged", handler); },
+        },
+
+        camera: {
+          takePhoto() { return request("CAMERA_TAKE_PHOTO"); },
+          getUserMedia(constraints) { return navigator.mediaDevices.getUserMedia(constraints || { video: true }); }
+        },
+
+        payments: {
+          invoice(options) { return request("CREATE_INVOICE_SPARKS", options || {}); },
+          crypto(options) { return request("CRYPTO_REQUEST", options || {}); },
+          solana(options) { return request("MINIAPP_SOLANA_PAYMENT", options || {}); }
+        },
+
+        ping() { return request("NAJI_SDK_PING"); },
+      };
+
+      window.NajiMiniApp = sdk;
+    })();
+  </script>
 
   <header class="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 py-3 shadow-sm">
     <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-2">
       <div>
         <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
-          NajiMiniApp Demo Panel
+          NajiMiniApp Demo Panel & Mi Band 6 Control
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, Mi Band 6, 60fps Камеры и Платежей</p>
+        <p class="text-xs text-slate-500">Управление Xiaomi Mi Band 6 исключительно через NMASDK Bluetooth & инструменты SDK</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -76,9 +627,8 @@
 
   <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
 
-    <!-- ЛЕВАЯ КОЛОНКА: Данные инициализации и Пользователь -->
     <div class="space-y-6">
-      <!-- Блок информации о сессии -->
+      <!-- Информация о сессии -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div class="flex justify-between items-center mb-3">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Данные окружения</h2>
@@ -137,7 +687,7 @@
         </div>
       </section>
 
-      <!-- Контроль системных кнопок и вида -->
+      <!-- Системные вызовы -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Системные вызовы</h2>
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -146,95 +696,151 @@
           <button id="btn-close" class="border border-rose-200 text-rose-600 hover:bg-rose-50 py-1.5 rounded">Close App</button>
           <button id="btn-ping" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Ping</button>
         </div>
-        <div class="pt-2 border-t">
-          <label class="block text-xs text-slate-500 mb-1">Цвет заголовка (Header Color)</label>
-          <div class="flex gap-1">
-            <input type="color" id="header-color-picker" class="w-8 h-8 rounded border p-0 cursor-pointer" value="#4f46e5">
-            <button id="btn-set-header" class="bg-slate-800 text-white text-xs px-2 py-1 rounded flex-1">Применить</button>
-          </div>
-        </div>
-        <div class="pt-2 border-t flex justify-between items-center">
-          <span class="text-xs text-slate-500">Кнопка «Назад»:</span>
-          <div class="flex gap-1 text-xs">
-            <button id="btn-back-show" class="bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded">Показать</button>
-            <button id="btn-back-hide" class="bg-slate-200 hover:bg-slate-300 px-2 py-1 rounded">Скрыть</button>
-          </div>
-        </div>
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, Mi Band 6, API, Камера, Платежи -->
     <div class="space-y-6 md:col-span-2">
       
-      <!-- Логирование событий -->
+      <!-- Лог событий -->
       <section class="bg-slate-900 text-slate-200 p-4 rounded-xl shadow-sm">
         <div class="flex justify-between items-center mb-2">
           <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Лог событий SDK (Events)</h2>
           <button id="btn-clear-logs" class="text-[10px] text-slate-400 hover:text-white border border-slate-700 px-2 py-0.5 rounded">Очистить</button>
         </div>
         <div id="sdk-console" class="scrollable-console text-xs space-y-1 bg-slate-950 p-2 rounded border border-slate-800 text-green-400">
-          <div>[System] Ожидание подключения и инициализации...</div>
+          <div>[System] NMASDK загружен. Готов к работе с Bluetooth.</div>
         </div>
       </section>
 
-      <!-- ПЛАТЕЖИ И КАМЕРА (с 60fps HTML5 Video) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        
-        <!-- Блок Камеры с HTML5 Video (sdk.camera.getUserMedia 60 FPS) -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <div class="flex justify-between items-center">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Camera (getUserMedia 60 FPS)</h2>
-            <span id="badge-camera-lens" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold">Выключена</span>
-          </div>
-
-          <!-- Прямой плеер HTML5 <video> -->
-          <div class="relative w-full h-44 bg-slate-950 rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center">
-            <video id="camera-preview-video" autoplay playsinline muted class="w-full h-full object-cover hidden"></video>
-            <div id="camera-preview-placeholder" class="text-center p-3 text-slate-500 text-xs">
-              <span class="block font-medium mb-1">Видеопоток выключен</span>
-              <span class="text-[10px] text-slate-600 block">Нажмите «Задняя» или «Передняя» для трансляции в &lt;video&gt;</span>
+      <!-- ========================================================= -->
+      <!--            СПЕЦИАЛЬНЫЙ БЛОК: MI BAND 6 CONTROL            -->
+      <!-- ========================================================= -->
+      <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-5 rounded-2xl shadow-lg border border-slate-700 space-y-5">
+        <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-700/80 pb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 font-bold text-lg shadow-inner">
+              ⌚
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                Xiaomi Mi Band 6
+                <span id="miband-connection-badge" class="text-[10px] bg-slate-700 text-slate-300 font-normal px-2 py-0.5 rounded-full border border-slate-600">Отключен</span>
+              </h2>
+              <p class="text-xs text-slate-400">Управление вибрацией и зарядом строго через NMASDK Bluetooth API</p>
             </div>
           </div>
-
-          <!-- Элементы управления -->
-          <div class="space-y-2 text-xs">
-            <div class="grid grid-cols-3 gap-1.5">
-              <button id="btn-cam-back" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-1.5 rounded">Задняя</button>
-              <button id="btn-cam-front" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded">Передняя</button>
-              <button id="btn-cam-stop" class="bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 font-medium py-1.5 rounded">Stop Video</button>
-            </div>
-
-            <div class="pt-1 border-t">
-              <button id="btn-camera-photo" class="w-full border border-slate-200 hover:bg-slate-50 font-medium py-1 rounded">Сделать Фото (takePhoto)</button>
-            </div>
+          <div class="flex items-center gap-2">
+            <label class="text-[10px] text-slate-400 flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded border border-slate-700 cursor-pointer">
+              <input type="checkbox" id="miband-mock-toggle" class="rounded text-indigo-500 focus:ring-0">
+              <span>Симуляция SDK</span>
+            </label>
           </div>
-        </section>
+        </div>
 
-        <!-- Платежная система -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
-          <div class="space-y-3">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Платежи (Payments)</h2>
-            <p class="text-xs text-slate-500">Создание инвойсов и проведения крипто-транзакций через интерфейсы хоста.</p>
-            <div class="grid grid-cols-1 gap-2 text-xs">
-              <button id="btn-pay-sparks" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
-                <span>Sparks Invoice</span>
-                <span class="text-[10px] bg-amber-200/50 px-1.5 py-0.5 rounded">100 Sparks</span>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Левая колонка: Сканирование и Подключение -->
+          <div class="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">1. Поиск устройства (NMASDK)</span>
+              <span id="miband-scan-status" class="text-[10px] text-slate-400">Готов к сканированию</span>
+            </div>
+
+            <div class="flex gap-2">
+              <button id="btn-miband-start-scan" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold py-2 rounded-lg transition shadow-md flex items-center justify-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                Поиск BLE
               </button>
-              <button id="btn-pay-crypto" class="bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
-                <span>Crypto Request</span>
-                <span class="text-[10px] bg-blue-200/50 px-1.5 py-0.5 rounded">10 USDT</span>
-              </button>
-              <button id="btn-pay-solana" class="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
-                <span>Solana Payment</span>
-                <span class="text-[10px] bg-purple-200/50 px-1.5 py-0.5 rounded">0.1 SOL</span>
+              <button id="btn-miband-stop-scan" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 px-3 rounded-lg border border-slate-700">
+                Стоп
               </button>
             </div>
+
+            <!-- Список найденных BLE устройств -->
+            <div>
+              <label class="text-[10px] text-slate-400 block mb-1">Найденные устройства BLE:</label>
+              <select id="miband-device-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-orange-500">
+                <option value="">-- Нажмите "Поиск BLE" --</option>
+              </select>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 flex gap-2">
+              <button id="btn-miband-connect" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold py-2 rounded-lg transition">
+                Подключить Mi Band 6
+              </button>
+              <button id="btn-miband-disconnect" class="bg-rose-900/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800 text-xs py-2 px-3 rounded-lg">
+                Отключить
+              </button>
+            </div>
           </div>
-        </section>
 
-      </div>
+          <!-- Правая колонка: Виджет браслета, Заряд и Вибрация -->
+          <div class="space-y-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-3">
+                <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">2. Статус & Заряд аккумулятора</span>
+                <button id="btn-miband-read-battery" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-orange-400 border border-slate-700 px-2 py-0.5 rounded flex items-center gap-1">
+                  🔄 Обновить заряд
+                </button>
+              </div>
 
-      <!-- ДАТЧИКИ ДВИЖЕНИЯ (Гироскоп с 3D-Кубиком и Акселерометр) -->
+              <!-- Виджет заряда аккумулятора -->
+              <div class="flex items-center justify-between bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                <div class="flex items-center gap-3">
+                  <div id="miband-icon-container" class="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl transition">
+                    ⌚
+                  </div>
+                  <div>
+                    <span class="text-xs text-slate-400 block">Уровень заряда</span>
+                    <span id="val-miband-battery" class="text-2xl font-bold text-slate-300">-- %</span>
+                  </div>
+                </div>
+
+                <!-- Индикатор шкалы -->
+                <div class="w-24 bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700">
+                  <div id="miband-battery-bar" class="bg-emerald-500 h-full w-0 transition-all duration-500"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Команды вибрации -->
+            <div class="space-y-2 pt-2 border-t border-slate-800">
+              <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider block">3. Вызов вибрации (Immediate Alert)</span>
+              <p class="text-[10px] text-slate-400">Отправка команды вибрации на Service UUID <code>0x1802</code>, Char UUID <code>0x2A06</code> через <code>sdk.bluetooth.sendRaw</code></p>
+              
+              <div class="grid grid-cols-2 gap-2">
+                <button id="btn-miband-vib-mild" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium py-2 px-2 rounded-lg transition flex items-center justify-center gap-1">
+                  📳 Короткая вибрация
+                </button>
+                <button id="btn-miband-vib-strong" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium py-2 px-2 rounded-lg transition flex items-center justify-center gap-1">
+                  📳📳 Сильная вибрация
+                </button>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 pt-1">
+                <button id="btn-miband-vib-pattern" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-1.5 rounded-lg transition text-center">
+                  🔔 Поиск браслета (3х)
+                </button>
+                <button id="btn-miband-vib-stop" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-1.5 rounded-lg border border-slate-700">
+                  ⏹️ Стоп сигнал
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Пожизненный лог взаимодействия с Mi Band -->
+        <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-[11px] font-mono">
+          <div class="flex justify-between items-center text-slate-500 mb-1">
+            <span>Лог обмена данными Mi Band (NMASDK Bluetooth Raw):</span>
+            <span id="miband-last-uuid" class="text-[10px] text-orange-400/80">UUID: 0x180F / 0x1802</span>
+          </div>
+          <div id="miband-log" class="text-slate-300 max-h-24 overflow-y-auto space-y-0.5">
+            <div class="text-slate-600">[MiBand] Ожидание действий пользователя...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Датчики движения -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div class="flex justify-between items-center border-b pb-2">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Датчики движения (Motion Sensors)</h2>
@@ -242,7 +848,7 @@
         </div>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <!-- Гироскоп + 3D Визуализация -->
+          <!-- Гироскоп -->
           <div class="bg-slate-50 p-3 rounded-lg border space-y-3 flex flex-col justify-between">
             <div class="space-y-2">
               <div class="flex justify-between items-center">
@@ -265,7 +871,6 @@
               </div>
             </div>
 
-            <!-- Контейнер для 3D-Кубика -->
             <div class="flex justify-center items-center py-4 bg-white rounded-lg border border-slate-100 min-h-[140px]">
               <div class="scene">
                 <div id="gyro-cube" class="cube">
@@ -322,279 +927,44 @@
         </div>
       </section>
 
-      <!-- NFC & ВИБРАЦИЯ & MI BAND 6 -->
+      <!-- Вибрация телефона и Контакты -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <!-- Блок NFC (Near Field Communication) -->
         <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <div class="flex justify-between items-center">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">NFC Бесконтактная связь</h2>
-            <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">NFC Module</span>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Вибрация устройства</h2>
+            <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">Haptics</span>
           </div>
-          <div class="text-xs space-y-2">
-            <div class="bg-slate-50 p-2 rounded border grid grid-cols-2 gap-1 font-medium">
-              <div>Доступен: <span id="val-nfc-available" class="text-indigo-600">-</span></div>
-              <div>Включен: <span id="val-nfc-enabled" class="text-indigo-600">-</span></div>
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block text-slate-500 mb-0.5">Длительность (мс)</label>
+              <div class="flex gap-1">
+                <input type="number" id="vibrate-duration" class="border border-slate-200 rounded p-1.5 w-24 focus:outline-indigo-500" value="200" min="10" max="2000">
+                <button id="btn-vibrate-custom" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded flex-1">Вибрировать</button>
+              </div>
             </div>
-            
-            <div class="grid grid-cols-2 gap-1">
-              <button id="btn-nfc-check" class="bg-slate-800 hover:bg-slate-900 text-white py-1 rounded">Проверить</button>
-              <button id="btn-nfc-cancel" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Cancel</button>
-            </div>
-
-            <div class="border-t pt-2 space-y-2">
-              <button id="btn-nfc-read" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 rounded font-semibold">Читать тэг (Read)</button>
-              
-              <div class="space-y-0.5">
-                <label class="text-[10px] text-slate-400 block">Данные для записи/шаринга</label>
-                <input type="text" id="nfc-text-input" class="w-full border rounded p-1 text-slate-800 focus:outline-indigo-500" value="Naji NFC Text Data">
-              </div>
-
-              <div class="grid grid-cols-2 gap-1.5">
-                <button id="btn-nfc-write" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Записать (Write)</button>
-                <button id="btn-nfc-share" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Share Payload</button>
-              </div>
-              <button id="btn-nfc-stop-share" class="w-full text-rose-600 bg-rose-50 border border-rose-100 py-1 rounded hover:bg-rose-100">Остановить Share</button>
-            </div>
-
-            <button id="btn-mock-nfc-read" class="w-full bg-slate-100 border border-slate-200 text-slate-600 py-1 rounded hover:bg-slate-200 text-[10px]">Симулировать чтение NFC тэга</button>
-
-            <!-- IsoDep / APDU -->
-            <div class="border-t pt-3 mt-2 space-y-2">
-              <div class="flex justify-between items-center">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">IsoDep / APDU (ePassport, банковские карты)</span>
-                <span id="badge-isodep" class="w-2 h-2 rounded-full bg-slate-400"></span>
-              </div>
-              <div class="grid grid-cols-2 gap-1">
-                <button id="btn-isodep-connect" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1 rounded font-semibold">Подключиться (Connect)</button>
-                <button id="btn-isodep-disconnect" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Отключить</button>
-              </div>
-              <div>
-                <label class="text-[10px] text-slate-400 block">APDU команда (hex)</label>
-                <div class="flex gap-1">
-                  <input type="text" id="isodep-command" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" value="00A4040007A0000002470001">
-                  <button id="btn-isodep-send" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-[10px]">Send</button>
-                </div>
-                <div class="mt-1">
-                  <label class="text-[10px] text-slate-400 block">Ответ:</label>
-                  <textarea id="isodep-response" class="w-full border rounded p-1 text-xs font-mono bg-slate-50" rows="2" readonly placeholder="здесь будет hex-ответ"></textarea>
-                </div>
-              </div>
+            <div class="pt-2 border-t">
               <div class="grid grid-cols-3 gap-1 text-[10px]">
-                <button id="btn-isodep-select-mf" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">SELECT MF</button>
-                <button id="btn-isodep-get-challenge" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">GET CHALLENGE</button>
-                <button id="btn-isodep-read-binary" class="border border-slate-200 hover:bg-slate-50 py-0.5 rounded">READ BINARY</button>
-              </div>
-
-              <!-- ePassport BAC Reader -->
-              <div class="border-t pt-2 mt-1 space-y-1.5">
-                <div class="flex justify-between items-center">
-                  <span class="text-[10px] font-semibold uppercase text-emerald-600">ePassport Reader (BAC)</span>
-                  <span id="badge-epassport" class="w-2 h-2 rounded-full bg-slate-400"></span>
-                </div>
-                <div>
-                  <label class="text-[10px] text-slate-400 block">MRZ (2-я строка паспорта целиком)</label>
-                  <input type="text" id="ep-mrz" class="w-full border rounded p-1 text-xs font-mono focus:outline-indigo-500" placeholder="123456789<RUS7001015M2601018<<<<<<<<<<<<<1">
-                  <button id="btn-ep-read" class="mt-1 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded text-xs font-semibold">Прочитать паспорт</button>
-                </div>
-                <div class="flex gap-1 text-[10px]">
-                  <button id="btn-ep-select-only" class="flex-1 border border-emerald-200 hover:bg-emerald-50 py-0.5 rounded">SELECT + Challenge</button>
-                  <button id="btn-ep-dg1" class="flex-1 border border-emerald-200 hover:bg-emerald-50 py-0.5 rounded">Читать DG1</button>
-                  <button id="btn-ep-dg2" class="flex-1 border border-emerald-200 hover:bg-emerald-50 py-0.5 rounded">Читать DG2</button>
-                </div>
-                <div>
-                  <label class="text-[10px] text-slate-400 block">Лог:</label>
-                  <textarea id="ep-log" class="w-full border rounded p-1 text-xs font-mono bg-emerald-50" rows="3" readonly></textarea>
-                </div>
+                <button id="btn-vibrate-short" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Легкий (50)</button>
+                <button id="btn-vibrate-medium" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Средний (200)</button>
+                <button id="btn-vibrate-long" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Сильный (500)</button>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- Блок Вибрации, Mi Band 6 & Контакты -->
-        <div class="space-y-6">
-          
-          <!-- УПРАВЛЕНИЕ MI BAND 6 -->
-          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <div class="flex justify-between items-center">
-              <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900">Mi Band 6 (Bluetooth LE)</h2>
-              <span id="badge-miband-status" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold">Отключен</span>
-            </div>
-
-            <div class="space-y-2 text-xs">
-              <div class="bg-slate-50 p-2 rounded border space-y-1">
-                <div class="flex justify-between">
-                  <span class="text-slate-500">Устройство:</span>
-                  <span id="val-miband-id" class="font-mono font-medium truncate max-w-[140px]">-</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-slate-500">Заряд батареи:</span>
-                  <span id="val-miband-battery" class="font-bold text-emerald-600">-</span>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-1.5">
-                <button id="btn-miband-scan" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded">Поиск и ПоДКЛ</button>
-                <button id="btn-miband-disconnect" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Отключить</button>
-              </div>
-
-              <div class="grid grid-cols-2 gap-1.5 pt-1 border-t">
-                <button id="btn-miband-battery" class="bg-slate-800 hover:bg-slate-900 text-white py-1.5 rounded">Запросить Заряд</button>
-                <button id="btn-miband-vibrate" class="bg-amber-500 hover:bg-amber-600 text-white font-medium py-1.5 rounded">Вибрация (Alert)</button>
-              </div>
-
-              <button id="btn-mock-miband" class="w-full bg-slate-100 border border-slate-200 text-slate-600 py-1 rounded hover:bg-slate-200 text-[10px]">Симулировать Mi Band 6</button>
-            </div>
-          </section>
-
-          <!-- Блок телефонной вибрации -->
-          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <div class="flex justify-between items-center">
-              <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Вибрация Телефона</h2>
-              <span class="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500">Haptics</span>
-            </div>
-            <div class="space-y-3 text-xs">
-              <div>
-                <label class="block text-slate-500 mb-0.5">Произвольная длительность (мс)</label>
-                <div class="flex gap-1">
-                  <input type="number" id="vibrate-duration" class="border border-slate-200 rounded p-1.5 w-24 focus:outline-indigo-500" value="200" min="10" max="2000">
-                  <button id="btn-vibrate-custom" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded flex-1">Вибрировать</button>
-                </div>
-              </div>
-              <div class="pt-2 border-t">
-                <label class="block text-slate-500 mb-1">Быстрые шаблоны (Presets)</label>
-                <div class="grid grid-cols-3 gap-1 text-[10px]">
-                  <button id="btn-vibrate-short" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Легкий (50)</button>
-                  <button id="btn-vibrate-medium" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Средний (200)</button>
-                  <button id="btn-vibrate-long" class="border border-slate-200 hover:bg-slate-50 py-1 rounded font-medium">Сильный (500)</button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Контакты (Contacts)</h2>
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <button id="btn-contacts-list" class="bg-indigo-50 text-indigo-700 font-medium py-1.5 rounded border border-indigo-100 hover:bg-indigo-100">Список</button>
-              <button id="btn-contacts-share" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Поделиться</button>
-              <button id="btn-contacts-invite" class="col-span-2 border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Пригласить в комнату</button>
-            </div>
-          </section>
-
-          <!-- API-запросы через хост -->
-          <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">SDK API Request</h2>
-            <div class="flex gap-1 text-xs">
-              <input type="text" id="api-path-input" class="flex-1 border rounded p-1.5" value="/v1/user/profile">
-              <button id="btn-api-send" class="bg-slate-800 text-white px-3 py-1.5 rounded font-medium">Запрос</button>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <!-- Блок Локального хранилища (Storage) -->
+        <!-- Хранилище -->
         <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Хранилище (Storage)</h2>
           <div class="space-y-2 text-xs">
-            <div>
-              <label class="block text-slate-500 mb-0.5">Ключ (Key)</label>
-              <input type="text" id="storage-key" class="w-full border border-slate-200 rounded p-1.5 focus:outline-indigo-500" value="demo_key">
-            </div>
-            <div>
-              <label class="block text-slate-500 mb-0.5">Значение (Value)</label>
-              <input type="text" id="storage-value" class="w-full border border-slate-200 rounded p-1.5 focus:outline-indigo-500" value="Hello Naji!">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="storage-key" class="border border-slate-200 rounded p-1.5" value="demo_key" placeholder="Key">
+              <input type="text" id="storage-value" class="border border-slate-200 rounded p-1.5" value="Hello MiBand" placeholder="Value">
             </div>
             <div class="grid grid-cols-3 gap-1 pt-1">
               <button id="btn-store-set" class="bg-slate-800 text-white py-1 rounded hover:bg-slate-900">Set</button>
               <button id="btn-store-get" class="bg-slate-100 hover:bg-slate-200 py-1 rounded">Get</button>
               <button id="btn-store-del" class="text-rose-600 bg-rose-50 hover:bg-rose-100 py-1 rounded">Delete</button>
             </div>
-            <button id="btn-store-keys" class="w-full border border-slate-200 hover:bg-slate-50 py-1 rounded mt-1">Показать все ключи</button>
-          </div>
-        </section>
-
-        <!-- Блок UI и Уведомлений -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Уведомления и Буфер</h2>
-          <div class="space-y-2 text-xs">
-            <div>
-              <label class="block text-slate-500 mb-0.5">Текст сообщения</label>
-              <input type="text" id="ui-message" class="w-full border border-slate-200 rounded p-1.5" value="Тестовое сообщение">
-            </div>
-            <div class="grid grid-cols-2 gap-2 pt-1">
-              <button id="btn-ui-toast" class="bg-slate-800 text-white py-1.5 rounded">Toast</button>
-              <button id="btn-ui-alert" class="bg-slate-800 text-white py-1.5 rounded">Alert</button>
-              <button id="btn-ui-copy" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Copy text</button>
-              <button id="btn-ui-link" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded text-blue-600 font-medium">Open Link</button>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- Блоки Мультиплеера и Звука -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        
-        <!-- Мультиплеер (Multiplayer) -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Мультиплеер</h2>
-          <div class="text-xs space-y-2">
-            <div class="bg-slate-50 p-2 rounded border">
-              <div><span class="text-slate-500">Комната:</span> <span id="val-mp-room" class="font-mono font-medium">-</span></div>
-              <div><span class="text-slate-500">В очереди:</span> <span id="val-mp-queue" class="font-medium">-</span></div>
-            </div>
-            <div class="grid grid-cols-2 gap-1.5">
-              <button id="btn-mp-create" class="bg-indigo-50 text-indigo-700 font-medium py-1 rounded border border-indigo-100 hover:bg-indigo-100">Создать комнату</button>
-              <button id="btn-mp-join" class="bg-slate-100 py-1 rounded hover:bg-slate-200">Войти в комнату</button>
-              <button id="btn-mp-match" class="bg-emerald-50 text-emerald-700 font-medium py-1 rounded border border-emerald-100 hover:bg-emerald-100">Искать игру</button>
-              <button id="btn-mp-leave" class="text-rose-600 bg-rose-50 py-1 rounded hover:bg-rose-100">Покинуть</button>
-            </div>
-            <div class="grid grid-cols-2 gap-1.5 pt-1 border-t">
-              <button id="btn-mp-send-fast" class="border border-slate-200 py-1 rounded hover:bg-slate-50 text-[10px]">Send Fast Event</button>
-              <button id="btn-mp-update-state" class="border border-slate-200 py-1 rounded hover:bg-slate-50 text-[10px]">Update State</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- Голосовой чат (Voice) -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Голосовой чат</h2>
-          <div class="text-xs space-y-2">
-            <div class="bg-slate-50 p-2 rounded border space-y-1">
-              <div><span class="text-slate-500">Статус:</span> <span id="val-voice-status" class="font-medium">-</span></div>
-              <div><span class="text-slate-500">Микрофон:</span> <span id="val-voice-muted" class="font-semibold">-</span></div>
-              <div><span class="text-slate-500">Участников:</span> <span id="val-voice-count" class="font-medium">0</span></div>
-            </div>
-            <div class="grid grid-cols-2 gap-1.5">
-              <button id="btn-voice-join" class="bg-slate-800 text-white py-1 rounded hover:bg-slate-900">Подключиться</button>
-              <button id="btn-voice-leave" class="border border-slate-200 py-1 rounded hover:bg-slate-50">Выйти</button>
-              <button id="btn-voice-mute" class="col-span-2 bg-slate-100 py-1 rounded hover:bg-slate-200">Переключить микрофон</button>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <!-- Геймпады и Ориентация экрана -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <!-- Ориентация -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Ориентация экрана</h2>
-          <div class="text-xs space-y-2">
-            <div class="bg-slate-50 p-2 rounded border">
-              <div><span class="text-slate-500">Текущая ориентация:</span> <span id="val-orientation" class="font-medium">-</span></div>
-            </div>
-            <button id="btn-orient-refresh" class="w-full bg-slate-100 py-1 rounded hover:bg-slate-200">Обновить принудительно</button>
-          </div>
-        </section>
-
-        <!-- Геймпад -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Геймпад</h2>
-          <div class="text-xs space-y-2">
-            <div class="bg-slate-50 p-2 rounded border">
-              <div><span class="text-slate-500">Поддержка:</span> <span id="val-gamepad-support" class="font-medium">-</span></div>
-              <div><span class="text-slate-500">Активные геймпады:</span> <span id="val-gamepad-count" class="font-medium">0</span></div>
-            </div>
-            <button id="btn-gamepad-refresh" class="w-full bg-slate-100 py-1 rounded hover:bg-slate-200">Опросить геймпады</button>
           </div>
         </section>
       </div>
@@ -603,1578 +973,392 @@
   </main>
 
   <script>
-    let miBandGattServer = null;
-let miBandDevice = null;
-
-// Службы и характеристики Mi Band 6
-const BLE_SERVICES = {
-  BATTERY_SERVICE: '0000180f-0000-1000-8000-00805f9b34fb',
-  BATTERY_LEVEL_CHAR: '00002a19-0000-1000-8000-00805f9b34fb',
-  IMMEDIATE_ALERT_SERVICE: '00001802-0000-1000-8000-00805f9b34fb',
-  ALERT_LEVEL_CHAR: '00002a06-0000-1000-8000-00805f9b34fb',
-  MI_BAND_CUSTOM_SERVICE: '0000fee0-0000-1000-8000-00805f9b34fb'
-};
-    // Помощник логирования во встроенную консоль на странице
-    const logContainer = document.getElementById('sdk-console');
-    function log(message, type = 'info') {
-      const el = document.createElement('div');
-      const time = new Date().toLocaleTimeString();
-      let colorClass = 'text-green-400';
-      if (type === 'error') colorClass = 'text-rose-400';
-      if (type === 'warning') colorClass = 'text-amber-400';
-      if (type === 'sys') colorClass = 'text-indigo-300';
-      
-      el.className = colorClass;
-      el.textContent = `[${time}] ${message}`;
-      logContainer.appendChild(el);
-      logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    // Сохранение углов для плавного вращения куба
-    let cubeRotX = 0;
-    let cubeRotY = 0;
-    let cubeRotZ = 0;
-    const cubeEl = document.getElementById('gyro-cube');
-
-    function updateCubeTransform(x, y, z) {
-      cubeRotX += x * 3; 
-      cubeRotY += y * 3;
-      cubeRotZ += z * 3;
-      
-      if (cubeEl) {
-        cubeEl.style.transform = `rotateX(${cubeRotX}deg) rotateY(${cubeRotY}deg) rotateZ(${cubeRotZ}deg)`;
-      }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener("DOMContentLoaded", () => {
       const sdk = window.NajiMiniApp;
-      if (!sdk) {
-        log('Ошибка: SDK NajiMiniApp не загружен.', 'error');
-        return;
-      }
-      log('SDK обнаружен на странице. Ожидание инициализации...', 'sys');
 
-      // Кнопка принудительного вызова init
-      document.getElementById('btn-init').addEventListener('click', () => {
-        log('Запрос инициализации...', 'sys');
-        
+      // Logger Helper
+      function logEvent(msg, payload) {
+        const consoleEl = document.getElementById("sdk-console");
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement("div");
+        entry.innerHTML = `<span class="text-slate-500">[${time}]</span> ${msg} ${payload ? `<span class="text-emerald-300">${JSON.stringify(payload)}</span>` : ""}`;
+        consoleEl.appendChild(entry);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      }
+
+      function logMiBand(msg, isError = false) {
+        const logEl = document.getElementById("miband-log");
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement("div");
+        entry.className = isError ? "text-rose-400" : "text-emerald-400";
+        entry.innerHTML = `<span class="text-slate-500">[${time}]</span> ${msg}`;
+        logEl.appendChild(entry);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      document.getElementById("btn-clear-logs")?.addEventListener("click", () => {
+        const c = document.getElementById("sdk-console");
+        if (c) c.innerHTML = "";
+      });
+
+      // SDK Init Button
+      document.getElementById("btn-init")?.addEventListener("click", () => {
+        logEvent("Инициализация NajiMiniApp SDK...");
         sdk.init()
           .then((data) => {
-            log('Инициализация успешна. Получены данные initData.');
-            document.getElementById('status-indicator').classList.replace('bg-amber-500', 'bg-emerald-500');
-            document.getElementById('btn-ready').removeAttribute('disabled');
-            updateUIWithInitData(data);
+            logEvent("SDK успешно инициализирован", data);
+            document.getElementById("status-indicator").className = "w-3 h-3 rounded-full bg-emerald-500";
+            document.getElementById("btn-ready").removeAttribute("disabled");
+            
+            // Populate environment UI
+            document.getElementById("val-platform").textContent = sdk.platform;
+            document.getElementById("val-theme").textContent = sdk.theme;
+            document.getElementById("val-origin").textContent = sdk.parentOrigin || "Direct";
+            
+            if (sdk.user) {
+              document.getElementById("user-info-placeholder").classList.add("hidden");
+              document.getElementById("user-info-content").classList.remove("hidden");
+              document.getElementById("user-name").textContent = sdk.user.username || sdk.user.first_name || "User";
+              document.getElementById("user-id").textContent = `ID: ${sdk.user.id || "-"}`;
+              document.getElementById("val-sparks").textContent = sdk.sparks?.balance || 0;
+            }
           })
           .catch((err) => {
-            log(`Ошибка инициализации: ${err.message}. Возможно, приложение запущено вне родительского фрейма.`, 'warning');
-            log(`Запуск демо-режима: эмуляция данных...`, 'sys');
-            mockInitData();
+            logEvent("Ошибка инициализации SDK", err.message);
           });
       });
 
-      // Кнопка вызова готовности приложения (Ready)
-      document.getElementById('btn-ready').addEventListener('click', () => {
+      document.getElementById("btn-ready")?.addEventListener("click", () => {
         sdk.ready();
-        log('Отправлен сигнал APP_READY на хост.', 'sys');
+        logEvent("Отправлен сигнал APP_READY");
       });
 
-      // Заполнение полей из initData
-      function updateUIWithInitData(data) {
-        if (!data) return;
-        document.getElementById('val-platform').textContent = sdk.platform;
-        document.getElementById('val-theme').textContent = sdk.theme;
-        document.getElementById('val-origin').textContent = sdk.parentOrigin || 'N/A';
-        document.getElementById('val-origin').title = sdk.parentOrigin || '';
-        document.getElementById('val-start-params').textContent = JSON.stringify(sdk.startParams) || 'нет';
-
-        if (sdk.user) {
-          document.getElementById('user-info-placeholder').classList.add('hidden');
-          document.getElementById('user-info-content').classList.remove('hidden');
-          document.getElementById('user-name').textContent = sdk.user.username || sdk.user.firstName || 'User';
-          document.getElementById('user-id').textContent = `ID: ${sdk.user.id || '-'}`;
-          if (sdk.user.avatarUrl) {
-            document.getElementById('user-avatar').innerHTML = `<img src="${sdk.user.avatarUrl}" class="rounded-full w-full h-full object-cover">`;
-          }
-        }
-
-        document.getElementById('val-sparks').textContent = sdk.sparks?.balance || 0;
-        document.getElementById('val-wallet').textContent = data.wallet ? (data.wallet.address || 'Подключен') : 'Отсутствует';
-        
-        // Свойства модулей
-        document.getElementById('val-orientation').textContent = JSON.stringify(sdk.orientation) || 'N/A';
-        document.getElementById('val-gamepad-support').textContent = sdk.gamepadSupported ? 'Да' : 'Нет';
-        document.getElementById('val-gamepad-count').textContent = sdk.gamepads.length;
-
-        if (sdk.multiplayer.state) {
-          document.getElementById('val-mp-room').textContent = sdk.multiplayer.currentRoom?.id || '-';
-          document.getElementById('val-mp-queue').textContent = sdk.multiplayer.queue ? 'В поиске' : 'Нет';
-        }
-      }
-
-      // Эмуляция данных (для тестирования во внешнем браузере)
-      function mockInitData() {
-        const mockData = {
-          type: "NAJI_INIT_DATA",
-          platform: "web-mock",
-          theme: "dark",
-          user: {
-            id: 777123,
-            username: "Demo_Naji_User",
-            firstName: "Иван",
-            avatarUrl: ""
-          },
-          sparks: { balance: 1450 },
-          wallet: { address: "0xMockAddress...32ab" },
-          gamepadSupported: true,
-          orientation: { angle: 0, type: "landscape-primary" }
-        };
-        
-        window.postMessage(mockData, "*");
-        log('Отправлены эмулированные данные.', 'sys');
-      }
-
-      // ================= ПОДПИСКИ НА СОБЫТИЯ SDK =================
-
-      sdk.on('init', (payload) => {
-        log(`Событие 'init' получено: ${JSON.stringify(payload)}`);
-        updateUIWithInitData(payload);
-      });
-
-      sdk.on('themeChanged', (theme) => {
-        log(`Событие 'themeChanged': ${theme}`);
-        document.getElementById('val-theme').textContent = theme;
-      });
-
-      sdk.on('walletChanged', (wallet) => {
-        log(`Событие 'walletChanged': ${JSON.stringify(wallet)}`);
-        document.getElementById('val-wallet').textContent = wallet ? (wallet.address || 'Подключен') : 'Отсутствует';
-      });
-
-      sdk.on('orientationChanged', (orientation) => {
-        log(`Событие 'orientationChanged': ${JSON.stringify(orientation)}`);
-        document.getElementById('val-orientation').textContent = JSON.stringify(orientation);
-      });
-
-      sdk.on('gamepadsChanged', (payload) => {
-        log(`Событие 'gamepadsChanged'. Найдено геймпадов: ${payload?.gamepads?.length || 0}`);
-        document.getElementById('val-gamepad-count').textContent = payload?.gamepads?.length || 0;
-      });
-
-      sdk.on('gamepadConnected', (payload) => {
-        log(`Геймпад подключен: ${payload?.gamepad?.id || 'Устройство'}`);
-      });
-
-      sdk.on('gamepadDisconnected', (payload) => {
-        log(`Геймпад отключен: ${payload?.gamepad?.id || 'Устройство'}`, 'warning');
-      });
-
-      sdk.on('backButtonClicked', () => {
-        log(`Событие 'backButtonClicked': Нажата системная кнопка «Назад»`, 'warning');
-      });
-
-      sdk.on('launchParamsChanged', (params) => {
-        log(`Событие 'launchParamsChanged': ${JSON.stringify(params)}`);
-        document.getElementById('val-start-params').textContent = JSON.stringify(sdk.startParams) || 'нет';
-      });
-
-      sdk.on('multiplayerStateChanged', (state) => {
-        log(`Событие 'multiplayerStateChanged': ${JSON.stringify(state)}`);
-        document.getElementById('val-mp-room').textContent = state?.room?.id || '-';
-        document.getElementById('val-mp-queue').textContent = state?.queue ? 'В поиске' : 'Нет';
-      });
-
-      sdk.on('multiplayerMatchFound', (payload) => {
-        log(`Мультиплеер: Матч найден! ${JSON.stringify(payload)}`, 'sys');
-      });
-
-      sdk.multiplayer.onEvent((payload) => {
-        log(`Мультиплеер Ивент (onEvent): ${JSON.stringify(payload)}`);
-      });
-
-      sdk.on('voiceStateChanged', (state) => {
-        log(`Событие 'voiceStateChanged': ${JSON.stringify(state)}`);
-        document.getElementById('val-voice-status').textContent = state?.active ? 'Активен' : 'Отключен';
-        document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
-      });
-
-function extractDeviceId(device) {
-  if (!device) return null;
-  return device.id || device.deviceId || device.address || device.mac || device.uuid || device.device_id || null;
-}
-
-// Функция-помощник для извлечения имени устройства
-function extractDeviceName(device) {
-  if (!device) return 'Устройство';
-  return device.name || device.deviceName || device.localName || 'Mi Smart Band 6';
-}
-
-// Обработчик события обнаружения BLE устройства от хоста
-sdk.on('bluetoothDeviceFound', (device) => {
-  // Выводим сырой объект в консоль для отладки
-  log(`[RAW BLE DATA]: ${JSON.stringify(device)}`, 'sys');
-
-  const deviceId = extractDeviceId(device);
-  const deviceName = extractDeviceName(device);
-
-  log(`[SDK Event] Найдено устройство: ${deviceName} (ID: ${deviceId || 'не определен'})`, 'sys');
-
-  if (deviceId && deviceName.toLowerCase().includes('mi')) {
-    log(`Автоматическое подключение к ${deviceName} (ID: ${deviceId})...`, 'sys');
-    
-    sdk.bluetooth.connect(deviceId)
-      .then(() => {
-        document.getElementById('badge-miband-status').textContent = 'Подключен (SDK)';
-        document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-        document.getElementById('val-miband-id').textContent = deviceId;
-        log(`Успешно подключено к ${deviceName}!`, 'sys');
-      })
-      .catch((err) => {
-        log(`Ошибка подключения к ${deviceId}: ${err.message}`, 'error');
-      });
-  } else if (!deviceId) {
-    log(`⚠ Внимание: Нативный хост прислал объект без ID поля. Структура: ${JSON.stringify(device)}`, 'warning');
-  }
-});
-
-      sdk.on('voiceParticipantsChanged', (participants) => {
-        log(`Событие 'voiceParticipantsChanged'. Участников: ${participants.length}`);
-        document.getElementById('val-voice-count').textContent = participants.length;
-      });
-
-      sdk.voice.onParticipantJoined((p) => {
-        log(`Голос: Участник присоединился: ${JSON.stringify(p)}`, 'sys');
-      });
-
-      sdk.voice.onParticipantLeft((p) => {
-        log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
-      });
-
-      // ================= УПРАВЛЕНИЕ MI BAND 6 (BLUETOOTH LE) =================
-
-      let connectedMiBandId = null;
-
-      // Поиск и подключение к Mi Band 6
-let isConnectingOrConnected = false;
-let activeUnsubscribe = null;
-let scanTimeoutTimer = null;
-
-document.getElementById('btn-miband-scan').addEventListener('click', async () => {
-  // Сбрасываем предыдущие подписки и таймеры
-  if (activeUnsubscribe) activeUnsubscribe();
-  if (scanTimeoutTimer) clearTimeout(scanTimeoutTimer);
-  
-  isConnectingOrConnected = false;
-  log('Запуск поиска устройства...', 'sys');
-
-  // 1. Подписываемся на поток найденных устройств от хоста
-  activeUnsubscribe = sdk.on('bluetoothDeviceFound', async (device) => {
-    // Если уже начался процесс подключения к первому устройству — игнорируем остальные
-    if (isConnectingOrConnected) return;
-
-    const deviceId = device?.id || device?.deviceId || device?.address || device?.mac;
-    const deviceName = device?.name || device?.deviceName || device?.localName || 'Mi Smart Band';
-
-    // Фильтруем: ищем только Mi Band
-    if (deviceId && deviceName.toLowerCase().includes('mi')) {
+      // =========================================================================
+      //              MI BAND 6 CONTROL LOGIC (EXCLUSIVE NMASDK BLE)
+      // =========================================================================
       
-      // Блокируем новые подключения
-      isConnectingOrConnected = true;
+      // Mi Band 6 GATT Standard & Custom UUIDs
+      const BLE_UUIDS = {
+        BATTERY_SERVICE: "0000180f-0000-1000-8000-00805f9b34fb",
+        BATTERY_LEVEL_CHAR: "00002a19-0000-1000-8000-00805f9b34fb",
+        IMMEDIATE_ALERT_SERVICE: "00001802-0000-1000-8000-00805f9b34fb",
+        ALERT_LEVEL_CHAR: "00002a06-0000-1000-8000-00805f9b34fb"
+      };
 
-      // 🛑 2. ОСТАНАВЛИВАЕМ ПОИСК СРАЗУ ПОСЛЕ НАХОЖДЕНИЯ ПЕРВОГО УСТРОЙСТВА
-      log(`Найдено устройство: ${deviceName} (${deviceId}). ОСТАНАВЛИВАЕМ ПОИСК!`, 'sys');
-      sdk.bluetooth.stopScan();
+      let connectedBandDeviceId = null;
+      let foundDevices = new Map();
 
-      // Отписываемся от слушателя событий поиска
-      if (activeUnsubscribe) {
-        activeUnsubscribe();
-        activeUnsubscribe = null;
-      }
-      if (scanTimeoutTimer) clearTimeout(scanTimeoutTimer);
+      const mockToggle = document.getElementById("miband-mock-toggle");
+      const deviceSelect = document.getElementById("miband-device-select");
+      const badgeConnection = document.getElementById("miband-connection-badge");
+      const scanStatus = document.getElementById("miband-scan-status");
+      const batteryVal = document.getElementById("val-miband-battery");
+      const batteryBar = document.getElementById("miband-battery-bar");
+      const iconContainer = document.getElementById("miband-icon-container");
 
-      // 3. Подключаемся к этому единственному устройству
-      try {
-        log(`Подключение к ${deviceId}...`, 'sys');
-        await sdk.bluetooth.connect(deviceId);
-
-        // ⏳ Ждем 1.5 секунды, пока Android/iOS нативно завершит gatt.discoverServices()
-        log('Соединение установлено. Ожидание инициализации GATT-служб...', 'sys');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Обновляем UI
-        document.getElementById('badge-miband-status').textContent = 'Подключен (SDK)';
-        document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-        document.getElementById('val-miband-id').textContent = deviceId;
-        
-        log(`Успешно подключено к ${deviceName} (${deviceId})!`, 'sys');
-
-        // Автоматически запрашиваем уровень заряда
-        await getRealBatteryLevel(deviceId);
-
-      } catch (err) {
-        log(`Ошибка подключения к ${deviceId}: ${err.message}`, 'error');
-        isConnectingOrConnected = false;
-      }
-    }
-  });
-
-  // 4. Запускаем поиск через SDK
-  try {
-    await sdk.bluetooth.startScan({
-      services: ['0000180f-0000-1000-8000-00805f9b34fb', '00001802-0000-1000-8000-00805f9b34fb'],
-      namePrefix: 'Mi Smart Band'
-    });
-
-    // 5. Авто-остановка поиска через 10 секунд, если ничего не нашли
-    scanTimeoutTimer = setTimeout(() => {
-      if (!isConnectingOrConnected) {
-        log('Тайм-аут поиска (10 сек): устройства не найдены. Поиск остановлен.', 'warning');
-        sdk.bluetooth.stopScan();
-        if (activeUnsubscribe) activeUnsubscribe();
-      }
-    }, 10000);
-
-  } catch (e) {
-    log(`Ошибка запуска поиска через SDK: ${e.message}`, 'error');
-    if (activeUnsubscribe) activeUnsubscribe();
-  }
-});
-      async function getRealBatteryLevel() {
-  if (miBandGattServer && miBandGattServer.connected) {
-    try {
-      log('Чтение характеристики батареи (0x180F -> 0x2A19)...', 'sys');
-      const service = await miBandGattServer.getPrimaryService(BLE_SERVICES.BATTERY_SERVICE);
-      const characteristic = await service.getCharacteristic(BLE_SERVICES.BATTERY_LEVEL_CHAR);
-      const value = await characteristic.readValue();
-      const batteryPercent = value.getUint8(0);
-
-      document.getElementById('val-miband-battery').textContent = `${batteryPercent}%`;
-      log(`РЕАЛЬНЫЙ заряд батареи Mi Band 6: ${batteryPercent}%`, 'sys');
-    } catch (e) {
-      log(`Не удалось прочесть батарею напрямую: ${e.message}`, 'error');
-    }
-  } else {
-    // Через мост SDK
-    try {
-      const res = await sdk.bluetooth.sendRaw(document.getElementById('val-miband-id').textContent, {
-        service: BLE_SERVICES.BATTERY_SERVICE,
-        characteristic: BLE_SERVICES.BATTERY_LEVEL_CHAR,
-        action: 'read'
-      });
-      const val = typeof res === 'number' ? res : (res?.level || res?.value || '-');
-      document.getElementById('val-miband-battery').textContent = `${val}%`;
-      log(`Заряд батареи: ${val}%`, 'sys');
-    } catch (e) {
-      log(`Ошибка чтения батареи: ${e.message}`, 'error');
-    }
-  }
-}
-
-      // Запрос заряда батареи (Battery Service: 0x180F -> 0x2A19)
-const MI_BAND_ID = 'D4:30:19:1A:FE:75';
-
-// Функция безопасного парсинга ответа от батареи (HEX, Number, Array или Base64)
-function parseBatteryLevel(response) {
-  log(`[RAW Battery Response]: ${JSON.stringify(response)} (тип: ${typeof response})`, 'sys');
-
-  if (typeof response === 'number') return response;
-  if (typeof response === 'string') {
-    // Если пришла HEX строка (например "55" -> 85%)
-    const parsedHex = parseInt(response.replace('0x', ''), 16);
-    if (!isNaN(parsedHex)) return parsedHex;
-  }
-  if (response && typeof response === 'object') {
-    if (response.value !== undefined) return parseBatteryLevel(response.value);
-    if (response.data !== undefined) return parseBatteryLevel(response.data);
-  }
-  return '??';
-}
-
-// 1. ЗАПРОС ЗАРЯДА БАТАРЕИ
-document.getElementById('btn-miband-battery').addEventListener('click', async () => {
-  log('Чтение батареи из службы 0000180f...', 'sys');
-  try {
-    const rawRes = await sdk.bluetooth.sendRaw(MI_BAND_ID, {
-      service: '0000180f-0000-1000-8000-00805f9b34fb',
-      serviceUuid: '0000180f-0000-1000-8000-00805f9b34fb',
-      characteristic: '00002a19-0000-1000-8000-00805f9b34fb',
-      characteristicUuid: '00002a19-0000-1000-8000-00805f9b34fb',
-      action: 'read'
-    });
-
-    const batteryLevel = parseBatteryLevel(rawRes);
-    document.getElementById('val-miband-battery').textContent = `${batteryLevel}%`;
-    log(`Заряд батареи успешно прочитан: ${batteryLevel}%`, 'sys');
-
-  } catch (err) {
-    log(`Ошибка чтения батареи: ${err.message}`, 'error');
-  }
-});
-
-// 2. ОТПРАВКА СИГНАЛА ВИБРАЦИИ
-document.getElementById('btn-miband-vibrate').addEventListener('click', async () => {
-  log('Отправка команды вибрации в службу 00001802...', 'sys');
-  try {
-    // Дублируем ключи с Uuid и без, чтобы NajiGamepad точно прочитал нужный ключ
-    const payload = {
-      service: '00001802-0000-1000-8000-00805f9b34fb',
-      serviceUuid: '00001802-0000-1000-8000-00805f9b34fb',
-      characteristic: '00002a06-0000-1000-8000-00805f9b34fb',
-      characteristicUuid: '00002a06-0000-1000-8000-00805f9b34fb',
-      data: '02',
-      value: '02',
-      bytes: [2]
-    };
-
-    await sdk.bluetooth.sendRaw(MI_BAND_ID, payload);
-    log('Команда 0x02 отправлена! Проверьте вибрацию.', 'sys');
-
-  } catch (err) {
-    log(`Ошибка отправки вибрации: ${err.message}`, 'error');
-  }
-});
-
-// 3. ПОДКЛЮЧЕНИЕ С ЗАДЕРЖКОЙ 2.5 СЕКУНДЫ (чтобы не было "No services discovered yet")
-async function connectToMiBand(deviceId) {
-  log(`Подключение к ${deviceId}...`, 'sys');
-  await sdk.bluetooth.connect(deviceId);
-  
-  // Пауза 2.5 секунды, так как нативное сканирование служб занимает 1.85 сек (по вашим логам)
-  log('Ждем 2.5 сек, пока Android найдет 12 GATT-служб браслета...', 'sys');
-  await new Promise(r => setTimeout(r, 2500));
-  
-  log('Службы готовы к работе!', 'sys');
-}
-// Реальное отключение
-document.getElementById('btn-miband-disconnect').addEventListener('click', () => {
-  if (miBandDevice && miBandDevice.gatt.connected) {
-    miBandDevice.gatt.disconnect();
-  } else {
-    sdk.bluetooth.stopScan();
-  }
-  onMiBandDisconnected();
-});
-
-function onMiBandDisconnected() {
-  miBandGattServer = null;
-  document.getElementById('badge-miband-status').textContent = 'Отключен';
-  document.getElementById('badge-miband-status').className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
-  document.getElementById('val-miband-id').textContent = '-';
-  document.getElementById('val-miband-battery').textContent = '-';
-  log('Mi Band 6 был отключен.');
-}
-
-      // Эмуляция/Mock для Mi Band 6 (если тестируете без реального устройства)
-      document.getElementById('btn-mock-miband').addEventListener('click', () => {
-        connectedMiBandId = 'MiBand6-Mock-A1';
-        document.getElementById('badge-miband-status').textContent = 'Подключен (Mock)';
-        document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-        document.getElementById('val-miband-id').textContent = connectedMiBandId;
-        document.getElementById('val-miband-battery').textContent = '88%';
-        log('Симуляция: Mi Band 6 подключен. Заряд 88%.', 'sys');
+      // Register NMASDK Bluetooth Event Listeners
+      sdk.bluetooth.onDeviceFound((device) => {
+        logEvent("BLE Device Found via SDK", device);
+        if (device && device.id) {
+          foundDevices.set(device.id, device);
+          renderDeviceList();
+        }
       });
 
-      // ================= УПРАВЛЕНИЕ КАМЕРОЙ (sdk.camera.getUserMedia 60 FPS) =================
-
-      let currentLocalStream = null;
-
-      const videoEl = document.getElementById('camera-preview-video');
-      const previewPlaceholder = document.getElementById('camera-preview-placeholder');
-      const lensBadge = document.getElementById('badge-camera-lens');
-
-      // Прямой запуск 60 FPS стрима с использованием sdk.camera.getUserMedia
-      async function startCameraStream(lens = 'back') {
-        stopCameraStream();
-
-        const facingMode = lens === 'front' ? 'user' : { ideal: 'environment' };
-
-        try {
-          log(`Запрос видеопотока через sdk.camera.getUserMedia (${lens}, 60 FPS)...`, 'sys');
-          
-          // Захват видео через актуальный метод SDK с частотой 60 кадров/сек
-          currentLocalStream = await sdk.camera.getUserMedia({
-            video: {
-              facingMode: facingMode,
-              frameRate: { ideal: 60, max: 60 }
-            },
-            audio: false
-          });
-
-          videoEl.srcObject = currentLocalStream;
-          videoEl.classList.remove('hidden');
-          previewPlaceholder.classList.add('hidden');
-
-          lensBadge.textContent = lens === 'front' ? 'Передняя (Selfie)' : 'Задняя';
-          lensBadge.className = lens === 'front' 
-            ? 'text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-semibold'
-            : 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
-
-          log(`Видеопоток с частотой 60 FPS успешно запущен!`, 'sys');
-
-        } catch (err) {
-          log(`Ошибка захвата видеопотока: ${err.message}`, 'error');
-        }
-      }
-
-      function stopCameraStream() {
-        if (currentLocalStream) {
-          currentLocalStream.getTracks().forEach(track => track.stop());
-          currentLocalStream = null;
-        }
-
-        if (videoEl.srcObject) {
-          if (typeof videoEl.srcObject.getTracks === 'function') {
-            videoEl.srcObject.getTracks().forEach(track => track.stop());
+      sdk.bluetooth.onConnectionStateChanged((event) => {
+        logEvent("BLE Connection State Changed", event);
+        if (event.deviceId === connectedBandDeviceId) {
+          if (event.connected) {
+            badgeConnection.textContent = "Подключен";
+            badgeConnection.className = "text-[10px] bg-emerald-500/20 text-emerald-300 font-normal px-2 py-0.5 rounded-full border border-emerald-500/40";
+            logMiBand(`Устройство ${event.deviceId} успешно подключено!`);
+          } else {
+            badgeConnection.textContent = "Отключен";
+            badgeConnection.className = "text-[10px] bg-slate-700 text-slate-300 font-normal px-2 py-0.5 rounded-full border border-slate-600";
+            logMiBand(`Устройство ${event.deviceId} отключено.`);
           }
-          videoEl.srcObject = null;
+        }
+      });
+
+      sdk.bluetooth.onData((dataPackage) => {
+        logEvent("BLE Raw Data Received via SDK", dataPackage);
+        if (dataPackage.characteristicUuid === BLE_UUIDS.BATTERY_LEVEL_CHAR || dataPackage.characteristicUuid === "2a19") {
+          parseBatteryData(dataPackage.data);
+        }
+      });
+
+      function renderDeviceList() {
+        deviceSelect.innerHTML = "";
+        if (foundDevices.size === 0) {
+          deviceSelect.innerHTML = `<option value="">-- Устройства не найдены --</option>`;
+          return;
         }
 
-        lensBadge.textContent = 'Выключена';
-        lensBadge.className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
-        videoEl.classList.add('hidden');
-        previewPlaceholder.classList.remove('hidden');
-        log('Видеопоток камеры остановлен.');
+        foundDevices.forEach((dev, id) => {
+          const opt = document.createElement("option");
+          opt.value = id;
+          const isMiBand = (dev.name && (dev.name.includes("Mi") || dev.name.includes("Band") || dev.name.includes("Smart"))) ? "⌚ " : "";
+          opt.textContent = `${isMiBand}${dev.name || "Неизвестное BLE устройство"} [${id}]`;
+          deviceSelect.appendChild(opt);
+        });
       }
 
-      // Кнопки управления видеопотоком
-      document.getElementById('btn-cam-back').addEventListener('click', () => startCameraStream('back'));
-      document.getElementById('btn-cam-front').addEventListener('click', () => startCameraStream('front'));
-      document.getElementById('btn-cam-stop').addEventListener('click', () => stopCameraStream());
+      // Start BLE Scan via SDK
+      document.getElementById("btn-miband-start-scan")?.addEventListener("click", () => {
+        if (mockToggle.checked) {
+          scanStatus.textContent = "Симуляция поиска...";
+          logMiBand("Запущен симулированный поиск Mi Band 6");
+          setTimeout(() => {
+            foundDevices.set("MB6-MOCK-88:99:AA", { id: "MB6-MOCK-88:99:AA", name: "Mi Smart Band 6 (Simulated)" });
+            foundDevices.set("BLE-DEV-12:34:56", { id: "BLE-DEV-12:34:56", name: "Generic BLE Heart Rate" });
+            renderDeviceList();
+            scanStatus.textContent = "Найдено устр-в: 2";
+          }, 800);
+          return;
+        }
 
-      // Снимок фото через SDK
-      document.getElementById('btn-camera-photo').addEventListener('click', () => {
-        log('Запрос снимка с камеры (takePhoto)...', 'sys');
-        sdk.camera.takePhoto()
-          .then((res) => log(`Фото получено: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка снимка камеры: ${e.message}`, 'error'));
-      });
-
-      // ================= УПРАВЛЕНИЕ ПЛАТЕЖАМИ =================
-
-      document.getElementById('btn-pay-sparks').addEventListener('click', () => {
-        sdk.payments.invoice({ amount: 100, title: "Демо покупка" })
-          .then((res) => log(`Sparks Инвойс создан: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка Sparks Invoice: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-pay-crypto').addEventListener('click', () => {
-        sdk.payments.crypto({ symbol: "USDT", amount: 10 })
-          .then((res) => log(`Crypto запрос создан: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка Crypto Request: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-pay-solana').addEventListener('click', () => {
-        sdk.payments.solana({ amount: 0.1, recipient: "DemoSolanaAddressHere" })
-          .then((res) => log(`Solana платеж выполнен: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка Solana Payment: ${e.message}`, 'error'));
-      });
-
-      // ================= УПРАВЛЕНИЕ КОШЕЛЬКОМ И КОНТЕКСТОМ =================
-
-      document.getElementById('btn-req-context').addEventListener('click', () => {
-        sdk.requestContext()
-          .then((ctx) => {
-            log(`Запрошен контекст приложения: ${JSON.stringify(ctx)}`, 'sys');
-            updateUIWithInitData(ctx);
+        scanStatus.textContent = "Сканирование...";
+        logMiBand("Запуск sdk.bluetooth.startScan()");
+        sdk.bluetooth.startScan({ serviceUuids: [BLE_UUIDS.BATTERY_SERVICE, BLE_UUIDS.IMMEDIATE_ALERT_SERVICE] })
+          .then(() => {
+            logMiBand("Сканирование BLE запущено через NMASDK");
           })
-          .catch((e) => log(`Ошибка запроса контекста: ${e.message}`, 'error'));
+          .catch((err) => {
+            logMiBand("Ошибка старта сканирования: " + err.message, true);
+            scanStatus.textContent = "Ошибка сканирования";
+          });
       });
 
-      document.getElementById('btn-wallet-get').addEventListener('click', () => {
-        sdk.wallet.getState()
-          .then((w) => log(`Состояние кошелька: ${JSON.stringify(w)}`))
-          .catch((e) => log(`Ошибка кошелька: ${e.message}`, 'error'));
+      // Stop BLE Scan via SDK
+      document.getElementById("btn-miband-stop-scan")?.addEventListener("click", () => {
+        if (!mockToggle.checked) {
+          sdk.bluetooth.stopScan();
+        }
+        scanStatus.textContent = "Сканирование остановлено";
+        logMiBand("Остановка сканирования BLE");
       });
 
-      document.getElementById('btn-wallet-refresh').addEventListener('click', () => {
-        sdk.wallet.refresh();
-        log('Запрос обновления состояния кошелька отправлен.');
+      // Connect to selected device via SDK
+      document.getElementById("btn-miband-connect")?.addEventListener("click", () => {
+        const selectedId = deviceSelect.value;
+        if (!selectedId) {
+          logMiBand("Выберите устройство из списка!", true);
+          return;
+        }
+
+        connectedBandDeviceId = selectedId;
+        logMiBand(`Запрос подключения к ${selectedId} через sdk.bluetooth.connect()`);
+
+        if (mockToggle.checked) {
+          badgeConnection.textContent = "Подключен (Mock)";
+          badgeConnection.className = "text-[10px] bg-emerald-500/20 text-emerald-300 font-normal px-2 py-0.5 rounded-full border border-emerald-500/40";
+          logMiBand("Симулированное соединение с Mi Band 6 установлено!");
+          updateBatteryUI(87);
+          return;
+        }
+
+        sdk.bluetooth.connect(selectedId)
+          .then(() => {
+            logMiBand(`Успешный отклик подключения от хоста`);
+            return sdk.bluetooth.discoverServices(selectedId);
+          })
+          .then((services) => {
+            logMiBand(`Обнаружены сервисы BLE: ${JSON.stringify(services)}`);
+            // Подписываемся на батарею
+            return sdk.bluetooth.subscribe(selectedId, BLE_UUIDS.BATTERY_SERVICE, BLE_UUIDS.BATTERY_LEVEL_CHAR);
+          })
+          .then(() => {
+            logMiBand(`Подписка на уровень батареи оформлена.`);
+          })
+          .catch((err) => {
+            logMiBand(`Ошибка подключения: ${err.message}`, true);
+          });
       });
 
-      // ================= API REQUEST =================
+      // Disconnect via SDK
+      document.getElementById("btn-miband-disconnect")?.addEventListener("click", () => {
+        if (mockToggle.checked) {
+          badgeConnection.textContent = "Отключен";
+          badgeConnection.className = "text-[10px] bg-slate-700 text-slate-300 font-normal px-2 py-0.5 rounded-full border border-slate-600";
+          logMiBand("Симулированный сеанс завершен");
+          updateBatteryUI(0);
+          return;
+        }
 
-      document.getElementById('btn-api-send').addEventListener('click', () => {
-        const path = document.getElementById('api-path-input').value;
-        log(`Отправка API запроса: ${path}...`, 'sys');
-        sdk.api.request(path, { method: 'GET' })
-          .then((res) => log(`Ответ API: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка API: ${e.message}`, 'error'));
+        logMiBand(`Отключение от ${connectedBandDeviceId}`);
+        connectedBandDeviceId = null;
+        badgeConnection.textContent = "Отключен";
+        badgeConnection.className = "text-[10px] bg-slate-700 text-slate-300 font-normal px-2 py-0.5 rounded-full border border-slate-600";
       });
 
-      // === ПОДПИСКА НА ДАТЧИКИ И КУБ ===
+      // Read Battery Level via SDK
+      document.getElementById("btn-miband-read-battery")?.addEventListener("click", () => {
+        if (!connectedBandDeviceId && !mockToggle.checked) {
+          logMiBand("Сначала подключите Mi Band 6!", true);
+          return;
+        }
+
+        if (mockToggle.checked) {
+          const mockLevel = Math.floor(Math.random() * 30) + 70;
+          logMiBand(`[Mock] Чтение заряда аккумулятора... Получено: ${mockLevel}%`);
+          updateBatteryUI(mockLevel);
+          return;
+        }
+
+        logMiBand(`Вызов sdk.bluetooth.readRaw() для Battery Level...`);
+        sdk.bluetooth.readRaw(connectedBandDeviceId, BLE_UUIDS.BATTERY_SERVICE, BLE_UUIDS.BATTERY_LEVEL_CHAR)
+          .then((res) => {
+            logMiBand(`Ответ батареи hex/raw: ${JSON.stringify(res)}`);
+            parseBatteryData(res);
+          })
+          .catch((err) => {
+            logMiBand(`Ошибка чтения аккумулятора: ${err.message}`, true);
+          });
+      });
+
+      function parseBatteryData(rawData) {
+        let level = 0;
+        if (typeof rawData === "number") {
+          level = rawData;
+        } else if (typeof rawData === "string") {
+          level = parseInt(rawData, 16) || 0;
+        } else if (Array.isArray(rawData) && rawData.length > 0) {
+          level = rawData[0];
+        }
+        logMiBand(`Заряд Mi Band 6: ${level}%`);
+        updateBatteryUI(level);
+      }
+
+      function updateBatteryUI(percent) {
+        batteryVal.textContent = `${percent} %`;
+        batteryBar.style.width = `${percent}%`;
+        
+        if (percent > 50) {
+          batteryBar.className = "bg-emerald-500 h-full transition-all duration-500";
+        } else if (percent > 20) {
+          batteryBar.className = "bg-amber-500 h-full transition-all duration-500";
+        } else {
+          batteryBar.className = "bg-rose-500 h-full transition-all duration-500";
+        }
+      }
+
+      // VIBRATION COMMANDS via NMASDK Bluetooth sendRaw
+      function triggerBandVibration(levelHex, description) {
+        if (!connectedBandDeviceId && !mockToggle.checked) {
+          logMiBand("Сначала подключите Mi Band 6!", true);
+          return;
+        }
+
+        logMiBand(`Отправка команды вибрации [${description}] -> sendRaw Hex: "${levelHex}"`);
+
+        // Visual feedback
+        iconContainer.classList.add("vibrating");
+        setTimeout(() => iconContainer.classList.remove("vibrating"), 1200);
+
+        if (mockToggle.checked) {
+          logMiBand(`[Mock] Mi Band 6 успешно провибрировал (${description})!`);
+          return;
+        }
+
+        // Send Raw command directly through SDK Bluetooth tool
+        sdk.bluetooth.sendRaw(connectedBandDeviceId, {
+          serviceUuid: BLE_UUIDS.IMMEDIATE_ALERT_SERVICE,
+          characteristicUuid: BLE_UUIDS.ALERT_LEVEL_CHAR,
+          data: levelHex // "01" = Mild, "02" = High Alert
+        })
+        .then(() => {
+          logMiBand(`Команда вибрации [${levelHex}] успешно отправлена на Mi Band 6`);
+        })
+        .catch((err) => {
+          logMiBand(`Ошибка отправки вибрации: ${err.message}`, true);
+        });
+      }
+
+      document.getElementById("btn-miband-vib-mild")?.addEventListener("click", () => {
+        triggerBandVibration("01", "Мягкая вибрация");
+      });
+
+      document.getElementById("btn-miband-vib-strong")?.addEventListener("click", () => {
+        triggerBandVibration("02", "Сильная вибрация");
+      });
+
+      document.getElementById("btn-miband-vib-stop")?.addEventListener("click", () => {
+        triggerBandVibration("00", "Остановка вибрации");
+      });
+
+      document.getElementById("btn-miband-vib-pattern")?.addEventListener("click", () => {
+        logMiBand("Запуск шаблона поиска браслета (3 повтора вибрации)...");
+        let count = 0;
+        const interval = setInterval(() => {
+          triggerBandVibration("02", `Импульс поиска #${count + 1}`);
+          count++;
+          if (count >= 3) clearInterval(interval);
+        }, 800);
+      });
+
+      // Vibrator haptics on phone
+      document.getElementById("btn-vibrate-custom")?.addEventListener("click", () => {
+        const duration = parseInt(document.getElementById("vibrate-duration").value) || 200;
+        sdk.vibrator.vibrate(duration);
+        logEvent(`Вибрация устройства ${duration}мс`);
+      });
+
+      // Gyroscope simulation & cube rotation
+      let gyroActive = false;
+      document.getElementById("btn-gyro-start")?.addEventListener("click", () => {
+        gyroActive = true;
+        sdk.gyroscope.start();
+        document.getElementById("badge-gyro").className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
+        logEvent("Гироскоп запущен");
+      });
+
+      document.getElementById("btn-gyro-stop")?.addEventListener("click", () => {
+        gyroActive = false;
+        sdk.gyroscope.stop();
+        document.getElementById("badge-gyro").className = "w-2 h-2 rounded-full bg-slate-400";
+        logEvent("Гироскоп остановлен");
+      });
 
       sdk.gyroscope.onChange((data) => {
         if (!data) return;
-        const x = Number(data.x || 0);
-        const y = Number(data.y || 0);
-        const z = Number(data.z || 0);
+        document.getElementById("val-gyro-x").textContent = (data.x || 0).toFixed(2);
+        document.getElementById("val-gyro-y").textContent = (data.y || 0).toFixed(2);
+        document.getElementById("val-gyro-z").textContent = (data.z || 0).toFixed(2);
 
-        document.getElementById('val-gyro-x').textContent = x.toFixed(2);
-        document.getElementById('val-gyro-y').textContent = y.toFixed(2);
-        document.getElementById('val-gyro-z').textContent = z.toFixed(2);
-
-        updateCubeTransform(x, y, z);
-      });
-
-      sdk.accelerometer.onChange((data) => {
-        if (!data) return;
-        document.getElementById('val-acc-x').textContent = Number(data.x || 0).toFixed(2);
-        document.getElementById('val-acc-y').textContent = Number(data.y || 0).toFixed(2);
-        document.getElementById('val-acc-z').textContent = Number(data.z || 0).toFixed(2);
-      });
-
-      // ================= УПРАВЛЕНИЕ ДАТЧИКАМИ =================
-
-      // Гироскоп кнопки
-      document.getElementById('btn-gyro-start').addEventListener('click', () => {
-        sdk.gyroscope.start();
-        document.getElementById('badge-gyro').classList.replace('bg-slate-400', 'bg-emerald-500');
-        log('Отправлена команда: GYROSCOPE_START');
-      });
-
-      document.getElementById('btn-gyro-stop').addEventListener('click', () => {
-        sdk.gyroscope.stop();
-        document.getElementById('badge-gyro').classList.replace('bg-emerald-500', 'bg-slate-400');
-        log('Отправлена команда: GYROSCOPE_STOP');
-      });
-
-      document.getElementById('btn-gyro-get').addEventListener('click', () => {
-        sdk.gyroscope.getState()
-          .then((state) => {
-            log(`Гироскоп (Текущее состояние): ${JSON.stringify(state)}`);
-            if (state) {
-              const x = Number(state.x || 0);
-              const y = Number(state.y || 0);
-              const z = Number(state.z || 0);
-              document.getElementById('val-gyro-x').textContent = x.toFixed(2);
-              document.getElementById('val-gyro-y').textContent = y.toFixed(2);
-              document.getElementById('val-gyro-z').textContent = z.toFixed(2);
-              updateCubeTransform(x, y, z);
-            }
-          })
-          .catch((e) => log(`Ошибка запроса гироскопа: ${e.message}`, 'error'));
-      });
-
-      // Акселерометр кнопки
-      document.getElementById('btn-acc-start').addEventListener('click', () => {
-        sdk.accelerometer.start();
-        document.getElementById('badge-acc').classList.replace('bg-slate-400', 'bg-emerald-500');
-        log('Отправлена команда: ACCELEROMETER_START');
-      });
-
-      document.getElementById('btn-acc-stop').addEventListener('click', () => {
-        sdk.accelerometer.stop();
-        document.getElementById('badge-acc').classList.replace('bg-emerald-500', 'bg-slate-400');
-        log('Отправлена команда: ACCELEROMETER_STOP');
-      });
-
-      document.getElementById('btn-acc-get').addEventListener('click', () => {
-        sdk.accelerometer.getState()
-          .then((state) => {
-            log(`Акселерометр (Текущее состояние): ${JSON.stringify(state)}`);
-            if (state) {
-              document.getElementById('val-acc-x').textContent = Number(state.x || 0).toFixed(2);
-              document.getElementById('val-acc-y').textContent = Number(state.y || 0).toFixed(2);
-              document.getElementById('val-acc-z').textContent = Number(state.z || 0).toFixed(2);
-            }
-          })
-          .catch((e) => log(`Ошибка запроса акселерометра: ${e.message}`, 'error'));
-      });
-
-      // Эмуляция датчиков
-      let mockInterval = null;
-      document.getElementById('btn-mock-sensors').addEventListener('click', () => {
-        if (mockInterval) {
-          clearInterval(mockInterval);
-          mockInterval = null;
-          document.getElementById('btn-mock-sensors').textContent = 'Сэмулировать движение';
-          document.getElementById('badge-gyro').classList.replace('bg-emerald-500', 'bg-slate-400');
-          document.getElementById('badge-acc').classList.replace('bg-emerald-500', 'bg-slate-400');
-          log('Эмуляция датчиков остановлена.', 'sys');
-          return;
+        const cube = document.getElementById("gyro-cube");
+        if (cube) {
+          cube.style.transform = `rotateX(${data.x * 20}deg) rotateY(${data.y * 20}deg) rotateZ(${data.z * 20}deg)`;
         }
-
-        document.getElementById('btn-mock-sensors').textContent = 'Остановить эмуляцию';
-        document.getElementById('badge-gyro').classList.replace('bg-slate-400', 'bg-emerald-500');
-        document.getElementById('badge-acc').classList.replace('bg-slate-400', 'bg-emerald-500');
-        log('Запущено непрерывное движение...', 'sys');
-        
-        mockInterval = setInterval(() => {
-          const gX = (Math.sin(Date.now() / 400) * 1.5);
-          const gY = (Math.cos(Date.now() / 500) * 2.0);
-          const gZ = (Math.sin(Date.now() / 600) * 1.0);
-          
-          window.postMessage({
-            type: "NAJI_EVENT",
-            eventName: "gyroscopeChanged",
-            payload: { x: gX, y: gY, z: gZ }
-          }, "*");
-
-          const aX = (Math.random() * 0.4);
-          const aY = -9.8 + (Math.random() * 0.4);
-          const aZ = (Math.random() * 0.4);
-
-          window.postMessage({
-            type: "NAJI_EVENT",
-            eventName: "accelerometerChanged",
-            payload: { x: aX, y: aY, z: aZ }
-          }, "*");
-        }, 100);
       });
 
-      // ================= УПРАВЛЕНИЕ ВИБРАЦИЕЙ (VIBRATOR) =================
-
-      document.getElementById('btn-vibrate-custom').addEventListener('click', () => {
-        const durationInput = document.getElementById('vibrate-duration');
-        const duration = parseInt(durationInput.value, 10) || 200;
-        sdk.vibrator.vibrate(duration);
-        log(`Отправлен вызов вибрации: ${duration} мс`, 'sys');
-      });
-
-      document.getElementById('btn-vibrate-short').addEventListener('click', () => {
-        sdk.vibrator.vibrate(50);
-        log('Отправлен вызов короткой вибрации (50 мс)', 'sys');
-      });
-
-      document.getElementById('btn-vibrate-medium').addEventListener('click', () => {
-        sdk.vibrator.vibrate(200);
-        log('Отправлен вызов средней вибрации (200 мс)', 'sys');
-      });
-
-      document.getElementById('btn-vibrate-long').addEventListener('click', () => {
-        sdk.vibrator.vibrate(500);
-        log('Отправлен вызов сильной вибрации (500 мс)', 'sys');
-      });
-
-      // ================= УПРАВЛЕНИЕ NFC =================
-
-      sdk.nfc.onTagRead((tag) => {
-        log(`Событие 'nfcTagRead': Данные тэга -> ${JSON.stringify(tag)}`, 'sys');
-      });
-
-      document.getElementById('btn-nfc-check').addEventListener('click', () => {
-        Promise.all([sdk.nfc.isAvailable(), sdk.nfc.isEnabled()])
-          .then(([available, enabled]) => {
-            document.getElementById('val-nfc-available').textContent = available ? 'Да' : 'Нет';
-            document.getElementById('val-nfc-enabled').textContent = enabled ? 'Да' : 'Нет';
-            log(`Статус NFC проверен: Доступен = ${available}, Включен = ${enabled}`);
-          })
-          .catch((e) => log(`Ошибка проверки NFC: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-nfc-cancel').addEventListener('click', () => {
-        sdk.nfc.cancel();
-        log('Отправлена команда отмены NFC (Cancel)');
-      });
-
-      document.getElementById('btn-nfc-read').addEventListener('click', () => {
-        log('Режим чтения NFC запущен. Поднесите тэг...');
-        sdk.nfc.read()
-          .then((res) => {
-            log(`Результат чтения NFC: ${JSON.stringify(res)}`);
-          })
-          .catch((e) => log(`Ошибка чтения NFC: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-nfc-write').addEventListener('click', () => {
-        const textValue = document.getElementById('nfc-text-input').value;
-        const records = [
-          {
-            tnf: 1,
-            type: "T",
-            payload: textValue
-          }
-        ];
-        log(`Запуск записи на NFC-тэг. Данные: "${textValue}"`, 'sys');
-        sdk.nfc.write(records)
-          .then((res) => {
-            log(`Запись NFC успешно завершена`);
-          })
-          .catch((e) => log(`Ошибка записи NFC: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-nfc-share').addEventListener('click', () => {
-        const textValue = document.getElementById('nfc-text-input').value;
-        sdk.nfc.sharePayload(textValue)
-          .then(() => log(`Запущен шеринг payload по NFC: "${textValue}"`))
-          .catch((e) => log(`Ошибка запуска шеринга NFC: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-nfc-stop-share').addEventListener('click', () => {
-        sdk.nfc.stopShare();
-        log('Шеринг payload по NFC остановлен');
-      });
-
-      document.getElementById('btn-mock-nfc-read').addEventListener('click', () => {
-        const textValue = document.getElementById('nfc-text-input').value;
-        window.postMessage({
-          type: "NAJI_EVENT",
-          eventName: "nfcTagRead",
-          payload: {
-            id: "04:5F:12:8A:BC:3D:E0",
-            techList: ["android.nfc.tech.Ndef", "android.nfc.tech.NfcA"],
-            records: [
-              {
-                recordType: "text",
-                mediaType: "text/plain",
-                payload: textValue
-              }
-            ]
-          }
-        }, "*");
-        log('Симуляция: событие чтения NFC тэга отправлено.', 'sys');
-      });
-
-      // ================= IsoDep / APDU =================
-
-      let isoDepConnected = false;
-
-      document.getElementById('btn-isodep-connect').addEventListener('click', () => {
-        log('IsoDep: подключение к тэгу...', 'sys');
-        sdk.nfc.connectIsoDep()
-          .then((info) => {
-            isoDepConnected = true;
-            document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
-            log(`IsoDep: подключен. UID=${info.uid}, histBytes=${info.historicalBytes}`, 'sys');
-            epAppend(`✅ IsoDep: UID=${info.uid}`);
-            if (info.historicalBytes) epAppend(`📋 HistBytes: ${info.historicalBytes.slice(0, 60)}...`);
-            if (info.tech) epAppend(`📋 Tech: ${info.tech.join(', ')}`);
-          })
-          .catch((e) => log(`IsoDep: ошибка подключения: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-isodep-disconnect').addEventListener('click', () => {
-        sdk.nfc.disconnect();
-        isoDepConnected = false;
-        document.getElementById('badge-isodep').classList.replace('bg-emerald-500', 'bg-slate-400');
-        document.getElementById('isodep-response').value = '';
-        log('IsoDep: отключен', 'sys');
-      });
-
-      document.getElementById('btn-isodep-send').addEventListener('click', () => {
-        const cmd = document.getElementById('isodep-command').value;
-        log(`IsoDep: отправка APDU: ${cmd}`, 'sys');
-        sdk.nfc.transceive(cmd)
-          .then((resp) => {
-            document.getElementById('isodep-response').value = resp;
-            log(`IsoDep: ответ: ${resp}`, 'sys');
-          })
-          .catch((e) => log(`IsoDep: ошибка: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-isodep-select-mf').addEventListener('click', () => {
-        document.getElementById('isodep-command').value = '00A40000023F00';
-        document.getElementById('btn-isodep-send').click();
-      });
-
-      document.getElementById('btn-isodep-get-challenge').addEventListener('click', () => {
-        document.getElementById('isodep-command').value = '00A4000002';
-        document.getElementById('btn-isodep-send').click();
-      });
-
-      document.getElementById('btn-isodep-read-binary').addEventListener('click', () => {
-        document.getElementById('isodep-command').value = '00B0000000';
-        document.getElementById('btn-isodep-send').click();
-      });
-
-      // ================= ePassport BAC Reader =================
-
-      const epLog = document.getElementById('ep-log');
-
-      function epAppend(msg) {
-        epLog.value += msg + '\n';
-        epLog.scrollTop = epLog.scrollHeight;
-      }
-
-      function hexToBytes(hex) {
-        if (!hex || typeof hex !== 'string') return new Uint8Array(0);
-        const clean = hex.replace(/\s+/g, '');
-        if (!clean) return new Uint8Array(0);
-        const match = clean.match(/.{1,2}/g);
-        if (!match) return new Uint8Array(0);
-        return new Uint8Array(match.map(b => parseInt(b, 16)));
-      }
-
-      function bytesToHex(bytes) {
-        if (!bytes) return '';
-        const arr = new Uint8Array(bytes);
-        return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
-      }
-
-      function bytesToWA(b) { return CryptoJS.enc.Hex.parse(bytesToHex(b)); }
-      function waToBytes(wa) { return hexToBytes(CryptoJS.enc.Hex.stringify(wa)); }
-
-      function des3EncryptCBC(keyBytes, dataBytes, iv) {
-        const key = bytesToWA(keyBytes);
-        const data = bytesToWA(dataBytes);
-        const ivWA = bytesToWA(iv || new Uint8Array(8));
-        const enc = CryptoJS.TripleDES.encrypt(data, key, {
-          mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.NoPadding, iv: ivWA
-        });
-        return waToBytes(enc.ciphertext);
-      }
-
-      function des3DecryptCBC(keyBytes, dataBytes, iv) {
-        const key = bytesToWA(keyBytes);
-        const data = bytesToWA(dataBytes);
-        const ivWA = bytesToWA(iv || new Uint8Array(8));
-        const dec = CryptoJS.TripleDES.decrypt({ ciphertext: data, salt: null }, key, {
-          mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.NoPadding, iv: ivWA
-        });
-        return waToBytes(dec);
-      }
-
-      function isoPad(data, blockSize) {
-        const padLen = blockSize - (data.length % blockSize);
-        const padded = new Uint8Array(data.length + padLen);
-        padded.set(data);
-        padded[data.length] = 0x80;
-        return padded;
-      }
-
-      function desEncryptBlock(key8Bytes, data8Bytes) {
-        const key = bytesToWA(key8Bytes);
-        const data = bytesToWA(data8Bytes);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const enc = CryptoJS.DES.encrypt(data, key, {
-          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        return waToBytes(enc.ciphertext);
-      }
-
-      function desDecryptBlock(key8Bytes, data8Bytes) {
-        const key = bytesToWA(key8Bytes);
-        const data = bytesToWA(data8Bytes);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const dec = CryptoJS.DES.decrypt({ ciphertext: data, salt: null }, key, {
-          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        return waToBytes(dec);
-      }
-
-      function des3Mac(key16Bytes, dataBytes) {
-        const k1 = key16Bytes.slice(0, 8);
-        const k2 = key16Bytes.slice(8, 16);
-        const padded = isoPad(dataBytes, 8);
-
-        let y = new Uint8Array(8);
-
-        for (let i = 0; i < padded.length; i += 8) {
-          const block = padded.slice(i, i + 8);
-          const xorBlock = new Uint8Array(8);
-          for (let j = 0; j < 8; j++) {
-            xorBlock[j] = block[j] ^ y[j];
-          }
-          y = desEncryptBlock(k1, xorBlock);
+      document.getElementById("btn-mock-sensors")?.addEventListener("click", () => {
+        const mockX = (Math.random() * 4 - 2).toFixed(2);
+        const mockY = (Math.random() * 4 - 2).toFixed(2);
+        const mockZ = (Math.random() * 4 - 2).toFixed(2);
+        const cube = document.getElementById("gyro-cube");
+        if (cube) {
+          cube.style.transform = `rotateX(${mockX * 30}deg) rotateY(${mockY * 30}deg) rotateZ(${mockZ * 30}deg)`;
         }
-
-        const y2 = desDecryptBlock(k2, y);
-        const mac = desEncryptBlock(k1, y2);
-        return mac;
-      }
-
-      let bacKenc = null, bacKmac = null, bacSsc = null;
-
-      function parseMRZ(line2) {
-        const cleaned = line2.replace(/\s/g, '').toUpperCase();
-        return {
-          docNum: cleaned.slice(0, 9),
-          docCheck: cleaned[9],
-          dob: cleaned.slice(13, 19),
-          dobCheck: cleaned[19],
-          exp: cleaned.slice(21, 27),
-          expCheck: cleaned[27],
-          mrzNoChecks: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27),
-          mrzWithChecks: cleaned.slice(0, 9) + cleaned[9] + cleaned.slice(13, 19) + cleaned[19] + cleaned.slice(21, 27) + cleaned[27],
-          mrzFullLine: cleaned
-        };
-      }
-
-      function setOddParity(key) {
-        const res = new Uint8Array(key.length);
-        for (let i = 0; i < key.length; i++) {
-          let b = key[i];
-          let bits = 0;
-          for (let j = 0; j < 8; j++) if (b & (1 << j)) bits++;
-          if (bits % 2 === 0) b ^= 1;
-          res[i] = b;
-        }
-        return res;
-      }
-
-      async function deriveBacKeys(mrzInfo) {
-        const enc = new TextEncoder().encode(mrzInfo);
-        const hash = await crypto.subtle.digest('SHA-1', enc);
-        const kSeed = new Uint8Array(hash).slice(0, 16);
-
-        const dEnc = new Uint8Array(20);
-        dEnc.set(kSeed, 0);
-        dEnc.set([0x00, 0x00, 0x00, 0x01], 16);
-        const hashEnc = new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc));
-        bacKenc = setOddParity(hashEnc.slice(0, 16));
-
-        const dMac = new Uint8Array(20);
-        dMac.set(kSeed, 0);
-        dMac.set([0x00, 0x00, 0x00, 0x02], 16);
-        const hashMac = new Uint8Array(await crypto.subtle.digest('SHA-1', dMac));
-        bacKmac = setOddParity(hashMac.slice(0, 16));
-
-        return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
-      }
-
-      async function epReadDG(dgSfi, dgName) {
-        epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) в режиме Secure Messaging —`);
-        if (!bacSsc) {
-          epAppend('❌ Сначала пройдите аутентификацию (Read Passport)');
-          return;
-        }
-
-        try {
-          const p1 = 0x80 | dgSfi;
-          const headerHex = await sendSmApdu(0xB0, p1, 0x00, '', '04');
-          
-          if (!headerHex || headerHex.length < 4) {
-            throw new Error('Не удалось получить заголовок файла');
-          }
-
-          let dgLen = 0;
-          const lenByte = parseInt(headerHex.slice(2, 4), 16);
-
-          if (lenByte < 0x80) {
-            dgLen = lenByte + 2;
-          } else if (lenByte === 0x81) {
-            const l2 = parseInt(headerHex.slice(4, 6), 16);
-            dgLen = l2 + 3;
-          } else if (lenByte === 0x82) {
-            const l2 = parseInt(headerHex.slice(4, 8), 16);
-            dgLen = l2 + 4;
-          }
-
-          epAppend(`📊 Размер ${dgName}: ${dgLen} байт`);
-
-          let fullDataHex = '';
-          let offset = 0;
-          const chunkSize = 128;
-
-          while (offset < dgLen) {
-            const readLen = Math.min(chunkSize, dgLen - offset);
-            const p1Offset = Math.floor(offset / 256);
-            const p2Offset = offset % 256;
-            
-            const actualP1 = (offset === 0) ? p1 : p1Offset;
-            const leHex = readLen.toString(16).padStart(2, '0');
-            
-            const chunk = await sendSmApdu(0xB0, actualP1, p2Offset, '', leHex);
-            fullDataHex += chunk;
-            offset += chunk.length / 2;
-            
-            epAppend(`⏳ Прочитано: ${offset} / ${dgLen} байт`);
-          }
-
-          epAppend(`✅ ${dgName} УСПЕШНО ПРОЧИТАН!`);
-          epAppend(`📄 HEX (${fullDataHex.length / 2} байт):\n${fullDataHex}`);
-          document.getElementById('isodep-response').value = fullDataHex;
-
-        } catch (e) {
-          epAppend(`❌ Ошибка чтения ${dgName}: ${e.message}`);
-        }
-      }
-
-      async function rawTransceive(hex) {
-        const resp = await sdk.nfc.transceive(hex.replace(/\s+/g, ''));
-        if (!resp) throw new Error('no response from tag');
-        return resp;
-      }
-
-      const EP_AIDS = [
-        'A0000002470001',
-        'A0000002471001',
-        'A0000002472001',
-      ];
-
-      async function epGetCurrentApplet() {
-        epAppend('→ Запрос текущего applet');
-        const resp = await rawTransceive('00A4040000');
-        epAppend(`← ${resp}`);
-        return resp;
-      }
-
-      async function epSelectOrSkip() {
-        const current = await epGetCurrentApplet();
-        if (!current.endsWith('9000')) {
-          for (const p2 of ['00', '04', '0C']) {
-            for (const aid of EP_AIDS) {
-              const lc = aid.length / 2;
-              const lcHex = lc.toString(16).padStart(2, '0');
-              const cmd = `00A404${p2}${lcHex}${aid}`;
-              epAppend(`→ SELECT AID ${aid} P2=0x${p2}`);
-              try {
-                const resp = await rawTransceive(cmd);
-                epAppend(`← ${resp}`);
-                if (resp.endsWith('9000')) {
-                  epAppend(`✅ SELECT OK — AID: ${aid}`);
-                  return aid;
-                }
-              } catch (e) { epAppend(`← error: ${e.message}`); }
-            }
-          }
-          throw new Error('Не удалось SELECT ни один ePassport AID');
-        }
-        const data = current.slice(0, -4);
-        const aidMatch = data.match(/84([0-9a-f]{2})([0-9a-f]+)/i);
-        if (aidMatch) {
-          const aidLen = parseInt(aidMatch[1], 16) * 2;
-          const foundAid = aidMatch[2].slice(0, aidLen);
-          if (EP_AIDS.includes(foundAid.toUpperCase())) {
-            epAppend(`✅ Applet уже выбран: ${foundAid}`);
-            return foundAid.toUpperCase();
-          }
-        }
-        for (const aid of EP_AIDS) {
-          if (data.toUpperCase().includes(aid)) {
-            epAppend(`✅ Найден AID в FCI: ${aid}`);
-            return aid;
-          }
-        }
-        epAppend('⚠ Неизвестный applet — пробуем продолжить');
-        return null;
-      }
-
-      async function epGetChallenge() {
-        epAppend('→ GET CHALLENGE');
-        const resp = await rawTransceive('0084000008');
-        epAppend(`← ${resp}`);
-        if (resp.endsWith('9000')) epAppend('✅ CHALLENGE OK');
-        else throw new Error('GET CHALLENGE failed: ' + resp.slice(-4));
-        return hexToBytes(resp.slice(0, -4));
-      }
-
-      async function epMutualAuth(rndIcc) {
-        epAppend('— MUTUAL AUTHENTICATE —');
-        
-        const rndIfd = crypto.getRandomValues(new Uint8Array(8));
-        const kifd = crypto.getRandomValues(new Uint8Array(16));
-
-        const s = new Uint8Array(32);
-        s.set(rndIfd, 0);
-        s.set(rndIcc, 8);
-        s.set(kifd, 16);
-
-        const encS = des3EncryptCBC(bacKenc, s, new Uint8Array(8));
-        const macS = des3Mac(bacKmac, encS);
-
-        const data = bytesToHex(encS) + bytesToHex(macS);
-        const lcHex = (data.length / 2).toString(16).padStart(2, '0');
-        const cmd = '00820000' + lcHex + data + '08';
-        
-        epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08`);
-        const resp = await rawTransceive(cmd);
-        epAppend(`← ${resp}`);
-
-        if (!resp.endsWith('9000')) {
-          throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
-        }
-
-        const respData = hexToBytes(resp.slice(0, -4));
-        const encResp = respData.slice(0, respData.length - 8);
-        const respMac = respData.slice(respData.length - 8);
-
-        const expectedMac = des3Mac(bacKmac, encResp);
-        let macOk = true;
-        for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
-
-        if (!macOk) { 
-          epAppend('⚠ MAC ответа не совпал'); 
-          return false; 
-        }
-
-        const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
-        const rndIccBack = decResp.slice(0, 8);
-        const kicc = decResp.slice(16, 32);
-
-        let rndOk = true;
-        for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
-        if (!rndOk) { 
-          epAppend('⚠ RND.ICC не совпал'); 
-          return false; 
-        }
-
-        epAppend('✅ Mutual Auth OK!');
-
-        const kSeed = new Uint8Array(16);
-        for (let i = 0; i < 16; i++) kSeed[i] = kifd[i] ^ kicc[i];
-
-        bacSsc = new Uint8Array(8);
-        bacSsc.set(rndIcc.slice(4, 8), 0);
-        bacSsc.set(rndIfd.slice(4, 8), 4);
-
-        const dEnc = new Uint8Array(20); dEnc.set(kSeed, 0); dEnc.set([0,0,0,1], 16);
-        bacKenc = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc)).slice(0, 16));
-
-        const dMac = new Uint8Array(20); dMac.set(kSeed, 0); dMac.set([0,0,0,2], 16);
-        bacKmac = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dMac)).slice(0, 16));
-
-        epAppend('🔐 Сессия установлена. Переход в Secure Messaging.');
-        return true;
-      }
-
-      function parseDoTags(hex) {
-        const dos = {};
-        let offset = 0;
-        while (offset < hex.length) {
-          const tag = hex.slice(offset, offset + 2).toUpperCase();
-          offset += 2;
-          if (!tag || tag.length < 2) break;
-          
-          let len = parseInt(hex.slice(offset, offset + 2), 16);
-          offset += 2;
-          if (isNaN(len)) break;
-          
-          if (len & 0x80) {
-            const numBytes = len & 0x7F;
-            len = parseInt(hex.slice(offset, offset + numBytes * 2), 16);
-            offset += numBytes * 2;
-          }
-          
-          const val = hex.slice(offset, offset + len * 2);
-          offset += len * 2;
-          dos[tag] = val;
-        }
-        return dos;
-      }
-
-      async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
-        if (!bacSsc || !bacKenc || !bacKmac) {
-          throw new Error('Сессия Secure Messaging не активна');
-        }
-
-        for (let i = 7; i >= 0; i--) {
-          bacSsc[i]++;
-          if (bacSsc[i] !== 0) break;
-        }
-
-        const sscBytes = bacSsc.slice();
-
-        let do87Hex = '';
-        if (dataHex && dataHex.length > 0) {
-          const paddedData = isoPad(hexToBytes(dataHex), 8);
-          const encData = des3EncryptCBC(bacKenc, paddedData, new Uint8Array(8));
-          const encHex = bytesToHex(encData);
-          const payloadHex = '01' + encHex;
-          const payloadLen = payloadHex.length / 2;
-          const lenField = payloadLen < 0x80 
-            ? payloadLen.toString(16).padStart(2, '0') 
-            : '81' + payloadLen.toString(16).padStart(2, '0');
-          do87Hex = '87' + lenField + payloadHex;
-        }
-
-        let do97Hex = '';
-        if (leHex !== null && leHex !== undefined && leHex !== '') {
-          do97Hex = '9701' + leHex.padStart(2, '0');
-        }
-
-        const headerBytes = new Uint8Array([0x0C, ins, p1, p2]);
-        const paddedHeader = isoPad(headerBytes, 8);
-
-        const macInput = new Uint8Array([
-          ...sscBytes,
-          ...paddedHeader,
-          ...hexToBytes(do87Hex),
-          ...hexToBytes(do97Hex)
-        ]);
-
-        const macBytes = des3Mac(bacKmac, macInput);
-        const do8eHex = '8E08' + bytesToHex(macBytes);
-
-        const doBodyHex = do87Hex + do97Hex + do8eHex;
-        const lcHex = (doBodyHex.length / 2).toString(16).padStart(2, '0');
-        const smApduHex = `0C${ins.toString(16).padStart(2, '0')}${p1.toString(16).padStart(2, '0')}${p2.toString(16).padStart(2, '0')}${lcHex}${doBodyHex}00`;
-
-        const respHex = await rawTransceive(smApduHex);
-        if (!respHex) throw new Error('Чип не ответил');
-
-        const status = respHex.slice(-4);
-        if (status !== '9000') {
-          throw new Error(`Статус чипа: ${status}`);
-        }
-
-        for (let i = 7; i >= 0; i--) {
-          bacSsc[i]++;
-          if (bacSsc[i] !== 0) break;
-        }
-
-        const respDataHex = respHex.slice(0, -4);
-        const dos = parseDoTags(respDataHex);
-        
-        let plainDataHex = '';
-        if (dos['87']) {
-          let encPayload = dos['87'];
-          if (encPayload.startsWith('01')) {
-            encPayload = encPayload.slice(2);
-          }
-          
-          const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encPayload), new Uint8Array(8));
-          
-          let unpaddedLen = decBytes.length;
-          while (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x00) unpaddedLen--;
-          if (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x80) unpaddedLen--;
-          
-          plainDataHex = bytesToHex(decBytes.slice(0, unpaddedLen));
-        }
-
-        return plainDataHex;
-      }
-
-      async function readPassport() {
-        const mrzInput = document.getElementById('ep-mrz').value.trim();
-        if (!mrzInput) { epAppend('❌ Введи 2-ю строку MRZ'); return; }
-        epAppend('');
-        epAppend('==== ePassport Read ====');
-        epAppend(`MRZ: ${mrzInput}`);
-
-        let parsed;
-        try {
-          parsed = parseMRZ(mrzInput);
-          epAppend(`MRZ info (без чеков): ${parsed.mrzNoChecks}`);
-          epAppend(`MRZ info (с чеками): ${parsed.mrzWithChecks}`);
-        } catch (e) { epAppend(`❌ MRZ parse error: ${e.message}`); return; }
-
-        if (!isoDepConnected) {
-          epAppend('❌ Сначала подключись к NFC (Connect)');
-          return;
-        }
-
-        bacSsc = null;
-
-        try {
-          await epSelectOrSkip();
-        } catch (e) {
-          epAppend(`❌ SELECT: ${e.message}`);
-          return;
-        }
-
-        const mrzVariants = [
-          { label: 'без контрольных цифр', mrzInfo: parsed.mrzNoChecks },
-          { label: 'с контрольными цифрами', mrzInfo: parsed.mrzWithChecks },
-          { label: 'вся строка целиком', mrzInfo: parsed.mrzFullLine },
-        ];
-
-        for (const variant of mrzVariants) {
-          epAppend(`\n— Попытка ${variant.label}: "${variant.mrzInfo}" —`);
-          const hash = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(variant.mrzInfo));
-          epAppend(`SHA-1: ${bytesToHex(new Uint8Array(hash))}`);
-
-          try {
-            const keys = await deriveBacKeys(variant.mrzInfo);
-            epAppend(`Kenc: ${keys.kenc}`);
-            epAppend(`Kmac: ${keys.kmac}`);
-          } catch (e) { epAppend(`❌ Key derivation: ${e.message}`); continue; }
-
-          try {
-            const rndIcc = await epGetChallenge();
-            epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
-
-            const authOk = await epMutualAuth(rndIcc);
-            if (authOk) {
-              document.getElementById('badge-epassport').classList.replace('bg-slate-400', 'bg-emerald-500');
-              epAppend(`✅ Аутентификация пройдена! Ключи: ${variant.label}`);
-              return;
-            }
-          } catch (e) {
-            epAppend(`❌ ${e.message}`);
-          }
-        }
-
-        epAppend('\n💡 Не удалось аутентифицироваться ни с одним вариантом ключей');
-      }
-
-      async function epSelectAndChallenge() {
-        if (!isoDepConnected) { epAppend('❌ Сначала Connect'); return; }
-        epAppend('');
-        epAppend('— SELECT + CHALLENGE —');
-        try {
-          await epSelectOrSkip();
-          const rndIcc = await epGetChallenge();
-          epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
-        } catch (e) { epAppend(`❌ ${e.message}`); }
-      }
-
-      document.getElementById('btn-ep-read').addEventListener('click', readPassport);
-      document.getElementById('btn-ep-select-only').addEventListener('click', epSelectAndChallenge);
-      document.getElementById('btn-ep-dg1').addEventListener('click', async () => {
-        try { await epReadDG(1, 'DG1'); } catch (e) { epAppend(`❌ DG1: ${e.message}`); }
-      });
-      document.getElementById('btn-ep-dg2').addEventListener('click', async () => {
-        try { await epReadDG(2, 'DG2'); } catch (e) { epAppend(`❌ DG2: ${e.message}`); }
+        document.getElementById("val-gyro-x").textContent = mockX;
+        document.getElementById("val-gyro-y").textContent = mockY;
+        document.getElementById("val-gyro-z").textContent = mockZ;
+        logEvent("Симуляция поворота гироскопа", { x: mockX, y: mockY, z: mockZ });
       });
 
-      // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
-
-      document.getElementById('btn-contacts-list').addEventListener('click', () => {
-        sdk.contacts.list()
-          .then((contacts) => {
-            log(`Контакты получены: ${contacts.length} шт.`);
-            console.log(contacts);
-          })
-          .catch((e) => log(`Ошибка получения контактов: ${e.message}`, 'error'));
+      // Storage handlers
+      document.getElementById("btn-store-set")?.addEventListener("click", () => {
+        const k = document.getElementById("storage-key").value;
+        const v = document.getElementById("storage-value").value;
+        sdk.storage.set(k, v)
+          .then(() => logEvent(`Storage Set: ${k} = ${v}`))
+          .catch((err) => logEvent("Storage Set Error", err.message));
       });
 
-      document.getElementById('btn-contacts-share').addEventListener('click', () => {
-        sdk.contacts.share({ text: "Привет! Заходи в моё мини-приложение." })
-          .then(() => log(`Запрос на отправку успешно обработан`))
-          .catch((e) => log(`Ошибка отправки: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-contacts-invite').addEventListener('click', () => {
-        sdk.contacts.invite({ text: "Присоединяйся к игре в моей комнате!" })
-          .then(() => log(`Запрос на приглашение успешно обработан`))
-          .catch((e) => log(`Ошибка приглашения: ${e.message}`, 'error'));
-      });
-
-      // ================= СИСТЕМНЫЕ КНОПКИ И ХРАНИЛИЩЕ =================
-
-      document.getElementById('btn-expand').addEventListener('click', () => sdk.expand());
-      document.getElementById('btn-collapse').addEventListener('click', () => sdk.collapse());
-      document.getElementById('btn-close').addEventListener('click', () => sdk.close());
-      document.getElementById('btn-ping').addEventListener('click', () => {
-        sdk.ping().then(() => log('Ping успешный (Pong получен)')).catch(e => log(`Ping error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-set-header').addEventListener('click', () => {
-        const color = document.getElementById('header-color-picker').value;
-        sdk.setHeaderColor(color);
-        log(`Отправлен запрос на изменение цвета шапки: ${color}`);
-      });
-
-      document.getElementById('btn-back-show').addEventListener('click', () => sdk.backButton.show());
-      document.getElementById('btn-back-hide').addEventListener('click', () => sdk.backButton.hide());
-
-      // Работа с хранилищем (Storage)
-      document.getElementById('btn-store-set').addEventListener('click', () => {
-        const key = document.getElementById('storage-key').value;
-        const val = document.getElementById('storage-value').value;
-        sdk.storage.set(key, val)
-          .then(() => log(`Хранилище: Записан ключ [${key}]`))
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-store-get').addEventListener('click', () => {
-        const key = document.getElementById('storage-key').value;
-        sdk.storage.get(key)
-          .then(res => {
-            log(`Хранилище: Получено значение для [${key}] -> "${res}"`);
-            if (res) document.getElementById('storage-value').value = res;
-          })
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-store-del').addEventListener('click', () => {
-        const key = document.getElementById('storage-key').value;
-        sdk.storage.remove(key)
-          .then(() => log(`Хранилище: Ключ [${key}] удален`))
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-store-keys').addEventListener('click', () => {
-        sdk.storage.keys()
-          .then(keys => log(`Хранилище: Доступные ключи: [${keys.join(', ')}]`))
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
-      });
-
-      // Всплывающие окна (UI)
-      document.getElementById('btn-ui-toast').addEventListener('click', () => {
-        const msg = document.getElementById('ui-message').value;
-        sdk.ui.toast(msg).then(() => log(`Toast отправлен: "${msg}"`));
-      });
-
-      document.getElementById('btn-ui-alert').addEventListener('click', () => {
-        const msg = document.getElementById('ui-message').value;
-        sdk.ui.alert(msg);
-        log(`Вызван Alert с текстом: "${msg}"`);
-      });
-
-      document.getElementById('btn-ui-copy').addEventListener('click', () => {
-        const msg = document.getElementById('ui-message').value;
-        sdk.ui.copy(msg)
-          .then(() => log(`Текст скопирован в буфер`))
-          .catch(e => log(`Ошибка копирования: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-ui-link').addEventListener('click', () => {
-        sdk.ui.openLink('https://naji.com')
-          .then(() => log(`Запрос на открытие внешней ссылки отправлен`))
-          .catch(e => log(`Ошибка открытия ссылки: ${e.message}`, 'error'));
-      });
-
-      // Мультиплеер
-      document.getElementById('btn-mp-create').addEventListener('click', () => {
-        sdk.multiplayer.createRoom({ maxPlayers: 4 })
-          .then(state => log(`Мультиплеер: Комната создана. ID: ${state?.room?.id}`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-join').addEventListener('click', () => {
-        const roomId = prompt("Введите ID комнаты:");
-        if (!roomId) return;
-        sdk.multiplayer.joinRoom({ roomId })
-          .then(state => log(`Мультиплеер: Подключение к комнате ${roomId}`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-match').addEventListener('click', () => {
-        sdk.multiplayer.joinMatchmaking()
-          .then(state => log(`Мультиплеер: Начало подбора игроков`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-leave').addEventListener('click', () => {
-        sdk.multiplayer.leaveRoom()
-          .then(() => log(`Мультиплеер: Сессия покинута`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-send-fast').addEventListener('click', () => {
-        sdk.multiplayer.send('player_move', { x: 10, y: 25 }, { transient: true })
-          .then(res => log(`Быстрое событие отправлено: ${JSON.stringify(res)}`))
-          .catch(e => log(`Мультиплеер Event Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-update-state').addEventListener('click', () => {
-        sdk.multiplayer.updateState({ score: 100, health: 95 })
-          .then(res => log(`Состояние игры обновлено: ${JSON.stringify(res)}`))
-          .catch(e => log(`Мультиплеер State Error: ${e.message}`, 'error'));
-      });
-
-      // Голосовой чат
-      document.getElementById('btn-voice-join').addEventListener('click', () => {
-        sdk.voice.join()
-          .then(state => log('Голос: Подключено'))
-          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-voice-leave').addEventListener('click', () => {
-        sdk.voice.leave()
-          .then(() => log('Голос: Отключено'))
-          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-voice-mute').addEventListener('click', () => {
-        sdk.voice.toggleMuted()
-          .then(state => log(`Голос: Микрофон изменен. Muted: ${state?.muted}`))
-          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
-      });
-
-      // Геймпад и Ориентация
-      document.getElementById('btn-orient-refresh').addEventListener('click', () => {
-        sdk.orientation.getState().then(res => log(`Ориентация обновлена: ${JSON.stringify(res)}`));
-      });
-
-      document.getElementById('btn-gamepad-refresh').addEventListener('click', () => {
-        sdk.gamepad.getState().then(res => log(`Состояние геймпадов опрошено. Найдено устройств: ${res?.length || 0}`));
-      });
-
-      document.getElementById('btn-clear-logs').addEventListener('click', () => {
-        logContainer.innerHTML = '';
-        log('Лог очищен.', 'sys');
+      document.getElementById("btn-store-get")?.addEventListener("click", () => {
+        const k = document.getElementById("storage-key").value;
+        sdk.storage.get(k)
+          .then((val) => logEvent(`Storage Get (${k}):`, val))
+          .catch((err) => logEvent("Storage Get Error", err.message));
       });
     });
   </script>
