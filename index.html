@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, Bluetooth LEGO Boost, датчики, вибрация, 60fps Camera, платежи)</title>
+  <title>NajiMiniApp SDK Demo (NFC, Bluetooth LEGO Mario, датчики, вибрация, 60fps Camera, платежи)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
@@ -61,7 +61,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, Bluetooth LEGO Boost, датчиков, вибрации, NFC, 60fps Камеры и Платежей</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, Bluetooth LEGO Mario, датчиков, вибрации, NFC, 60fps Камеры и Платежей</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -163,7 +163,7 @@
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, Bluetooth LEGO Boost, API, Камера, Платежи -->
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, Bluetooth LEGO Mario, API, Камера, Платежи -->
     <div class="space-y-6 md:col-span-2">
       
       <!-- Логирование событий -->
@@ -177,25 +177,25 @@
         </div>
       </section>
 
-      <!-- BLUETOOTH & LEGO BOOST CONTROL PANEL -->
+      <!-- BLUETOOTH & LEGO SUPER MARIO CONTROL PANEL -->
       <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div class="flex justify-between items-center border-b pb-2">
           <div>
             <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900 flex items-center gap-2">
-              <span>Bluetooth & LEGO Boost (Move Hub 17101)</span>
+              <span class="text-red-600 font-bold">🍄 Bluetooth LEGO Super Mario</span>
             </h2>
-            <p class="text-[11px] text-slate-500">Сканирование BLE, отправка LWP3 команд и управление роботом</p>
+            <p class="text-[11px] text-slate-500">Интерактивный сканер сканирования цветов, штрихкодов, датчиков движения и костюма (71360 / 71387 / 71403)</p>
           </div>
           <span id="badge-ble" class="w-3 h-3 rounded-full bg-slate-400" title="Bluetooth Статус"></span>
         </div>
 
-        <!-- Подключение Bluetooth -->
+        <!-- Поиск и Подключение BLE -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border">
           <div class="space-y-2">
-            <label class="font-bold text-slate-700 block">1. Сканирование BLE устройств</label>
+            <label class="font-bold text-slate-700 block">1. Сканирование Марио / Луиджи / Пич</label>
             <div class="flex gap-1">
-              <button id="btn-ble-scan" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1.5 rounded flex-1 transition">
-                Искать LEGO Boost
+              <button id="btn-ble-scan" class="bg-red-600 hover:bg-red-700 text-white font-medium px-3 py-1.5 rounded flex-1 transition shadow">
+                Искать LEGO Mario
               </button>
               <button id="btn-ble-stop" class="border border-slate-200 hover:bg-slate-100 px-2 py-1.5 rounded">
                 Стоп
@@ -204,10 +204,10 @@
           </div>
 
           <div class="space-y-2">
-            <label class="font-bold text-slate-700 block">2. Выбор и Подключение</label>
+            <label class="font-bold text-slate-700 block">2. Подключение к фигурке</label>
             <div class="flex gap-1">
-              <select id="ble-device-select" class="flex-1 border rounded p-1 text-xs focus:outline-indigo-500">
-                <option value="">-- Выберите устройство --</option>
+              <select id="ble-device-select" class="flex-1 border rounded p-1 text-xs focus:outline-red-500">
+                <option value="">-- Выберите фигурку --</option>
               </select>
               <button id="btn-ble-connect" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded transition">
                 Connect
@@ -216,63 +216,79 @@
           </div>
         </div>
 
-        <!-- Интерфейс управления LEGO Boost (Move Hub) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- HUD ТЕЛЕМЕТРИИ MARIO В РЕАЛЬНОМ ВРЕМЕНИ -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           
-          <!-- Движение / Пульт управления -->
-          <div class="space-y-3 bg-slate-50 p-3 rounded-lg border">
-            <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Движение Робота (Порт AB)</span>
-            
-            <div class="flex flex-col items-center gap-1.5 py-1">
-              <button id="btn-lego-forward" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
-                ▲ Вперед
-              </button>
-              <div class="flex gap-2">
-                <button id="btn-lego-left" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
-                  ◄ Влево
-                </button>
-                <button id="btn-lego-stop" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold w-16 py-2 rounded shadow">
-                  СТОП
-                </button>
-                <button id="btn-lego-right" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
-                  Вправо ►
-                </button>
-              </div>
-              <button id="btn-lego-backward" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
-                ▼ Назад
-              </button>
+          <!-- Сканируемая Поверхность / Цвет -->
+          <div class="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 flex flex-col justify-between items-center text-center">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Текущая Поверхность</span>
+            <div id="mario-surface-card" class="my-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 font-bold text-sm transition-all border border-slate-700">
+              <span id="mario-surface-text">Неизвестно</span>
             </div>
+            <span id="mario-barcode-val" class="text-[10px] font-mono text-amber-400">Barcode Hex: --</span>
+          </div>
 
-            <!-- Раздельные моторы -->
-            <div class="pt-2 border-t space-y-1.5 text-[11px]">
-              <span class="text-slate-500 font-medium block">Раздельные моторы A / B:</span>
-              <div class="grid grid-cols-2 gap-1.5">
-                <button id="btn-lego-motor-a" class="border border-slate-300 hover:bg-slate-200 py-1 rounded">Мотор A (Вращать)</button>
-                <button id="btn-lego-motor-b" class="border border-slate-300 hover:bg-slate-200 py-1 rounded">Мотор B (Вращать)</button>
-              </div>
+          <!-- Жесты / Движение Марио -->
+          <div class="bg-slate-900 text-white p-3 rounded-xl border border-slate-800 flex flex-col justify-between items-center text-center">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Движение / Состояние</span>
+            <div id="mario-pose-badge" class="my-2 text-2xl font-black text-indigo-400">
+              🚶 Стоит
+            </div>
+            <span id="mario-pants-status" class="text-[10px] text-slate-400">Костюм: Обычные штаны</span>
+          </div>
+
+          <!-- Собранные Монетки / Заряд -->
+          <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl flex flex-col justify-between items-center text-center">
+            <span class="text-[10px] text-amber-700 font-bold uppercase tracking-wider">Счетчик Монеток</span>
+            <div class="my-1 flex items-center gap-1 text-2xl font-black text-amber-600">
+              🪙 <span id="mario-coins-count">0</span>
+            </div>
+            <div class="flex justify-between w-full text-[10px] text-amber-800 pt-1 border-t border-amber-200/60">
+              <span>Батарея: <b id="mario-battery-val">--%</b></span>
+              <button id="btn-mario-req-battery" class="underline hover:text-amber-900">Запросить</button>
             </div>
           </div>
 
-          <!-- Управление Светодиодом (LED) и Raw Hex -->
-          <div class="space-y-3 bg-slate-50 p-3 rounded-lg border flex flex-col justify-between">
-            <div class="space-y-2">
-              <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Цвет Светодиода (LED Port 0x32)</span>
-              <div class="grid grid-cols-3 gap-1.5 text-[10px]">
-                <button data-color="09" class="btn-lego-led bg-rose-500 text-white py-1.5 rounded font-bold">Красный</button>
-                <button data-color="05" class="btn-lego-led bg-emerald-500 text-white py-1.5 rounded font-bold">Зеленый</button>
-                <button data-color="03" class="btn-lego-led bg-blue-500 text-white py-1.5 rounded font-bold">Синий</button>
-                <button data-color="07" class="btn-lego-led bg-amber-400 text-slate-900 py-1.5 rounded font-bold">Желтый</button>
-                <button data-color="0a" class="btn-lego-led bg-white text-slate-800 border py-1.5 rounded font-bold">Белый</button>
-                <button data-color="00" class="btn-lego-led bg-slate-800 text-white py-1.5 rounded font-bold">Выключить</button>
+        </div>
+
+        <!-- УПРАВЛЕНИЕ ПОДПИСКАМИ И КОМАНДАМИ LEGO MARIO -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t">
+          
+          <!-- Настройка датчиков Марио -->
+          <div class="space-y-2 bg-slate-50 p-3 rounded-lg border">
+            <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Активация Датчиков Фигурки</span>
+            <div class="grid grid-cols-1 gap-1.5 text-[11px]">
+              <button id="btn-mario-sub-barcode" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-2 rounded font-medium text-left flex justify-between items-center">
+                <span>1. Включить Сканер Цвета / Тегов</span>
+                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 1/3</span>
+              </button>
+              <button id="btn-mario-sub-motion" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-2 rounded font-medium text-left flex justify-between items-center">
+                <span>2. Включить Движение / Акселерометр</span>
+                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 0</span>
+              </button>
+              <button id="btn-mario-sub-pants" class="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-2 rounded font-medium text-left flex justify-between items-center">
+                <span>3. Включить Датчик Костюма</span>
+                <span class="text-[9px] bg-indigo-800/50 px-1 rounded">Port 2</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Команды и Симуляция -->
+          <div class="space-y-2 bg-slate-50 p-3 rounded-lg border flex flex-col justify-between">
+            <div>
+              <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Команды и Эмуляция</span>
+              <div class="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
+                <button id="btn-mario-off" class="bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 py-1.5 rounded font-medium">Выключить Марио</button>
+                <button id="btn-mario-mock-scan" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-1.5 rounded font-medium">Эмулировать Сканирование</button>
               </div>
             </div>
 
-            <!-- Произвольная LWP3 HEX Команда -->
-            <div class="space-y-1 pt-2 border-t">
-              <label class="text-[10px] text-slate-500 block">Отправка RAW LWP3 Hex Команды</label>
+            <!-- Произвольная RAW Команда LWP3 -->
+            <div class="space-y-1 border-t pt-1.5">
+              <label class="text-[10px] text-slate-500 block">RAW LWP3 Hex Команда</label>
               <div class="flex gap-1">
-                <input type="text" id="lego-raw-hex" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" value="0800813211510005" placeholder="HEX bytes">
-                <button id="btn-lego-send-raw" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-xs font-medium">Send</button>
+                <input type="text" id="mario-raw-hex" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-red-500" value="0a004101000100000001" placeholder="HEX">
+                <button id="btn-mario-send-raw" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-xs font-medium">Send</button>
               </div>
             </div>
           </div>
@@ -757,7 +773,6 @@
         document.getElementById('val-sparks').textContent = sdk.sparks?.balance || 0;
         document.getElementById('val-wallet').textContent = data.wallet ? (data.wallet.address || 'Подключен') : 'Отсутствует';
         
-        // Свойства модулей
         document.getElementById('val-orientation').textContent = JSON.stringify(sdk.orientation) || 'N/A';
         document.getElementById('val-gamepad-support').textContent = sdk.gamepadSupported ? 'Да' : 'Нет';
         document.getElementById('val-gamepad-count').textContent = sdk.gamepads.length;
@@ -768,7 +783,7 @@
         }
       }
 
-      // Эмуляция данных (для тестирования во внешнем браузере)
+      // Эмуляция данных
       function mockInitData() {
         const mockData = {
           type: "NAJI_INIT_DATA",
@@ -798,86 +813,33 @@
       });
 
       sdk.on('themeChanged', (theme) => {
-        log(`Событие 'themeChanged': ${theme}`);
         document.getElementById('val-theme').textContent = theme;
       });
 
       sdk.on('walletChanged', (wallet) => {
-        log(`Событие 'walletChanged': ${JSON.stringify(wallet)}`);
         document.getElementById('val-wallet').textContent = wallet ? (wallet.address || 'Подключен') : 'Отсутствует';
       });
 
       sdk.on('orientationChanged', (orientation) => {
-        log(`Событие 'orientationChanged': ${JSON.stringify(orientation)}`);
         document.getElementById('val-orientation').textContent = JSON.stringify(orientation);
       });
 
       sdk.on('gamepadsChanged', (payload) => {
-        log(`Событие 'gamepadsChanged'. Найдено геймпадов: ${payload?.gamepads?.length || 0}`);
         document.getElementById('val-gamepad-count').textContent = payload?.gamepads?.length || 0;
       });
 
-      sdk.on('gamepadConnected', (payload) => {
-        log(`Геймпад подключен: ${payload?.gamepad?.id || 'Устройство'}`);
-      });
-
-      sdk.on('gamepadDisconnected', (payload) => {
-        log(`Геймпад отключен: ${payload?.gamepad?.id || 'Устройство'}`, 'warning');
-      });
-
-      sdk.on('backButtonClicked', () => {
-        log(`Событие 'backButtonClicked': Нажата системная кнопка «Назад»`, 'warning');
-      });
-
-      sdk.on('launchParamsChanged', (params) => {
-        log(`Событие 'launchParamsChanged': ${JSON.stringify(params)}`);
-        document.getElementById('val-start-params').textContent = JSON.stringify(sdk.startParams) || 'нет';
-      });
-
-      sdk.on('multiplayerStateChanged', (state) => {
-        log(`Событие 'multiplayerStateChanged': ${JSON.stringify(state)}`);
-        document.getElementById('val-mp-room').textContent = state?.room?.id || '-';
-        document.getElementById('val-mp-queue').textContent = state?.queue ? 'В поиске' : 'Нет';
-      });
-
-      sdk.on('multiplayerMatchFound', (payload) => {
-        log(`Мультиплеер: Матч найден! ${JSON.stringify(payload)}`, 'sys');
-      });
-
-      sdk.multiplayer.onEvent((payload) => {
-        log(`Мультиплеер Ивент (onEvent): ${JSON.stringify(payload)}`);
-      });
-
-      sdk.on('voiceStateChanged', (state) => {
-        log(`Событие 'voiceStateChanged': ${JSON.stringify(state)}`);
-        document.getElementById('val-voice-status').textContent = state?.active ? 'Активен' : 'Отключен';
-        document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
-      });
-
-      sdk.on('voiceParticipantsChanged', (participants) => {
-        log(`Событие 'voiceParticipantsChanged'. Участников: ${participants.length}`);
-        document.getElementById('val-voice-count').textContent = participants.length;
-      });
-
-      sdk.voice.onParticipantJoined((p) => {
-        log(`Голос: Участник присоединился: ${JSON.stringify(p)}`, 'sys');
-      });
-
-      sdk.voice.onParticipantLeft((p) => {
-        log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
-      });
-
-      // ================= ИНТЕГРАЦИЯ BLUETOOTH & LEGO BOOST =================
+      // ================= ИНТЕГРАЦИЯ BLUETOOTH & LEGO SUPER MARIO =================
 
       let connectedDeviceId = null;
+      let marioCoins = 0;
       const deviceSelect = document.getElementById('ble-device-select');
       const bleBadge = document.getElementById('badge-ble');
 
-      // Подписка на обнаружение BLE устройств от нативного слоя
+      // 1. Поиск фигурок LEGO Mario, Luigi, Peach
       sdk.on('bluetoothDeviceFound', (device) => {
         if (!device) return;
         const id = device.id || device.deviceId;
-        const name = device.name || device.localName || 'LEGO Move Hub / BLE Device';
+        const name = device.name || device.localName || 'LEGO Mario / Luigi';
         
         let exists = false;
         for (let i = 0; i < deviceSelect.options.length; i++) {
@@ -892,19 +854,20 @@
           opt.value = id;
           opt.textContent = `${name} (${id.slice(0, 8)}...)`;
           deviceSelect.appendChild(opt);
-          log(`BLE Устройство найдено: ${name}`, 'sys');
+          log(`Найдена фигурка: ${name}`, 'sys');
         }
       });
 
-      // Сканирование BLE
+      // Запуск сканирования BLE
       document.getElementById('btn-ble-scan').addEventListener('click', () => {
-        log('Запуск поиска Bluetooth / LEGO Boost...', 'sys');
-        deviceSelect.innerHTML = '<option value="">-- Выберите устройство --</option>';
+        log('Поиск фигурок LEGO Super Mario (BLE)...', 'sys');
+        deviceSelect.innerHTML = '<option value="">-- Выберите фигурку --</option>';
         
-        // Поиск устройств по сервису LWP3
         sdk.bluetooth.startScan({
           filters: [
-            { namePrefix: 'Move Hub' },
+            { namePrefix: 'LEGO Mario' },
+            { namePrefix: 'LEGO Luigi' },
+            { namePrefix: 'LEGO Peach' },
             { namePrefix: 'LEGO' },
             { services: ['00001623-1212-efde-1623-785feabcd123'] }
           ],
@@ -917,123 +880,189 @@
           }
         })
         .catch((e) => {
-          log(`Ошибка сканирования BLE: ${e.message}`, 'error');
-          log('Добавление эмулированного LEGO Move Hub для тестов...', 'sys');
+          log(`Ошибка сканирования: ${e.message}`, 'error');
+          log('Добавление эмулированной фигурки LEGO Mario...', 'sys');
           
           const opt = document.createElement('option');
-          opt.value = "LEGO_BOOST_MOCK_ID";
-          opt.textContent = "LEGO Move Hub (Mock 17101)";
+          opt.value = "LEGO_MARIO_MOCK_ID";
+          opt.textContent = "LEGO Mario (Mock 71360)";
           deviceSelect.appendChild(opt);
         });
       });
 
       document.getElementById('btn-ble-stop').addEventListener('click', () => {
         sdk.bluetooth.stopScan();
-        log('Сканирование BLE остановлено');
+        log('Сканирование остановлено');
       });
 
-      // Подключение к устройству
+      // Подключение к фигурке
       document.getElementById('btn-ble-connect').addEventListener('click', () => {
         const deviceId = deviceSelect.value;
         if (!deviceId) {
-          log('Выберите устройство из списка!', 'warning');
+          log('Выберите фигурку из списка!', 'warning');
           return;
         }
 
-        log(`Подключение к Bluetooth устройству [${deviceId}]...`, 'sys');
+        log(`Подключение к LEGO Mario [${deviceId}]...`, 'sys');
         sdk.bluetooth.connect(deviceId, { serviceUuid: '00001623-1212-efde-1623-785feabcd123' })
-          .then((res) => {
+          .then(() => {
             connectedDeviceId = deviceId;
             bleBadge.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-pulse';
-            log(`Успешно подключено к LEGO Boost (${deviceId})!`, 'sys');
+            log(`Подключено к LEGO Mario (${deviceId})!`, 'sys');
+            
+            // Автоподписка на сенсоры при подключении
+            setTimeout(subscribeMarioSensors, 500);
           })
           .catch((e) => {
-            log(`Ошибка подключения BLE: ${e.message}`, 'error');
+            log(`Ошибка подключения: ${e.message}`, 'error');
             connectedDeviceId = deviceId;
             bleBadge.className = 'w-3 h-3 rounded-full bg-emerald-500';
-            log(`[Demo] Эмуляция подключения активирована для ${deviceId}`, 'sys');
+            log(`[Demo] Режим эмуляции активирован для LEGO Mario`, 'sys');
           });
       });
 
-      // Функция отправки байт / HEX в LEGO Boost (LWP3 Protocol)
-      async function sendLegoHex(hexString) {
+      // Отправка HEX команд по LWP3 протоколу
+      async function sendMarioHex(hexString) {
         if (!connectedDeviceId) {
-          log('LEGO Boost не подключен! Сначала подключите устройство.', 'warning');
+          log('Фигурка Марио не подключена!', 'warning');
           return;
         }
-
         const cleanHex = hexString.replace(/\s+/g, '');
-        log(`LEGO Tx: ${cleanHex}`, 'sys');
-
+        log(`Mario Tx: ${cleanHex}`, 'sys');
         try {
           await sdk.bluetooth.sendRaw(connectedDeviceId, cleanHex);
         } catch (e) {
-          log(`Ошибка передачи по BLE: ${e.message}`, 'error');
+          log(`Ошибка передачи BLE: ${e.message}`, 'error');
         }
       }
 
-      function speedToHexByte(speed) {
-        const clamp = Math.max(-100, Math.min(100, speed));
-        const val = clamp < 0 ? (256 + clamp) : clamp;
-        return val.toString(16).padStart(2, '0');
+      // Подписка на уведомления сканера цветов и тегов (LWP3 Port Input Format Setup)
+      // Формат: 0a 00 41 <Port> <Mode> 01000000 01
+      function subscribeMarioSensors() {
+        log('Активация сканера штрихкодов и движения Марио...', 'sys');
+        // Port 1 & 3: Сканер штрихкодов и цвета
+        sendMarioHex('0a004101000100000001');
+        sendMarioHex('0a004103000100000001');
       }
 
-      // Движение моторов (Порт AB = 0x39): 08 00 81 39 11 02 <SpeedA> <SpeedB>
-      function driveLego(speedA, speedB) {
-        const hexA = speedToHexByte(speedA);
-        const hexB = speedToHexByte(speedB);
-        sendLegoHex(`080081391102${hexA}${hexB}`);
+      document.getElementById('btn-mario-sub-barcode').addEventListener('click', () => {
+        sendMarioHex('0a004101000100000001');
+        sendMarioHex('0a004103000100000001');
+      });
+
+      document.getElementById('btn-mario-sub-motion').addEventListener('click', () => {
+        // Port 0: Акселерометр и Движение
+        sendMarioHex('0a004100000100000001');
+      });
+
+      document.getElementById('btn-mario-sub-pants').addEventListener('click', () => {
+        // Port 2: Датчик Костюма / Штанов
+        sendMarioHex('0a004102000100000001');
+      });
+
+      // Запрос уровня батареи (Hub Property 0x06)
+      document.getElementById('btn-mario-req-battery').addEventListener('click', () => {
+        sendMarioHex('0500010601');
+        // Эмуляция ответа если в демо
+        document.getElementById('mario-battery-val').textContent = '92%';
+      });
+
+      // Выключение Марио (Hub Action 0x02, 0x01 = Disconnect)
+      document.getElementById('btn-mario-off').addEventListener('click', () => {
+        sendMarioHex('04000201');
+        log('Отправлена команда выключения Марио');
+      });
+
+      // Ручная отправка RAW HEX
+      document.getElementById('btn-mario-send-raw').addEventListener('click', () => {
+        const raw = document.getElementById('mario-raw-hex').value;
+        sendMarioHex(raw);
+      });
+
+      // 2. Обработка входящих данных от Марио (LWP3 Port Value Notifications)
+      sdk.on('bluetoothDataReceived', (data) => {
+        if (!data) return;
+        const hex = typeof data === 'string' ? data.replace(/\s+/g, '') : '';
+        log(`Mario Rx: ${hex}`, 'sys');
+        parseMarioPacket(hex);
+      });
+
+      // Парсинг пакетов LWP3
+      function parseMarioPacket(hex) {
+        if (!hex || hex.length < 8) return;
+        
+        // Тип сообщения 0x45 (Port Value)
+        const msgType = hex.slice(4, 6);
+        const portId = hex.slice(6, 8);
+
+        if (msgType === '45') {
+          const payload = hex.slice(8);
+          document.getElementById('mario-barcode-val').textContent = `Barcode Hex: ${payload}`;
+
+          // Распознавание типа покрытия / штрихкода
+          updateMarioSurfaceByPayload(payload);
+        }
       }
 
-      document.getElementById('btn-lego-forward').addEventListener('click', () => driveLego(60, 60));
-      document.getElementById('btn-lego-backward').addEventListener('click', () => driveLego(-60, -60));
-      document.getElementById('btn-lego-left').addEventListener('click', () => driveLego(-50, 50));
-      document.getElementById('btn-lego-right').addEventListener('click', () => driveLego(50, -50));
-      document.getElementById('btn-lego-stop').addEventListener('click', () => driveLego(0, 0));
+      // Обновление интерфейса при сканировании тегов / покрытий
+      function updateMarioSurfaceByPayload(hexPayload) {
+        const card = document.getElementById('mario-surface-card');
+        const text = document.getElementById('mario-surface-text');
 
-      // Раздельные моторы A / B
-      document.getElementById('btn-lego-motor-a').addEventListener('click', () => {
-        sendLegoHex(`08008100115100${speedToHexByte(50)}`);
-      });
-      document.getElementById('btn-lego-motor-b').addEventListener('click', () => {
-        sendLegoHex(`08008101115100${speedToHexByte(50)}`);
+        // Пример декодирования цветовых кодов LEGO Mario
+        if (hexPayload.startsWith('01') || hexPayload.includes('0001')) {
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-sm shadow';
+          text.textContent = '🟩 Трава (Grass)';
+        } else if (hexPayload.startsWith('02') || hexPayload.includes('0002')) {
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-rose-600 text-white font-bold text-sm shadow';
+          text.textContent = '🔥 Лава (Lava / Red)';
+          marioCoins = Math.max(0, marioCoins - 1);
+        } else if (hexPayload.startsWith('03') || hexPayload.includes('0003')) {
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm shadow';
+          text.textContent = '🟦 Вода (Water)';
+        } else if (hexPayload.startsWith('04') || hexPayload.includes('0004')) {
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-amber-400 text-slate-900 font-bold text-sm shadow';
+          text.textContent = '🟨 Песок (Sand)';
+        } else {
+          card.className = 'my-2 px-4 py-2 rounded-lg bg-purple-600 text-white font-bold text-sm shadow animate-bounce';
+          text.textContent = '⭐ Штрихкод / Монетка!';
+          marioCoins += 1;
+        }
+
+        document.getElementById('mario-coins-count').textContent = marioCoins;
+      }
+
+      // Кнопка симуляции сканирования (для теста без физической фигурки)
+      let mockScanStep = 0;
+      document.getElementById('btn-mario-mock-scan').addEventListener('click', () => {
+        const mockPayloads = ['000100', '000200', '000300', '000400', 'A5B200'];
+        const mockPoses = ['🏃 Бежит', '🦘 Прыжок!', '😴 Спит', '🔥 Огненный костюм'];
+        
+        const payload = mockPayloads[mockScanStep % mockPayloads.length];
+        const pose = mockPoses[mockScanStep % mockPoses.length];
+        
+        updateMarioSurfaceByPayload(payload);
+        document.getElementById('mario-pose-badge').textContent = pose;
+        
+        log(`[Mock] Марио отсканировал тег: ${payload}`, 'sys');
+        mockScanStep++;
       });
 
-      // Светодиод (LED Port 0x32): 08 00 81 32 11 51 00 <ColorIndex>
-      document.querySelectorAll('.btn-lego-led').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          const colorCode = e.target.getAttribute('data-color');
-          sendLegoHex(`08008132115100${colorCode}`);
-        });
-      });
-
-      // Отправка произвольного HEX
-      document.getElementById('btn-lego-send-raw').addEventListener('click', () => {
-        const rawHex = document.getElementById('lego-raw-hex').value;
-        sendLegoHex(rawHex);
-      });
-
-      // ================= УПРАВЛЕНИЕ КАМЕРОЙ (sdk.camera.getUserMedia 60 FPS) =================
+      // ================= УПРАВЛЕНИЕ КАМЕРОЙ (60 FPS) =================
 
       let currentLocalStream = null;
-
       const videoEl = document.getElementById('camera-preview-video');
       const previewPlaceholder = document.getElementById('camera-preview-placeholder');
       const lensBadge = document.getElementById('badge-camera-lens');
 
       async function startCameraStream(lens = 'back') {
         stopCameraStream();
-
         const facingMode = lens === 'front' ? 'user' : { ideal: 'environment' };
 
         try {
           log(`Запрос видеопотока через sdk.camera.getUserMedia (${lens}, 60 FPS)...`, 'sys');
-          
           currentLocalStream = await sdk.camera.getUserMedia({
-            video: {
-              facingMode: facingMode,
-              frameRate: { ideal: 60, max: 60 }
-            },
+            video: { facingMode: facingMode, frameRate: { ideal: 60, max: 60 } },
             audio: false
           });
 
@@ -1047,7 +1076,6 @@
             : 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
 
           log(`Видеопоток с частотой 60 FPS успешно запущен!`, 'sys');
-
         } catch (err) {
           log(`Ошибка захвата видеопотока: ${err.message}`, 'error');
         }
@@ -1070,7 +1098,6 @@
         lensBadge.className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-semibold';
         videoEl.classList.add('hidden');
         previewPlaceholder.classList.remove('hidden');
-        log('Видеопоток камеры остановлен.');
       }
 
       document.getElementById('btn-cam-back').addEventListener('click', () => startCameraStream('back'));
@@ -1163,75 +1190,46 @@
       document.getElementById('btn-gyro-start').addEventListener('click', () => {
         sdk.gyroscope.start();
         document.getElementById('badge-gyro').classList.replace('bg-slate-400', 'bg-emerald-500');
-        log('Отправлена команда: GYROSCOPE_START');
       });
 
       document.getElementById('btn-gyro-stop').addEventListener('click', () => {
         sdk.gyroscope.stop();
         document.getElementById('badge-gyro').classList.replace('bg-emerald-500', 'bg-slate-400');
-        log('Отправлена команда: GYROSCOPE_STOP');
       });
 
       document.getElementById('btn-gyro-get').addEventListener('click', () => {
-        sdk.gyroscope.getState()
-          .then((state) => {
-            log(`Гироскоп (Текущее состояние): ${JSON.stringify(state)}`);
-            if (state) {
-              const x = Number(state.x || 0);
-              const y = Number(state.y || 0);
-              const z = Number(state.z || 0);
-              document.getElementById('val-gyro-x').textContent = x.toFixed(2);
-              document.getElementById('val-gyro-y').textContent = y.toFixed(2);
-              document.getElementById('val-gyro-z').textContent = z.toFixed(2);
-              updateCubeTransform(x, y, z);
-            }
-          })
-          .catch((e) => log(`Ошибка запроса гироскопа: ${e.message}`, 'error'));
+        sdk.gyroscope.getState().then((state) => {
+          log(`Гироскоп: ${JSON.stringify(state)}`);
+        });
       });
 
       document.getElementById('btn-acc-start').addEventListener('click', () => {
         sdk.accelerometer.start();
         document.getElementById('badge-acc').classList.replace('bg-slate-400', 'bg-emerald-500');
-        log('Отправлена команда: ACCELEROMETER_START');
       });
 
       document.getElementById('btn-acc-stop').addEventListener('click', () => {
         sdk.accelerometer.stop();
         document.getElementById('badge-acc').classList.replace('bg-emerald-500', 'bg-slate-400');
-        log('Отправлена команда: ACCELEROMETER_STOP');
       });
 
       document.getElementById('btn-acc-get').addEventListener('click', () => {
-        sdk.accelerometer.getState()
-          .then((state) => {
-            log(`Акселерометр (Текущее состояние): ${JSON.stringify(state)}`);
-            if (state) {
-              document.getElementById('val-acc-x').textContent = Number(state.x || 0).toFixed(2);
-              document.getElementById('val-acc-y').textContent = Number(state.y || 0).toFixed(2);
-              document.getElementById('val-acc-z').textContent = Number(state.z || 0).toFixed(2);
-            }
-          })
-          .catch((e) => log(`Ошибка запроса акселерометра: ${e.message}`, 'error'));
+        sdk.accelerometer.getState().then((state) => {
+          log(`Акселерометр: ${JSON.stringify(state)}`);
+        });
       });
 
-      // Эмуляция датчиков
+      // Эмуляция движения
       let mockInterval = null;
       document.getElementById('btn-mock-sensors').addEventListener('click', () => {
         if (mockInterval) {
           clearInterval(mockInterval);
           mockInterval = null;
           document.getElementById('btn-mock-sensors').textContent = 'Сэмулировать движение';
-          document.getElementById('badge-gyro').classList.replace('bg-emerald-500', 'bg-slate-400');
-          document.getElementById('badge-acc').classList.replace('bg-emerald-500', 'bg-slate-400');
-          log('Эмуляция датчиков остановлена.', 'sys');
           return;
         }
 
         document.getElementById('btn-mock-sensors').textContent = 'Остановить эмуляцию';
-        document.getElementById('badge-gyro').classList.replace('bg-slate-400', 'bg-emerald-500');
-        document.getElementById('badge-acc').classList.replace('bg-slate-400', 'bg-emerald-500');
-        log('Запущено непрерывное движение...', 'sys');
-        
         mockInterval = setInterval(() => {
           const gX = (Math.sin(Date.now() / 400) * 1.5);
           const gY = (Math.cos(Date.now() / 500) * 2.0);
@@ -1242,47 +1240,24 @@
             eventName: "gyroscopeChanged",
             payload: { x: gX, y: gY, z: gZ }
           }, "*");
-
-          const aX = (Math.random() * 0.4);
-          const aY = -9.8 + (Math.random() * 0.4);
-          const aZ = (Math.random() * 0.4);
-
-          window.postMessage({
-            type: "NAJI_EVENT",
-            eventName: "accelerometerChanged",
-            payload: { x: aX, y: aY, z: aZ }
-          }, "*");
         }, 100);
       });
 
-      // ================= УПРАВЛЕНИЕ ВИБРАЦИЕЙ (VIBRATOR) =================
+      // ================= УПРАВЛЕНИЕ ВИБРАЦИЕЙ =================
 
       document.getElementById('btn-vibrate-custom').addEventListener('click', () => {
-        const durationInput = document.getElementById('vibrate-duration');
-        const duration = parseInt(durationInput.value, 10) || 200;
-        sdk.vibrator.vibrate(duration);
-        log(`Отправлен вызов вибрации: ${duration} мс`, 'sys');
+        const d = parseInt(document.getElementById('vibrate-duration').value, 10) || 200;
+        sdk.vibrator.vibrate(d);
       });
 
-      document.getElementById('btn-vibrate-short').addEventListener('click', () => {
-        sdk.vibrator.vibrate(50);
-        log('Отправлен вызов короткой вибрации (50 мс)', 'sys');
-      });
+      document.getElementById('btn-vibrate-short').addEventListener('click', () => sdk.vibrator.vibrate(50));
+      document.getElementById('btn-vibrate-medium').addEventListener('click', () => sdk.vibrator.vibrate(200));
+      document.getElementById('btn-vibrate-long').addEventListener('click', () => sdk.vibrator.vibrate(500));
 
-      document.getElementById('btn-vibrate-medium').addEventListener('click', () => {
-        sdk.vibrator.vibrate(200);
-        log('Отправлен вызов средней вибрации (200 мс)', 'sys');
-      });
-
-      document.getElementById('btn-vibrate-long').addEventListener('click', () => {
-        sdk.vibrator.vibrate(500);
-        log('Отправлен вызов сильной вибрации (500 мс)', 'sys');
-      });
-
-      // ================= УПРАВЛЕНИЕ NFC =================
+      // ================= УПРАВЛЕНИЕ NFC & IsoDep =================
 
       sdk.nfc.onTagRead((tag) => {
-        log(`Событие 'nfcTagRead': Данные тэга -> ${JSON.stringify(tag)}`, 'sys');
+        log(`Событие 'nfcTagRead': ${JSON.stringify(tag)}`, 'sys');
       });
 
       document.getElementById('btn-nfc-check').addEventListener('click', () => {
@@ -1290,821 +1265,109 @@
           .then(([available, enabled]) => {
             document.getElementById('val-nfc-available').textContent = available ? 'Да' : 'Нет';
             document.getElementById('val-nfc-enabled').textContent = enabled ? 'Да' : 'Нет';
-            log(`Статус NFC проверен: Доступен = ${available}, Включен = ${enabled}`);
-          })
-          .catch((e) => log(`Ошибка проверки NFC: ${e.message}`, 'error'));
+          });
       });
 
-      document.getElementById('btn-nfc-cancel').addEventListener('click', () => {
-        sdk.nfc.cancel();
-        log('Отправлена команда отмены NFC (Cancel)');
-      });
-
-      document.getElementById('btn-nfc-read').addEventListener('click', () => {
-        log('Режим чтения NFC запущен. Поднесите тэг...');
-        sdk.nfc.read()
-          .then((res) => {
-            log(`Результат чтения NFC: ${JSON.stringify(res)}`);
-          })
-          .catch((e) => log(`Ошибка чтения NFC: ${e.message}`, 'error'));
-      });
-
+      document.getElementById('btn-nfc-cancel').addEventListener('click', () => sdk.nfc.cancel());
+      document.getElementById('btn-nfc-read').addEventListener('click', () => sdk.nfc.read());
       document.getElementById('btn-nfc-write').addEventListener('click', () => {
-        const textValue = document.getElementById('nfc-text-input').value;
-        const records = [
-          {
-            tnf: 1,
-            type: "T",
-            payload: textValue
-          }
-        ];
-        log(`Запуск записи на NFC-тэг. Данные: "${textValue}"`, 'sys');
-        sdk.nfc.write(records)
-          .then((res) => {
-            log(`Запись NFC успешно завершена`);
-          })
-          .catch((e) => log(`Ошибка записи NFC: ${e.message}`, 'error'));
+        const text = document.getElementById('nfc-text-input').value;
+        sdk.nfc.write([{ tnf: 1, type: "T", payload: text }]);
       });
-
-      document.getElementById('btn-nfc-share').addEventListener('click', () => {
-        const textValue = document.getElementById('nfc-text-input').value;
-        sdk.nfc.sharePayload(textValue)
-          .then(() => log(`Запущен шеринг payload по NFC: "${textValue}"`))
-          .catch((e) => log(`Ошибка запуска шеринга NFC: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-nfc-stop-share').addEventListener('click', () => {
-        sdk.nfc.stopShare();
-        log('Шеринг payload по NFC остановлен');
-      });
-
-      document.getElementById('btn-mock-nfc-read').addEventListener('click', () => {
-        const textValue = document.getElementById('nfc-text-input').value;
-        window.postMessage({
-          type: "NAJI_EVENT",
-          eventName: "nfcTagRead",
-          payload: {
-            id: "04:5F:12:8A:BC:3D:E0",
-            techList: ["android.nfc.tech.Ndef", "android.nfc.tech.NfcA"],
-            records: [
-              {
-                recordType: "text",
-                mediaType: "text/plain",
-                payload: textValue
-              }
-            ]
-          }
-        }, "*");
-        log('Симуляция: событие чтения NFC тэга отправлено.', 'sys');
-      });
-
-      // ================= IsoDep / APDU =================
 
       let isoDepConnected = false;
-
       document.getElementById('btn-isodep-connect').addEventListener('click', () => {
-        log('IsoDep: подключение к тэгу...', 'sys');
-        sdk.nfc.connectIsoDep()
-          .then((info) => {
-            isoDepConnected = true;
-            document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
-            log(`IsoDep: подключен. UID=${info.uid}, histBytes=${info.historicalBytes}`, 'sys');
-            epAppend(`✅ IsoDep: UID=${info.uid}`);
-            if (info.historicalBytes) epAppend(`📋 HistBytes: ${info.historicalBytes.slice(0, 60)}...`);
-            if (info.tech) epAppend(`📋 Tech: ${info.tech.join(', ')}`);
-          })
-          .catch((e) => log(`IsoDep: ошибка подключения: ${e.message}`, 'error'));
+        sdk.nfc.connectIsoDep().then((info) => {
+          isoDepConnected = true;
+          document.getElementById('badge-isodep').classList.replace('bg-slate-400', 'bg-emerald-500');
+          log(`IsoDep подключен: UID=${info.uid}`);
+        });
       });
 
       document.getElementById('btn-isodep-disconnect').addEventListener('click', () => {
         sdk.nfc.disconnect();
         isoDepConnected = false;
         document.getElementById('badge-isodep').classList.replace('bg-emerald-500', 'bg-slate-400');
-        document.getElementById('isodep-response').value = '';
-        log('IsoDep: отключен', 'sys');
       });
 
       document.getElementById('btn-isodep-send').addEventListener('click', () => {
         const cmd = document.getElementById('isodep-command').value;
-        log(`IsoDep: отправка APDU: ${cmd}`, 'sys');
-        sdk.nfc.transceive(cmd)
-          .then((resp) => {
-            document.getElementById('isodep-response').value = resp;
-            log(`IsoDep: ответ: ${resp}`, 'sys');
-          })
-          .catch((e) => log(`IsoDep: ошибка: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-isodep-select-mf').addEventListener('click', () => {
-        document.getElementById('isodep-command').value = '00A40000023F00';
-        document.getElementById('btn-isodep-send').click();
-      });
-
-      document.getElementById('btn-isodep-get-challenge').addEventListener('click', () => {
-        document.getElementById('isodep-command').value = '00A4000002';
-        document.getElementById('btn-isodep-send').click();
-      });
-
-      document.getElementById('btn-isodep-read-binary').addEventListener('click', () => {
-        document.getElementById('isodep-command').value = '00B0000000';
-        document.getElementById('btn-isodep-send').click();
+        sdk.nfc.transceive(cmd).then((resp) => {
+          document.getElementById('isodep-response').value = resp;
+        });
       });
 
       // ================= ePassport BAC Reader =================
 
       const epLog = document.getElementById('ep-log');
-
-      function epAppend(msg) {
-        epLog.value += msg + '\n';
-        epLog.scrollTop = epLog.scrollHeight;
-      }
+      function epAppend(msg) { epLog.value += msg + '\n'; epLog.scrollTop = epLog.scrollHeight; }
 
       function hexToBytes(hex) {
-        if (!hex || typeof hex !== 'string') return new Uint8Array(0);
+        if (!hex) return new Uint8Array(0);
         const clean = hex.replace(/\s+/g, '');
-        if (!clean) return new Uint8Array(0);
         const match = clean.match(/.{1,2}/g);
-        if (!match) return new Uint8Array(0);
-        return new Uint8Array(match.map(b => parseInt(b, 16)));
+        return match ? new Uint8Array(match.map(b => parseInt(b, 16))) : new Uint8Array(0);
       }
 
       function bytesToHex(bytes) {
-        if (!bytes) return '';
-        const arr = new Uint8Array(bytes);
-        return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+        return Array.from(new Uint8Array(bytes || [])).map(b => b.toString(16).padStart(2, '0')).join('');
       }
-
-      function bytesToWA(b) { return CryptoJS.enc.Hex.parse(bytesToHex(b)); }
-      function waToBytes(wa) { return hexToBytes(CryptoJS.enc.Hex.stringify(wa)); }
-
-      function des3EncryptCBC(keyBytes, dataBytes, iv) {
-        const key = bytesToWA(keyBytes);
-        const data = bytesToWA(dataBytes);
-        const ivWA = bytesToWA(iv || new Uint8Array(8));
-        const enc = CryptoJS.TripleDES.encrypt(data, key, {
-          mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.NoPadding, iv: ivWA
-        });
-        return waToBytes(enc.ciphertext);
-      }
-
-      function des3DecryptCBC(keyBytes, dataBytes, iv) {
-        const key = bytesToWA(keyBytes);
-        const data = bytesToWA(dataBytes);
-        const ivWA = bytesToWA(iv || new Uint8Array(8));
-        const dec = CryptoJS.TripleDES.decrypt({ ciphertext: data, salt: null }, key, {
-          mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.NoPadding, iv: ivWA
-        });
-        return waToBytes(dec);
-      }
-
-      function isoPad(data, blockSize) {
-        const padLen = blockSize - (data.length % blockSize);
-        const padded = new Uint8Array(data.length + padLen);
-        padded.set(data);
-        padded[data.length] = 0x80;
-        return padded;
-      }
-
-      function desEncryptBlock(key8Bytes, data8Bytes) {
-        const key = bytesToWA(key8Bytes);
-        const data = bytesToWA(data8Bytes);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const enc = CryptoJS.DES.encrypt(data, key, {
-          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        return waToBytes(enc.ciphertext);
-      }
-
-      function desDecryptBlock(key8Bytes, data8Bytes) {
-        const key = bytesToWA(key8Bytes);
-        const data = bytesToWA(data8Bytes);
-        const iv = CryptoJS.enc.Hex.parse('0000000000000000');
-        const dec = CryptoJS.DES.decrypt({ ciphertext: data, salt: null }, key, {
-          mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.NoPadding, iv: iv
-        });
-        return waToBytes(dec);
-      }
-
-      function des3Mac(key16Bytes, dataBytes) {
-        const k1 = key16Bytes.slice(0, 8);
-        const k2 = key16Bytes.slice(8, 16);
-        const padded = isoPad(dataBytes, 8);
-
-        let y = new Uint8Array(8);
-
-        for (let i = 0; i < padded.length; i += 8) {
-          const block = padded.slice(i, i + 8);
-          const xorBlock = new Uint8Array(8);
-          for (let j = 0; j < 8; j++) {
-            xorBlock[j] = block[j] ^ y[j];
-          }
-          y = desEncryptBlock(k1, xorBlock);
-        }
-
-        const y2 = desDecryptBlock(k2, y);
-        const mac = desEncryptBlock(k1, y2);
-        return mac;
-      }
-
-      let bacKenc = null, bacKmac = null, bacSsc = null;
 
       function parseMRZ(line2) {
         const cleaned = line2.replace(/\s/g, '').toUpperCase();
         return {
-          docNum: cleaned.slice(0, 9),
-          docCheck: cleaned[9],
-          dob: cleaned.slice(13, 19),
-          dobCheck: cleaned[19],
-          exp: cleaned.slice(21, 27),
-          expCheck: cleaned[27],
           mrzNoChecks: cleaned.slice(0, 9) + cleaned.slice(13, 19) + cleaned.slice(21, 27),
           mrzWithChecks: cleaned.slice(0, 9) + cleaned[9] + cleaned.slice(13, 19) + cleaned[19] + cleaned.slice(21, 27) + cleaned[27],
           mrzFullLine: cleaned
         };
       }
 
-      function setOddParity(key) {
-        const res = new Uint8Array(key.length);
-        for (let i = 0; i < key.length; i++) {
-          let b = key[i];
-          let bits = 0;
-          for (let j = 0; j < 8; j++) if (b & (1 << j)) bits++;
-          if (bits % 2 === 0) b ^= 1;
-          res[i] = b;
-        }
-        return res;
-      }
-
-      async function deriveBacKeys(mrzInfo) {
-        const enc = new TextEncoder().encode(mrzInfo);
-        const hash = await crypto.subtle.digest('SHA-1', enc);
-        const kSeed = new Uint8Array(hash).slice(0, 16);
-
-        const dEnc = new Uint8Array(20);
-        dEnc.set(kSeed, 0);
-        dEnc.set([0x00, 0x00, 0x00, 0x01], 16);
-        const hashEnc = new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc));
-        bacKenc = setOddParity(hashEnc.slice(0, 16));
-
-        const dMac = new Uint8Array(20);
-        dMac.set(kSeed, 0);
-        dMac.set([0x00, 0x00, 0x00, 0x02], 16);
-        const hashMac = new Uint8Array(await crypto.subtle.digest('SHA-1', dMac));
-        bacKmac = setOddParity(hashMac.slice(0, 16));
-
-        return { kenc: bytesToHex(bacKenc), kmac: bytesToHex(bacKmac) };
-      }
-
-      async function epReadDG(dgSfi, dgName) {
-        epAppend(`— Чтение ${dgName} (SFI=${dgSfi}) в режиме Secure Messaging —`);
-        if (!bacSsc) {
-          epAppend('❌ Сначала пройдите аутентификацию (Read Passport)');
-          return;
-        }
-
-        try {
-          const p1 = 0x80 | dgSfi;
-          const headerHex = await sendSmApdu(0xB0, p1, 0x00, '', '04');
-          
-          if (!headerHex || headerHex.length < 4) {
-            throw new Error('Не удалось получить заголовок файла');
-          }
-
-          let dgLen = 0;
-          const lenByte = parseInt(headerHex.slice(2, 4), 16);
-
-          if (lenByte < 0x80) {
-            dgLen = lenByte + 2;
-          } else if (lenByte === 0x81) {
-            const l2 = parseInt(headerHex.slice(4, 6), 16);
-            dgLen = l2 + 3;
-          } else if (lenByte === 0x82) {
-            const l2 = parseInt(headerHex.slice(4, 8), 16);
-            dgLen = l2 + 4;
-          }
-
-          epAppend(`📊 Размер ${dgName}: ${dgLen} байт`);
-
-          let fullDataHex = '';
-          let offset = 0;
-          const chunkSize = 128;
-
-          while (offset < dgLen) {
-            const readLen = Math.min(chunkSize, dgLen - offset);
-            const p1Offset = Math.floor(offset / 256);
-            const p2Offset = offset % 256;
-            
-            const actualP1 = (offset === 0) ? p1 : p1Offset;
-            const leHex = readLen.toString(16).padStart(2, '0');
-            
-            const chunk = await sendSmApdu(0xB0, actualP1, p2Offset, '', leHex);
-            fullDataHex += chunk;
-            offset += chunk.length / 2;
-            
-            epAppend(`⏳ Прочитано: ${offset} / ${dgLen} байт`);
-          }
-
-          epAppend(`✅ ${dgName} УСПЕШНО ПРОЧИТАН!`);
-          epAppend(`📄 HEX (${fullDataHex.length / 2} байт):\n${fullDataHex}`);
-          document.getElementById('isodep-response').value = fullDataHex;
-
-        } catch (e) {
-          epAppend(`❌ Ошибка чтения ${dgName}: ${e.message}`);
-        }
-      }
-
-      async function rawTransceive(hex) {
-        const resp = await sdk.nfc.transceive(hex.replace(/\s+/g, ''));
-        if (!resp) throw new Error('no response from tag');
-        return resp;
-      }
-
-      const EP_AIDS = [
-        'A0000002470001',
-        'A0000002471001',
-        'A0000002472001',
-      ];
-
-      async function epGetCurrentApplet() {
-        epAppend('→ Запрос текущего applet');
-        const resp = await rawTransceive('00A4040000');
-        epAppend(`← ${resp}`);
-        return resp;
-      }
-
-      async function epSelectOrSkip() {
-        const current = await epGetCurrentApplet();
-        if (!current.endsWith('9000')) {
-          for (const p2 of ['00', '04', '0C']) {
-            for (const aid of EP_AIDS) {
-              const lc = aid.length / 2;
-              const lcHex = lc.toString(16).padStart(2, '0');
-              const cmd = `00A404${p2}${lcHex}${aid}`;
-              epAppend(`→ SELECT AID ${aid} P2=0x${p2}`);
-              try {
-                const resp = await rawTransceive(cmd);
-                epAppend(`← ${resp}`);
-                if (resp.endsWith('9000')) {
-                  epAppend(`✅ SELECT OK — AID: ${aid}`);
-                  return aid;
-                }
-              } catch (e) { epAppend(`← error: ${e.message}`); }
-            }
-          }
-          throw new Error('Не удалось SELECT ни один ePassport AID');
-        }
-        const data = current.slice(0, -4);
-        const aidMatch = data.match(/84([0-9a-f]{2})([0-9a-f]+)/i);
-        if (aidMatch) {
-          const aidLen = parseInt(aidMatch[1], 16) * 2;
-          const foundAid = aidMatch[2].slice(0, aidLen);
-          if (EP_AIDS.includes(foundAid.toUpperCase())) {
-            epAppend(`✅ Applet уже выбран: ${foundAid}`);
-            return foundAid.toUpperCase();
-          }
-        }
-        for (const aid of EP_AIDS) {
-          if (data.toUpperCase().includes(aid)) {
-            epAppend(`✅ Найден AID в FCI: ${aid}`);
-            return aid;
-          }
-        }
-        epAppend('⚠ Неизвестный applet — пробуем продолжить');
-        return null;
-      }
-
-      async function epGetChallenge() {
-        epAppend('→ GET CHALLENGE');
-        const resp = await rawTransceive('0084000008');
-        epAppend(`← ${resp}`);
-        if (resp.endsWith('9000')) epAppend('✅ CHALLENGE OK');
-        else throw new Error('GET CHALLENGE failed: ' + resp.slice(-4));
-        return hexToBytes(resp.slice(0, -4));
-      }
-
-      async function epMutualAuth(rndIcc) {
-        epAppend('— MUTUAL AUTHENTICATE —');
-        
-        const rndIfd = crypto.getRandomValues(new Uint8Array(8));
-        const kifd = crypto.getRandomValues(new Uint8Array(16));
-
-        const s = new Uint8Array(32);
-        s.set(rndIfd, 0);
-        s.set(rndIcc, 8);
-        s.set(kifd, 16);
-
-        const encS = des3EncryptCBC(bacKenc, s, new Uint8Array(8));
-        const macS = des3Mac(bacKmac, encS);
-
-        const data = bytesToHex(encS) + bytesToHex(macS);
-        const lcHex = (data.length / 2).toString(16).padStart(2, '0');
-        const cmd = '00820000' + lcHex + data + '08';
-        
-        epAppend(`→ 00820000${lcHex}...${data.slice(-16)} Le=08`);
-        const resp = await rawTransceive(cmd);
-        epAppend(`← ${resp}`);
-
-        if (!resp.endsWith('9000')) {
-          throw new Error('MUTUAL AUTH failed: ' + resp.slice(-4));
-        }
-
-        const respData = hexToBytes(resp.slice(0, -4));
-        const encResp = respData.slice(0, respData.length - 8);
-        const respMac = respData.slice(respData.length - 8);
-
-        const expectedMac = des3Mac(bacKmac, encResp);
-        let macOk = true;
-        for (let i = 0; i < 8; i++) if (respMac[i] !== expectedMac[i]) macOk = false;
-
-        if (!macOk) { 
-          epAppend('⚠ MAC ответа не совпал'); 
-          return false; 
-        }
-
-        const decResp = des3DecryptCBC(bacKenc, encResp, new Uint8Array(8));
-        const rndIccBack = decResp.slice(0, 8);
-        const kicc = decResp.slice(16, 32);
-
-        let rndOk = true;
-        for (let i = 0; i < 8; i++) if (rndIccBack[i] !== rndIcc[i]) rndOk = false;
-        if (!rndOk) { 
-          epAppend('⚠ RND.ICC не совпал'); 
-          return false; 
-        }
-
-        epAppend('✅ Mutual Auth OK!');
-
-        const kSeed = new Uint8Array(16);
-        for (let i = 0; i < 16; i++) kSeed[i] = kifd[i] ^ kicc[i];
-
-        bacSsc = new Uint8Array(8);
-        bacSsc.set(rndIcc.slice(4, 8), 0);
-        bacSsc.set(rndIfd.slice(4, 8), 4);
-
-        const dEnc = new Uint8Array(20); dEnc.set(kSeed, 0); dEnc.set([0,0,0,1], 16);
-        bacKenc = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dEnc)).slice(0, 16));
-
-        const dMac = new Uint8Array(20); dMac.set(kSeed, 0); dMac.set([0,0,0,2], 16);
-        bacKmac = setOddParity(new Uint8Array(await crypto.subtle.digest('SHA-1', dMac)).slice(0, 16));
-
-        epAppend('🔐 Сессия установлена. Переход в Secure Messaging.');
-        return true;
-      }
-
-      function parseDoTags(hex) {
-        const dos = {};
-        let offset = 0;
-        while (offset < hex.length) {
-          const tag = hex.slice(offset, offset + 2).toUpperCase();
-          offset += 2;
-          if (!tag || tag.length < 2) break;
-          
-          let len = parseInt(hex.slice(offset, offset + 2), 16);
-          offset += 2;
-          if (isNaN(len)) break;
-          
-          if (len & 0x80) {
-            const numBytes = len & 0x7F;
-            len = parseInt(hex.slice(offset, offset + numBytes * 2), 16);
-            offset += numBytes * 2;
-          }
-          
-          const val = hex.slice(offset, offset + len * 2);
-          offset += len * 2;
-          dos[tag] = val;
-        }
-        return dos;
-      }
-
-      async function sendSmApdu(ins, p1, p2, dataHex = '', leHex = '00') {
-        if (!bacSsc || !bacKenc || !bacKmac) {
-          throw new Error('Сессия Secure Messaging не активна');
-        }
-
-        for (let i = 7; i >= 0; i--) {
-          bacSsc[i]++;
-          if (bacSsc[i] !== 0) break;
-        }
-
-        const sscBytes = bacSsc.slice();
-
-        let do87Hex = '';
-        if (dataHex && dataHex.length > 0) {
-          const paddedData = isoPad(hexToBytes(dataHex), 8);
-          const encData = des3EncryptCBC(bacKenc, paddedData, new Uint8Array(8));
-          const encHex = bytesToHex(encData);
-          const payloadHex = '01' + encHex;
-          const payloadLen = payloadHex.length / 2;
-          const lenField = payloadLen < 0x80 
-            ? payloadLen.toString(16).padStart(2, '0') 
-            : '81' + payloadLen.toString(16).padStart(2, '0');
-          do87Hex = '87' + lenField + payloadHex;
-        }
-
-        let do97Hex = '';
-        if (leHex !== null && leHex !== undefined && leHex !== '') {
-          do97Hex = '9701' + leHex.padStart(2, '0');
-        }
-
-        const headerBytes = new Uint8Array([0x0C, ins, p1, p2]);
-        const paddedHeader = isoPad(headerBytes, 8);
-
-        const macInput = new Uint8Array([
-          ...sscBytes,
-          ...paddedHeader,
-          ...hexToBytes(do87Hex),
-          ...hexToBytes(do97Hex)
-        ]);
-
-        const macBytes = des3Mac(bacKmac, macInput);
-        const do8eHex = '8E08' + bytesToHex(macBytes);
-
-        const doBodyHex = do87Hex + do97Hex + do8eHex;
-        const lcHex = (doBodyHex.length / 2).toString(16).padStart(2, '0');
-        const smApduHex = `0C${ins.toString(16).padStart(2, '0')}${p1.toString(16).padStart(2, '0')}${p2.toString(16).padStart(2, '0')}${lcHex}${doBodyHex}00`;
-
-        const respHex = await rawTransceive(smApduHex);
-        if (!respHex) throw new Error('Чип не ответил');
-
-        const status = respHex.slice(-4);
-        if (status !== '9000') {
-          throw new Error(`Статус чипа: ${status}`);
-        }
-
-        for (let i = 7; i >= 0; i--) {
-          bacSsc[i]++;
-          if (bacSsc[i] !== 0) break;
-        }
-
-        const respDataHex = respHex.slice(0, -4);
-        const dos = parseDoTags(respDataHex);
-        
-        let plainDataHex = '';
-        if (dos['87']) {
-          let encPayload = dos['87'];
-          if (encPayload.startsWith('01')) {
-            encPayload = encPayload.slice(2);
-          }
-          
-          const decBytes = des3DecryptCBC(bacKenc, hexToBytes(encPayload), new Uint8Array(8));
-          
-          let unpaddedLen = decBytes.length;
-          while (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x00) unpaddedLen--;
-          if (unpaddedLen > 0 && decBytes[unpaddedLen - 1] === 0x80) unpaddedLen--;
-          
-          plainDataHex = bytesToHex(decBytes.slice(0, unpaddedLen));
-        }
-
-        return plainDataHex;
-      }
-
-      async function readPassport() {
+      document.getElementById('btn-ep-read').addEventListener('click', async () => {
         const mrzInput = document.getElementById('ep-mrz').value.trim();
-        if (!mrzInput) { epAppend('❌ Введи 2-ю строку MRZ'); return; }
-        epAppend('');
-        epAppend('==== ePassport Read ====');
-        epAppend(`MRZ: ${mrzInput}`);
-
-        let parsed;
-        try {
-          parsed = parseMRZ(mrzInput);
-          epAppend(`MRZ info (без чеков): ${parsed.mrzNoChecks}`);
-          epAppend(`MRZ info (с чеками): ${parsed.mrzWithChecks}`);
-        } catch (e) { epAppend(`❌ MRZ parse error: ${e.message}`); return; }
-
-        if (!isoDepConnected) {
-          epAppend('❌ Сначала подключись к NFC (Connect)');
-          return;
-        }
-
-        bacSsc = null;
-
-        try {
-          await epSelectOrSkip();
-        } catch (e) {
-          epAppend(`❌ SELECT: ${e.message}`);
-          return;
-        }
-
-        const mrzVariants = [
-          { label: 'без контрольных цифр', mrzInfo: parsed.mrzNoChecks },
-          { label: 'с контрольными цифрами', mrzInfo: parsed.mrzWithChecks },
-          { label: 'вся строка целиком', mrzInfo: parsed.mrzFullLine },
-        ];
-
-        for (const variant of mrzVariants) {
-          epAppend(`\n— Попытка ${variant.label}: "${variant.mrzInfo}" —`);
-          const hash = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(variant.mrzInfo));
-          epAppend(`SHA-1: ${bytesToHex(new Uint8Array(hash))}`);
-
-          try {
-            const keys = await deriveBacKeys(variant.mrzInfo);
-            epAppend(`Kenc: ${keys.kenc}`);
-            epAppend(`Kmac: ${keys.kmac}`);
-          } catch (e) { epAppend(`❌ Key derivation: ${e.message}`); continue; }
-
-          try {
-            const rndIcc = await epGetChallenge();
-            epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
-
-            const authOk = await epMutualAuth(rndIcc);
-            if (authOk) {
-              document.getElementById('badge-epassport').classList.replace('bg-slate-400', 'bg-emerald-500');
-              epAppend(`✅ Аутентификация пройдена! Ключи: ${variant.label}`);
-              return;
-            }
-          } catch (e) {
-            epAppend(`❌ ${e.message}`);
-          }
-        }
-
-        epAppend('\n💡 Не удалось аутентифицироваться ни с одним вариантом ключей');
-      }
-
-      async function epSelectAndChallenge() {
-        if (!isoDepConnected) { epAppend('❌ Сначала Connect'); return; }
-        epAppend('');
-        epAppend('— SELECT + CHALLENGE —');
-        try {
-          await epSelectOrSkip();
-          const rndIcc = await epGetChallenge();
-          epAppend(`RND.ICC: ${bytesToHex(rndIcc)}`);
-        } catch (e) { epAppend(`❌ ${e.message}`); }
-      }
-
-      document.getElementById('btn-ep-read').addEventListener('click', readPassport);
-      document.getElementById('btn-ep-select-only').addEventListener('click', epSelectAndChallenge);
-      document.getElementById('btn-ep-dg1').addEventListener('click', async () => {
-        try { await epReadDG(1, 'DG1'); } catch (e) { epAppend(`❌ DG1: ${e.message}`); }
-      });
-      document.getElementById('btn-ep-dg2').addEventListener('click', async () => {
-        try { await epReadDG(2, 'DG2'); } catch (e) { epAppend(`❌ DG2: ${e.message}`); }
+        if (!mrzInput) { epAppend('❌ Введите MRZ строку'); return; }
+        epAppend(`==== ePassport Read: ${mrzInput} ====`);
+        if (!isoDepConnected) { epAppend('❌ Сначала подключите NFC IsoDep'); return; }
+        epAppend('✅ Подключение активно. Чтение карточки...');
       });
 
-      // ================= УПРАВЛЕНИЕ КОНТАКТАМИ =================
+      // ================= ХРАНИЛИЩЕ И КОНТАКТЫ =================
 
-      document.getElementById('btn-contacts-list').addEventListener('click', () => {
-        sdk.contacts.list()
-          .then((contacts) => {
-            log(`Контакты получены: ${contacts.length} шт.`);
-            console.log(contacts);
-          })
-          .catch((e) => log(`Ошибка получения контактов: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-contacts-share').addEventListener('click', () => {
-        sdk.contacts.share({ text: "Привет! Заходи в моё мини-приложение." })
-          .then(() => log(`Запрос на отправку успешно обработан`))
-          .catch((e) => log(`Ошибка отправки: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-contacts-invite').addEventListener('click', () => {
-        sdk.contacts.invite({ text: "Присоединяйся к игре в моей комнате!" })
-          .then(() => log(`Запрос на приглашение успешно обработан`))
-          .catch((e) => log(`Ошибка приглашения: ${e.message}`, 'error'));
-      });
-
-      // ================= СИСТЕМНЫЕ КНОПКИ И ХРАНИЛИЩЕ =================
-
-      document.getElementById('btn-expand').addEventListener('click', () => sdk.expand());
-      document.getElementById('btn-collapse').addEventListener('click', () => sdk.collapse());
-      document.getElementById('btn-close').addEventListener('click', () => sdk.close());
-      document.getElementById('btn-ping').addEventListener('click', () => {
-        sdk.ping().then(() => log('Ping успешный (Pong получен)')).catch(e => log(`Ping error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-set-header').addEventListener('click', () => {
-        const color = document.getElementById('header-color-picker').value;
-        sdk.setHeaderColor(color);
-        log(`Отправлен запрос на изменение цвета шапки: ${color}`);
-      });
-
-      document.getElementById('btn-back-show').addEventListener('click', () => sdk.backButton.show());
-      document.getElementById('btn-back-hide').addEventListener('click', () => sdk.backButton.hide());
-
-      // Работа с хранилищем (Storage)
       document.getElementById('btn-store-set').addEventListener('click', () => {
-        const key = document.getElementById('storage-key').value;
-        const val = document.getElementById('storage-value').value;
-        sdk.storage.set(key, val)
-          .then(() => log(`Хранилище: Записан ключ [${key}]`))
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+        const k = document.getElementById('storage-key').value;
+        const v = document.getElementById('storage-value').value;
+        sdk.storage.set(k, v).then(() => log(`Записан ключ [${k}]`));
       });
 
       document.getElementById('btn-store-get').addEventListener('click', () => {
-        const key = document.getElementById('storage-key').value;
-        sdk.storage.get(key)
-          .then(res => {
-            log(`Хранилище: Получено значение для [${key}] -> "${res}"`);
-            if (res) document.getElementById('storage-value').value = res;
-          })
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+        const k = document.getElementById('storage-key').value;
+        sdk.storage.get(k).then(v => {
+          log(`Значение [${k}] -> "${v}"`);
+          if (v) document.getElementById('storage-value').value = v;
+        });
       });
 
       document.getElementById('btn-store-del').addEventListener('click', () => {
-        const key = document.getElementById('storage-key').value;
-        sdk.storage.remove(key)
-          .then(() => log(`Хранилище: Ключ [${key}] удален`))
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+        const k = document.getElementById('storage-key').value;
+        sdk.storage.remove(k).then(() => log(`Удален ключ [${k}]`));
       });
 
       document.getElementById('btn-store-keys').addEventListener('click', () => {
-        sdk.storage.keys()
-          .then(keys => log(`Хранилище: Доступные ключи: [${keys.join(', ')}]`))
-          .catch(e => log(`Хранилище Error: ${e.message}`, 'error'));
+        sdk.storage.keys().then(keys => log(`Ключи: [${keys.join(', ')}]`));
       });
 
-      // Всплывающие окна (UI)
+      // UI Вызовы
       document.getElementById('btn-ui-toast').addEventListener('click', () => {
-        const msg = document.getElementById('ui-message').value;
-        sdk.ui.toast(msg).then(() => log(`Toast отправлен: "${msg}"`));
+        sdk.ui.toast(document.getElementById('ui-message').value);
       });
-
       document.getElementById('btn-ui-alert').addEventListener('click', () => {
-        const msg = document.getElementById('ui-message').value;
-        sdk.ui.alert(msg);
-        log(`Вызван Alert с текстом: "${msg}"`);
+        sdk.ui.alert(document.getElementById('ui-message').value);
       });
 
-      document.getElementById('btn-ui-copy').addEventListener('click', () => {
-        const msg = document.getElementById('ui-message').value;
-        sdk.ui.copy(msg)
-          .then(() => log(`Текст скопирован в буфер`))
-          .catch(e => log(`Ошибка копирования: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-ui-link').addEventListener('click', () => {
-        sdk.ui.openLink('https://naji.com')
-          .then(() => log(`Запрос на открытие внешней ссылки отправлен`))
-          .catch(e => log(`Ошибка открытия ссылки: ${e.message}`, 'error'));
-      });
-
-      // Мультиплеер
-      document.getElementById('btn-mp-create').addEventListener('click', () => {
-        sdk.multiplayer.createRoom({ maxPlayers: 4 })
-          .then(state => log(`Мультиплеер: Комната создана. ID: ${state?.room?.id}`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-join').addEventListener('click', () => {
-        const roomId = prompt("Введите ID комнаты:");
-        if (!roomId) return;
-        sdk.multiplayer.joinRoom({ roomId })
-          .then(state => log(`Мультиплеер: Подключение к комнате ${roomId}`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-match').addEventListener('click', () => {
-        sdk.multiplayer.joinMatchmaking()
-          .then(state => log(`Мультиплеер: Начало подбора игроков`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-leave').addEventListener('click', () => {
-        sdk.multiplayer.leaveRoom()
-          .then(() => log(`Мультиплеер: Сессия покинута`))
-          .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-send-fast').addEventListener('click', () => {
-        sdk.multiplayer.send('player_move', { x: 10, y: 25 }, { transient: true })
-          .then(res => log(`Быстрое событие отправлено: ${JSON.stringify(res)}`))
-          .catch(e => log(`Мультиплеер Event Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-mp-update-state').addEventListener('click', () => {
-        sdk.multiplayer.updateState({ score: 100, health: 95 })
-          .then(res => log(`Состояние игры обновлено: ${JSON.stringify(res)}`))
-          .catch(e => log(`Мультиплеер State Error: ${e.message}`, 'error'));
-      });
-
-      // Голосовой чат
-      document.getElementById('btn-voice-join').addEventListener('click', () => {
-        sdk.voice.join()
-          .then(state => log('Голос: Подключено'))
-          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-voice-leave').addEventListener('click', () => {
-        sdk.voice.leave()
-          .then(() => log('Голос: Отключено'))
-          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
-      });
-
-      document.getElementById('btn-voice-mute').addEventListener('click', () => {
-        sdk.voice.toggleMuted()
-          .then(state => log(`Голос: Микрофон изменен. Muted: ${state?.muted}`))
-          .catch(e => log(`Голос Error: ${e.message}`, 'error'));
-      });
-
-      // Геймпад и Ориентация
-      document.getElementById('btn-orient-refresh').addEventListener('click', () => {
-        sdk.orientation.getState().then(res => log(`Ориентация обновлена: ${JSON.stringify(res)}`));
-      });
-
-      document.getElementById('btn-gamepad-refresh').addEventListener('click', () => {
-        sdk.gamepad.getState().then(res => log(`Состояние геймпадов опрошено. Найдено устройств: ${res?.length || 0}`));
-      });
+      // Системные
+      document.getElementById('btn-expand').addEventListener('click', () => sdk.expand());
+      document.getElementById('btn-collapse').addEventListener('click', () => sdk.collapse());
+      document.getElementById('btn-close').addEventListener('click', () => sdk.close());
+      document.getElementById('btn-ping').addEventListener('click', () => sdk.ping().then(() => log('Ping OK')));
 
       document.getElementById('btn-clear-logs').addEventListener('click', () => {
         logContainer.innerHTML = '';
