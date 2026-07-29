@@ -797,12 +797,42 @@ const BLE_SERVICES = {
         document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
       });
 
-      // Подписка на поток найденных Bluetooth устройств от хоста
+function extractDeviceId(device) {
+  if (!device) return null;
+  return device.id || device.deviceId || device.address || device.mac || device.uuid || device.device_id || null;
+}
+
+// Функция-помощник для извлечения имени устройства
+function extractDeviceName(device) {
+  if (!device) return 'Устройство';
+  return device.name || device.deviceName || device.localName || 'Mi Smart Band 6';
+}
+
+// Обработчик события обнаружения BLE устройства от хоста
 sdk.on('bluetoothDeviceFound', (device) => {
-  log(`[SDK Event] Найдено Bluetooth устройство: ${device.name || device.id}`, 'sys');
-  if (device.name && device.name.includes('Mi Smart Band')) {
-    log(`Автоматическое подключение к найденному Mi Band: ${device.id}...`, 'sys');
-    sdk.bluetooth.connect(device.id);
+  // Выводим сырой объект в консоль для отладки
+  log(`[RAW BLE DATA]: ${JSON.stringify(device)}`, 'sys');
+
+  const deviceId = extractDeviceId(device);
+  const deviceName = extractDeviceName(device);
+
+  log(`[SDK Event] Найдено устройство: ${deviceName} (ID: ${deviceId || 'не определен'})`, 'sys');
+
+  if (deviceId && deviceName.toLowerCase().includes('mi')) {
+    log(`Автоматическое подключение к ${deviceName} (ID: ${deviceId})...`, 'sys');
+    
+    sdk.bluetooth.connect(deviceId)
+      .then(() => {
+        document.getElementById('badge-miband-status').textContent = 'Подключен (SDK)';
+        document.getElementById('badge-miband-status').className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold';
+        document.getElementById('val-miband-id').textContent = deviceId;
+        log(`Успешно подключено к ${deviceName}!`, 'sys');
+      })
+      .catch((err) => {
+        log(`Ошибка подключения к ${deviceId}: ${err.message}`, 'error');
+      });
+  } else if (!deviceId) {
+    log(`⚠ Внимание: Нативный хост прислал объект без ID поля. Структура: ${JSON.stringify(device)}`, 'warning');
   }
 });
 
