@@ -603,6 +603,17 @@
   </main>
 
   <script>
+    let miBandGattServer = null;
+let miBandDevice = null;
+
+// Службы и характеристики Mi Band 6
+const BLE_SERVICES = {
+  BATTERY_SERVICE: '0000180f-0000-1000-8000-00805f9b34fb',
+  BATTERY_LEVEL_CHAR: '00002a19-0000-1000-8000-00805f9b34fb',
+  IMMEDIATE_ALERT_SERVICE: '00001802-0000-1000-8000-00805f9b34fb',
+  ALERT_LEVEL_CHAR: '00002a06-0000-1000-8000-00805f9b34fb',
+  MI_BAND_CUSTOM_SERVICE: '0000fee0-0000-1000-8000-00805f9b34fb'
+};
     // Помощник логирования во встроенную консоль на странице
     const logContainer = document.getElementById('sdk-console');
     function log(message, type = 'info') {
