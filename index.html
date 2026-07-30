@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (BLE Mi Band 6)</title>
+  <title>NajiMiniApp (Mi Band 6 Raw Data)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <!-- Подключение SDK -->
   <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
   <style>
@@ -15,109 +14,88 @@
 <body class="bg-slate-50 text-slate-800 min-h-screen">
 
   <header class="bg-white border-b border-slate-200 sticky top-0 z-10 px-4 py-3 shadow-sm">
-    <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-2">
-      <div>
-        <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
-          <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
-          NajiMiniApp Demo Panel
-        </h1>
-        <p class="text-xs text-slate-500">Прямое подключение к Mi Band 6 через NMASDK</p>
-      </div>
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      <h1 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
+        BLE Test (Mi Band 6)
+      </h1>
       <div class="flex gap-2">
-        <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">Init</button>
-        <button id="btn-ready" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded transition" disabled>Ready</button>
+        <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded">Init</button>
+        <button id="btn-ready" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded" disabled>Ready</button>
       </div>
     </div>
   </header>
 
-  <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-    <!-- ЛЕВАЯ КОЛОНКА -->
-    <div class="space-y-6">
-      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div class="flex justify-between items-center mb-3">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Данные окружения</h2>
-          <button id="btn-req-context" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded border">Request Context</button>
-        </div>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between border-b pb-1"><span class="text-slate-500">Платформа:</span><span class="font-medium" id="val-platform">-</span></div>
-          <div class="flex justify-between border-b pb-1"><span class="text-slate-500">Тема:</span><span class="font-medium" id="val-theme">-</span></div>
-        </div>
-      </section>
+  <main class="max-w-6xl mx-auto p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Системные вызовы</h2>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <button id="btn-expand" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Expand</button>
-          <button id="btn-collapse" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Collapse</button>
-          <button id="btn-ping" class="border border-slate-200 hover:bg-slate-50 py-1.5 rounded">Ping</button>
-          <button id="btn-close" class="border border-rose-200 text-rose-600 hover:bg-rose-50 py-1.5 rounded">Close App</button>
+    <!-- ЛЕВАЯ КОЛОНКА (Интерфейс Mi Band) -->
+    <div class="space-y-6">
+      
+      <!-- Уведомление о шифровании -->
+      <div class="bg-rose-50 text-rose-800 text-[11px] p-3 rounded-xl border border-rose-200 shadow-sm leading-relaxed">
+        <b>Особенности Mi Band 6:</b> Если заряд больше 100% (например 231), значит браслет прислал <b>зашифрованный байт</b> (AES Auth). Без сопряжения/ключа он будет игнорировать команды на вибрацию (Alert), защищаясь от спама. Ниже мы попытаемся обойти это, прочитав системный сервис Huami.
+      </div>
+
+      <section class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm bg-blue-50/30">
+        <div class="flex justify-between items-center border-b pb-2 mb-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-blue-800">Управление BLE</h2>
+          <span id="badge-ble" class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-semibold border">Отключено</span>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div class="bg-white p-3 rounded-lg border border-blue-100 shadow-inner space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">MAC (ID):</span> 
+              <input type="text" id="input-ble-mac" value="D4:30:19:1A:FE:75" class="border border-blue-200 rounded px-1.5 py-1 text-xs font-mono w-40 text-right text-slate-800 focus:outline-blue-500 bg-blue-50">
+            </div>
+            
+            <div class="flex justify-between items-center pt-2 border-t border-dashed mt-2">
+              <span class="text-slate-500">Заряд (Standard):</span> 
+              <span id="val-ble-battery-std" class="text-base font-black text-slate-700">--%</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Заряд (Huami):</span> 
+              <span id="val-ble-battery-huami" class="text-base font-black text-emerald-600">--%</span>
+            </div>
+
+            <div class="pt-2 border-t border-dashed">
+              <span class="text-slate-500 block mb-1">Сырые данные (Raw Data) от Хоста:</span>
+              <div id="val-ble-raw" class="font-mono text-[10px] bg-slate-900 text-green-400 p-2 rounded break-all min-h-[40px]">-</div>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btn-ble-scan" class="bg-white hover:bg-slate-50 text-slate-700 font-medium py-2 rounded shadow-sm border border-slate-200">1. Найти MAC</button>
+            <button id="btn-ble-connect" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded shadow-sm">2. Подключить</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 pt-2 border-t">
+            <button id="btn-ble-get-battery-std" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded border" disabled>Заряд (Std 180F)</button>
+            <button id="btn-ble-get-battery-huami" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium py-2 rounded border border-emerald-200" disabled>Заряд (Huami FEE0)</button>
+            <button id="btn-ble-vibrate" class="col-span-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium py-2 rounded border border-purple-200" disabled>📳 Повибрировать (Alert 0x02)</button>
+          </div>
         </div>
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА -->
-    <div class="space-y-6 md:col-span-2">
-      <!-- Лог -->
-      <section class="bg-slate-900 text-slate-200 p-4 rounded-xl shadow-sm">
+    <!-- ПРАВАЯ КОЛОНКА (Логи) -->
+    <div class="space-y-6">
+      <section class="bg-slate-900 text-slate-200 p-4 rounded-xl shadow-sm h-full flex flex-col">
         <div class="flex justify-between items-center mb-2">
           <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Лог событий SDK</h2>
-          <button id="btn-clear-logs" class="text-[10px] text-slate-400 hover:text-white border border-slate-700 px-2 py-0.5 rounded">Очистить</button>
+          <button id="btn-clear-logs" class="text-[10px] text-slate-400 border border-slate-700 px-2 py-0.5 rounded">Очистить</button>
         </div>
-        <div id="sdk-console" class="scrollable-console text-xs space-y-1 bg-slate-950 p-2 rounded border border-slate-800 text-green-400">
-          <div>[System] Ожидание подключения и инициализации...</div>
-        </div>
-      </section>
-
-      <!-- BLUETOOTH / MI BAND 6 ПО MAC-АДРЕСУ -->
-      <section class="bg-white p-4 rounded-xl border border-blue-200 shadow-sm space-y-3 bg-blue-50/30">
-        <div class="flex justify-between items-center border-b pb-2">
-          <h2 class="text-sm font-semibold uppercase tracking-wider text-blue-800 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v20m0-20l5 5-5 5m0-10L7 7l5 5m0 10l5-5-5-5m0 10l-5-5 5-5"></path></svg>
-            Bluetooth (Управление Mi Band 6)
-          </h2>
-          <span id="badge-ble" class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-semibold border border-slate-300">Отключено</span>
-        </div>
-        
-        <div class="bg-yellow-50 text-yellow-800 text-[10px] p-2 rounded border border-yellow-200 mb-2">
-          <b>Важно:</b> Если браслет привязан к приложению Zepp Life, он может блокировать (отвечать ошибкой) на попытки прочитать заряд или включить вибрацию без AES Auth Key. SDK свои запросы отправляет исправно.
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="space-y-2 text-xs">
-            <div class="bg-white p-3 rounded-lg border border-blue-100 shadow-inner space-y-2">
-              <div class="flex justify-between items-center">
-                <span class="text-slate-500">MAC (ID):</span> 
-                <input type="text" id="input-ble-mac" value="D4:30:19:1A:FE:75" class="border border-blue-200 rounded px-1.5 py-0.5 text-xs font-mono w-36 text-right text-slate-800 focus:outline-blue-500 bg-blue-50">
-              </div>
-              <div class="flex justify-between">
-                <span class="text-slate-500">Имя:</span> 
-                <span id="val-ble-name" class="font-bold text-slate-700">Mi Band 6</span>
-              </div>
-              <div class="flex justify-between items-center pt-2 border-t border-dashed mt-2">
-                <span class="text-slate-500">Заряд батареи:</span> 
-                <span id="val-ble-battery" class="text-lg font-black text-emerald-500">--%</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="flex flex-col gap-2 justify-center text-xs">
-            <div class="grid grid-cols-2 gap-2">
-              <button id="btn-ble-scan" class="bg-white hover:bg-slate-50 text-slate-700 font-medium py-2 rounded shadow-sm border border-slate-200">Искать MAC</button>
-              <button id="btn-ble-connect" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded shadow-sm">Подключить</button>
-            </div>
-            <div class="grid grid-cols-2 gap-2 pt-2 border-t">
-              <button id="btn-ble-get-battery" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium py-2 rounded border border-emerald-200" disabled>Запросить заряд</button>
-              <button id="btn-ble-vibrate" class="bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium py-2 rounded border border-purple-200" disabled>Повибрировать</button>
-            </div>
-          </div>
+        <div id="sdk-console" class="scrollable-console flex-1 text-[11px] space-y-1 bg-slate-950 p-2 rounded border border-slate-800 text-green-400">
+          <div>[System] Ожидание инициализации...</div>
         </div>
       </section>
-
     </div>
   </main>
 
   <script>
     const logContainer = document.getElementById('sdk-console');
+    const rawContainer = document.getElementById('val-ble-raw');
+
     function log(message, type = 'info') {
       const el = document.createElement('div');
       const time = new Date().toLocaleTimeString();
@@ -129,14 +107,6 @@
       el.textContent = `[${time}] ${message}`;
       logContainer.appendChild(el);
       logContainer.scrollTop = logContainer.scrollHeight;
-    }
-
-    // Для 3D Кубика
-    let cubeRotX = 0, cubeRotY = 0, cubeRotZ = 0;
-    function updateCubeTransform(x, y, z) {
-      cubeRotX += x * 3; cubeRotY += y * 3; cubeRotZ += z * 3;
-      const cubeEl = document.getElementById('gyro-cube');
-      if(cubeEl) cubeEl.style.transform = `rotateX(${cubeRotX}deg) rotateY(${cubeRotY}deg) rotateZ(${cubeRotZ}deg)`;
     }
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -155,202 +125,165 @@
       });
 
       // =========================================================
-      // УПРАВЛЕНИЕ BLUETOOTH
+      // UUID's
       // =========================================================
-
       const UUID_BATTERY_SERVICE = "0000180f-0000-1000-8000-00805f9b34fb";
       const UUID_BATTERY_CHAR    = "00002a19-0000-1000-8000-00805f9b34fb";
+      
+      const UUID_HUAMI_SERVICE      = "0000fee0-0000-1000-8000-00805f9b34fb";
+      const UUID_HUAMI_BATTERY_CHAR = "00000006-0000-3512-2118-0009af100700";
+
       const UUID_ALERT_SERVICE   = "00001802-0000-1000-8000-00805f9b34fb";
       const UUID_ALERT_CHAR      = "00002a06-0000-1000-8000-00805f9b34fb";
 
       let activeBleDevice = null;
-      let servicesDiscovered = false; // Флаг для защиты от бесконечного цикла
+      let servicesDiscovered = false;
 
       function getTargetMac() {
         return document.getElementById('input-ble-mac').value.trim().toUpperCase();
       }
 
+      function enableButtons(enabled) {
+        const btns = ['btn-ble-get-battery-std', 'btn-ble-get-battery-huami', 'btn-ble-vibrate'];
+        btns.forEach(id => {
+          if (enabled) document.getElementById(id).removeAttribute('disabled');
+          else document.getElementById(id).setAttribute('disabled', 'true');
+        });
+      }
+
       sdk.bluetooth.onDeviceFound((device) => {
-        const targetMac = getTargetMac();
-        if (!activeBleDevice && (device.id || '').toUpperCase() === targetMac) {
+        if (!activeBleDevice && (device.id || '').toUpperCase() === getTargetMac()) {
           activeBleDevice = device;
           sdk.bluetooth.stopScan();
-          log(`BLE: Устройство [${targetMac}] найдено! Остановка сканирования.`, 'sys');
+          log(`BLE: Устройство найдено! Сканирование остановлено.`, 'sys');
         }
       });
 
-      // ОБРАБОТЧИК СОСТОЯНИЯ (С ЗАЩИТОЙ ОТ ЦИКЛА)
       sdk.bluetooth.onConnectionStateChanged((payload) => {
-        const targetMac = getTargetMac();
-        if (payload.deviceId.toUpperCase() === targetMac) {
+        if (payload.deviceId.toUpperCase() === getTargetMac()) {
           const badge = document.getElementById('badge-ble');
           
           if (payload.connected) {
             badge.className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold border border-emerald-300';
             badge.textContent = 'Подключено';
+            enableButtons(true);
             
-            document.getElementById('btn-ble-get-battery').removeAttribute('disabled');
-            document.getElementById('btn-ble-vibrate').removeAttribute('disabled');
-            
-            // Если хост уже сообщает, что сервисы готовы, ИЛИ мы их уже запросили — пропускаем
             if (payload.servicesReady) {
-                log('BLE: Сервисы найдены и готовы к использованию (из Flutter)', 'sys');
+                log('BLE: Сервисы найдены и готовы (из Flutter)', 'sys');
             } else if (!servicesDiscovered) {
                 servicesDiscovered = true;
-                log(`BLE: Запрашиваем сервисы...`, 'sys');
+                log(`BLE: Запрашиваем сервисы (discoverServices)...`, 'sys');
                 sdk.bluetooth.discoverServices(payload.deviceId)
-                  .catch(e => { servicesDiscovered = false; log(`BLE Services Error: ${e.message}`, 'error'); });
+                  .catch(e => { servicesDiscovered = false; log(`Ошибка сервисов: ${e.message}`, 'error'); });
             }
-              
           } else {
-            servicesDiscovered = false; // Сбрасываем флаг при отключении
+            servicesDiscovered = false;
             badge.className = 'text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-semibold border border-slate-300';
             badge.textContent = 'Отключено';
-            log(`BLE: Устройство ${targetMac} отключено.`, 'warning');
-            
-            document.getElementById('btn-ble-get-battery').setAttribute('disabled', 'true');
-            document.getElementById('btn-ble-vibrate').setAttribute('disabled', 'true');
+            enableButtons(false);
+            log(`BLE: Устройство отключено.`, 'warning');
           }
         }
       });
 
       document.getElementById('btn-ble-scan').addEventListener('click', () => {
-        activeBleDevice = null;
-        servicesDiscovered = false;
-        log(`BLE: Поиск устройства с MAC ${getTargetMac()}...`);
-        sdk.bluetooth.startScan({ timeout: 15000 })
-          .catch(e => log(`BLE Scan Error: ${e.message}`, 'error'));
+        activeBleDevice = null; servicesDiscovered = false;
+        log(`BLE: Поиск MAC ${getTargetMac()}...`);
+        sdk.bluetooth.startScan({ timeout: 15000 }).catch(e => log(`Scan Error: ${e.message}`, 'error'));
       });
 
       document.getElementById('btn-ble-connect').addEventListener('click', () => {
         const targetMac = getTargetMac();
-        if (!activeBleDevice) activeBleDevice = { id: targetMac, name: 'Mi Band 6' };
-        
+        if (!activeBleDevice) activeBleDevice = { id: targetMac };
         servicesDiscovered = false;
-        log(`BLE: Прямое подключение к MAC ${targetMac}...`);
-        sdk.bluetooth.connect(targetMac).catch(e => log(`BLE Connect Error: ${e.message}`, 'error'));
+        log(`BLE: Подключение к ${targetMac}...`);
+        sdk.bluetooth.connect(targetMac).catch(e => log(`Connect Error: ${e.message}`, 'error'));
       });
 
-      // УМНЫЙ ПАРСЕР ДЛЯ БАТАРЕИ (Flutter/Android обычно возвращают массивы или Base64)
-      function parseBatteryData(res) {
-        // Логируем сырой ответ, чтобы в крайнем случае понять, как он выглядит
-        log(`BLE (Сырой ответ батареи): ${JSON.stringify(res)}`, 'sys');
+      // --- УМНЫЙ ПАРСЕР ДАННЫХ (Вытаскиваем массив байтов в любом случае) ---
+      function extractByteArray(res) {
+        rawContainer.textContent = JSON.stringify(res); // ВЫВОДИМ СЫРОЙ ОТВЕТ НА ЭКРАН!
         
         try {
-            if (res == null) return 0;
-            if (typeof res === 'number') return res;
-            
-            // Если это сырой массив (например, [87])
-            if (Array.isArray(res)) return res[0];
-            
-            // Если это объект, извлекаем данные (Flutter часто присылает { value: [...] })
+            if (Array.isArray(res)) return res;
             if (typeof res === 'object') {
-               let val = res.data || res.value || res.result || res.payload;
-               if (Array.isArray(val)) return val[0];
-               
-               if (typeof val === 'string') {
-                   // Проверяем, Base64 ли это (Flutter_blue_plus возвращает Base64)
-                   try {
-                       const decoded = atob(val);
-                       if (decoded.length > 0) return decoded.charCodeAt(0);
-                   } catch(e) {}
-                   return parseInt(val, 16);
-               }
+                if (Array.isArray(res.value)) return res.value;
+                if (Array.isArray(res.data)) return res.data;
+                // Если хост прислал Base64 строку внутри объекта
+                const str = res.value || res.data || res.payload;
+                if (typeof str === 'string') return decodeBase64ToArray(str);
             }
-            
-            // Если пришла просто строка Base64 (например, "Vw==")
-            if (typeof res === 'string') {
-                try {
-                   const decoded = atob(res);
-                   if (decoded.length > 0) return decoded.charCodeAt(0);
-                } catch(e) {}
-                return parseInt(res, 16);
-            }
+            if (typeof res === 'string') return decodeBase64ToArray(res);
         } catch (e) {
-            log(`Ошибка парсинга заряда: ${e.message}`, 'error');
+            log(`Ошибка парсинга: ${e.message}`, 'error');
         }
-        
-        return 0;
+        return [];
       }
 
-      document.getElementById('btn-ble-get-battery').addEventListener('click', () => {
-        const targetMac = getTargetMac();
-        log(`BLE: Запрос заряда (Сервис: 180f)...`);
-        
-        sdk.bluetooth.readRaw(targetMac, UUID_BATTERY_SERVICE, UUID_BATTERY_CHAR)
+      function decodeBase64ToArray(str) {
+        try {
+            const bin = atob(str);
+            const arr = [];
+            for(let i = 0; i < bin.length; i++) arr.push(bin.charCodeAt(i));
+            return arr;
+        } catch(e) {
+            // Если не base64, пытаемся распарсить как hex
+            return [parseInt(str, 16) || 0];
+        }
+      }
+
+      // КНОПКА: Заряд Standard (180F) - Обычно 1 байт. Если зашифровано, даст мусор (типа 231)
+      document.getElementById('btn-ble-get-battery-std').addEventListener('click', () => {
+        log(`BLE: Запрос заряда (Standard 180f)...`);
+        sdk.bluetooth.readRaw(getTargetMac(), UUID_BATTERY_SERVICE, UUID_BATTERY_CHAR)
           .then((res) => {
-            const batteryLvl = parseBatteryData(res);
-            document.getElementById('val-ble-battery').textContent = `${batteryLvl}%`;
-            log(`BLE: Заряд батареи успешно прочитан = ${batteryLvl}%`, 'sys');
+            const bytes = extractByteArray(res);
+            const val = bytes.length > 0 ? bytes[0] : 0;
+            document.getElementById('val-ble-battery-std').textContent = `${val}%`;
+            
+            if (val > 100) log(`Получено ${val}%. Это зашифрованные данные (мусор).`, 'warning');
+            else log(`Заряд (Standard): ${val}%`, 'sys');
           })
-          .catch(e => log(`BLE Battery Read Error: ${e.message}`, 'error'));
+          .catch(e => log(`Battery Std Error: ${e.message}`, 'error'));
       });
 
+      // КНОПКА: Заряд Huami (FEE0) - Дает 20 байт. Индекс [1] — это заряд.
+      document.getElementById('btn-ble-get-battery-huami').addEventListener('click', () => {
+        log(`BLE: Запрос заряда (Huami FEE0)...`);
+        sdk.bluetooth.readRaw(getTargetMac(), UUID_HUAMI_SERVICE, UUID_HUAMI_BATTERY_CHAR)
+          .then((res) => {
+            const bytes = extractByteArray(res);
+            // У Huami массива длина 20, заряд лежит во 2-м байте (индекс 1)
+            const val = bytes.length >= 2 ? bytes[1] : (bytes[0] || 0);
+            document.getElementById('val-ble-battery-huami').textContent = `${val}%`;
+            
+            if (val > 100) log(`Получено ${val}%. Данные FEE0 тоже зашифрованы!`, 'error');
+            else log(`Заряд (Huami): ${val}%`, 'sys');
+          })
+          .catch(e => log(`Battery Huami Error: ${e.message}`, 'error'));
+      });
+
+      // КНОПКА: ВИБРАЦИЯ
       document.getElementById('btn-ble-vibrate').addEventListener('click', () => {
-        const targetMac = getTargetMac();
-        log(`BLE: Отправка команды на вибрацию (Alert 0x02)...`);
+        log(`BLE: Отправка команды на вибрацию [0x02]...`);
         
-        // В nmasdk.js функция sendRaw принимает payload целиком. 
-        // Мы отправляем все варианты данных (массив байт, base64, hex),
-        // чтобы нативный мост хоста сам выбрал подходящий формат.
+        // Массив из одного байта 2 (Medium Alert). 
+        // Если браслет заблокирован, он просто не отреагирует, а хост вернет success.
         const payload = {
           serviceUuid: UUID_ALERT_SERVICE,
           characteristicUuid: UUID_ALERT_CHAR,
-          data: [2],         // Массив для Flutter
-          value: [2],        // Массив (альтернативный ключ)
-          payload: "Ag==",   // Base64 от [2] 
-          hex: "02"          // На всякий случай
+          data: [2],
+          value: [2]
         };
         
-        sdk.bluetooth.sendRaw(targetMac, payload)
-          .then((res) => log(`BLE: 📳 Вибрация отправлена! Ответ хоста: ${JSON.stringify(res)}`, 'sys'))
-          .catch(e => log(`BLE Vibrate Error: ${e.message}`, 'error'));
+        sdk.bluetooth.sendRaw(getTargetMac(), payload)
+          .then((res) => {
+             rawContainer.textContent = "Write Success: " + JSON.stringify(res);
+             log(`Команда успешно отправлена на браслет! (Если не вибрирует = заблокировано AES)`, 'sys');
+          })
+          .catch(e => log(`Vibrate Error: ${e.message}`, 'error'));
       });
 
-      // =========================================================
-      // Гироскоп и Акселерометр
-      // =========================================================
-      sdk.gyroscope.onChange((data) => {
-        if (!data) return;
-        const x = Number(data.x || 0), y = Number(data.y || 0), z = Number(data.z || 0);
-        const gyroX = document.getElementById('val-gyro-x');
-        if(gyroX) {
-          gyroX.textContent = x.toFixed(2);
-          document.getElementById('val-gyro-y').textContent = y.toFixed(2);
-          document.getElementById('val-gyro-z').textContent = z.toFixed(2);
-          updateCubeTransform(x, y, z);
-        }
-      });
-
-      sdk.accelerometer.onChange((data) => {
-        if (!data) return;
-        const accX = document.getElementById('val-acc-x');
-        if(accX) {
-          accX.textContent = Number(data.x || 0).toFixed(2);
-          document.getElementById('val-acc-y').textContent = Number(data.y || 0).toFixed(2);
-          document.getElementById('val-acc-z').textContent = Number(data.z || 0).toFixed(2);
-        }
-      });
-
-      document.getElementById('btn-gyro-start').addEventListener('click', () => sdk.gyroscope.start());
-      document.getElementById('btn-gyro-stop').addEventListener('click', () => sdk.gyroscope.stop());
-      document.getElementById('btn-acc-start').addEventListener('click', () => sdk.accelerometer.start());
-      document.getElementById('btn-acc-stop').addEventListener('click', () => sdk.accelerometer.stop());
-      
-      let mockInterval = null;
-      document.getElementById('btn-mock-sensors').addEventListener('click', () => {
-        if (mockInterval) {
-          clearInterval(mockInterval); mockInterval = null;
-          log('Эмуляция датчиков остановлена.', 'sys');
-        } else {
-          log('Запущено непрерывное движение...', 'sys');
-          mockInterval = setInterval(() => {
-            window.postMessage({ type: "NAJI_EVENT", eventName: "gyroscopeChanged", payload: { x: Math.sin(Date.now() / 400), y: Math.cos(Date.now() / 500), z: Math.sin(Date.now() / 600) } }, "*");
-            window.postMessage({ type: "NAJI_EVENT", eventName: "accelerometerChanged", payload: { x: Math.random(), y: -9.8 + Math.random(), z: Math.random() } }, "*");
-          }, 100);
-        }
-      });
-      
       document.getElementById('btn-clear-logs').addEventListener('click', () => logContainer.innerHTML = '');
     });
   </script>
