@@ -131,6 +131,14 @@
       logContainer.scrollTop = logContainer.scrollHeight;
     }
 
+    // Для 3D Кубика
+    let cubeRotX = 0, cubeRotY = 0, cubeRotZ = 0;
+    function updateCubeTransform(x, y, z) {
+      cubeRotX += x * 3; cubeRotY += y * 3; cubeRotZ += z * 3;
+      const cubeEl = document.getElementById('gyro-cube');
+      if(cubeEl) cubeEl.style.transform = `rotateX(${cubeRotX}deg) rotateY(${cubeRotY}deg) rotateZ(${cubeRotZ}deg)`;
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       const sdk = window.NajiMiniApp;
 
@@ -147,20 +155,16 @@
       });
 
       // =========================================================
-      // УПРАВЛЕНИЕ BLUETOOTH (ПОЛНЫЕ 128-BIT UUID ДЛЯ НАДЁЖНОСТИ)
+      // УПРАВЛЕНИЕ BLUETOOTH
       // =========================================================
 
-      // Стандартные BLE UUID (батарея и вибрация) в 128-битном формате
       const UUID_BATTERY_SERVICE = "0000180f-0000-1000-8000-00805f9b34fb";
       const UUID_BATTERY_CHAR    = "00002a19-0000-1000-8000-00805f9b34fb";
       const UUID_ALERT_SERVICE   = "00001802-0000-1000-8000-00805f9b34fb";
       const UUID_ALERT_CHAR      = "00002a06-0000-1000-8000-00805f9b34fb";
 
-      // Проприетарный Huami UUID для батареи (на случай, если стандартный заблокирован)
-      const UUID_HUAMI_SERVICE      = "0000fee0-0000-1000-8000-00805f9b34fb";
-      const UUID_HUAMI_BATTERY_CHAR = "00000006-0000-3512-2118-0009af100700";
-
       let activeBleDevice = null;
+      let servicesDiscovered = false; // Флаг для защиты от бесконечного цикла
 
       function getTargetMac() {
         return document.getElementById('input-ble-mac').value.trim().toUpperCase();
@@ -175,23 +179,31 @@
         }
       });
 
+      // ОБРАБОТЧИК СОСТОЯНИЯ (С ЗАЩИТОЙ ОТ ЦИКЛА)
       sdk.bluetooth.onConnectionStateChanged((payload) => {
         const targetMac = getTargetMac();
         if (payload.deviceId.toUpperCase() === targetMac) {
           const badge = document.getElementById('badge-ble');
+          
           if (payload.connected) {
             badge.className = 'text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold border border-emerald-300';
             badge.textContent = 'Подключено';
-            log(`BLE: Успешное подключение к ${targetMac}! Запрашиваем сервисы...`, 'sys');
             
             document.getElementById('btn-ble-get-battery').removeAttribute('disabled');
             document.getElementById('btn-ble-vibrate').removeAttribute('disabled');
             
-            sdk.bluetooth.discoverServices(payload.deviceId)
-              .then(() => log('BLE: Сервисы обнаружены.'))
-              .catch(e => log(`BLE Services Error: ${e.message}`, 'error'));
+            // Если хост уже сообщает, что сервисы готовы, ИЛИ мы их уже запросили — пропускаем
+            if (payload.servicesReady) {
+                log('BLE: Сервисы найдены и готовы к использованию (из Flutter)', 'sys');
+            } else if (!servicesDiscovered) {
+                servicesDiscovered = true;
+                log(`BLE: Запрашиваем сервисы...`, 'sys');
+                sdk.bluetooth.discoverServices(payload.deviceId)
+                  .catch(e => { servicesDiscovered = false; log(`BLE Services Error: ${e.message}`, 'error'); });
+            }
               
           } else {
+            servicesDiscovered = false; // Сбрасываем флаг при отключении
             badge.className = 'text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-semibold border border-slate-300';
             badge.textContent = 'Отключено';
             log(`BLE: Устройство ${targetMac} отключено.`, 'warning');
@@ -204,6 +216,7 @@
 
       document.getElementById('btn-ble-scan').addEventListener('click', () => {
         activeBleDevice = null;
+        servicesDiscovered = false;
         log(`BLE: Поиск устройства с MAC ${getTargetMac()}...`);
         sdk.bluetooth.startScan({ timeout: 15000 })
           .catch(e => log(`BLE Scan Error: ${e.message}`, 'error'));
@@ -213,63 +226,129 @@
         const targetMac = getTargetMac();
         if (!activeBleDevice) activeBleDevice = { id: targetMac, name: 'Mi Band 6' };
         
+        servicesDiscovered = false;
         log(`BLE: Прямое подключение к MAC ${targetMac}...`);
         sdk.bluetooth.connect(targetMac).catch(e => log(`BLE Connect Error: ${e.message}`, 'error'));
       });
 
-      // Парсинг результата от разных нативных мостов
+      // УМНЫЙ ПАРСЕР ДЛЯ БАТАРЕИ (Flutter/Android обычно возвращают массивы или Base64)
       function parseBatteryData(res) {
-        if (typeof res === 'string') return parseInt(res, 16);
-        if (res && typeof res === 'object') {
-           if (res.data && Array.isArray(res.data)) return res.data[0];
-           if (res.value) return parseInt(res.value, 16);
+        // Логируем сырой ответ, чтобы в крайнем случае понять, как он выглядит
+        log(`BLE (Сырой ответ батареи): ${JSON.stringify(res)}`, 'sys');
+        
+        try {
+            if (res == null) return 0;
+            if (typeof res === 'number') return res;
+            
+            // Если это сырой массив (например, [87])
+            if (Array.isArray(res)) return res[0];
+            
+            // Если это объект, извлекаем данные (Flutter часто присылает { value: [...] })
+            if (typeof res === 'object') {
+               let val = res.data || res.value || res.result || res.payload;
+               if (Array.isArray(val)) return val[0];
+               
+               if (typeof val === 'string') {
+                   // Проверяем, Base64 ли это (Flutter_blue_plus возвращает Base64)
+                   try {
+                       const decoded = atob(val);
+                       if (decoded.length > 0) return decoded.charCodeAt(0);
+                   } catch(e) {}
+                   return parseInt(val, 16);
+               }
+            }
+            
+            // Если пришла просто строка Base64 (например, "Vw==")
+            if (typeof res === 'string') {
+                try {
+                   const decoded = atob(res);
+                   if (decoded.length > 0) return decoded.charCodeAt(0);
+                } catch(e) {}
+                return parseInt(res, 16);
+            }
+        } catch (e) {
+            log(`Ошибка парсинга заряда: ${e.message}`, 'error');
         }
-        return parseInt(res, 16) || 0;
+        
+        return 0;
       }
 
       document.getElementById('btn-ble-get-battery').addEventListener('click', () => {
         const targetMac = getTargetMac();
-        log(`BLE: Запрос заряда (Стандартный 180f)...`);
+        log(`BLE: Запрос заряда (Сервис: 180f)...`);
         
-        // 1. Пробуем стандартный метод
         sdk.bluetooth.readRaw(targetMac, UUID_BATTERY_SERVICE, UUID_BATTERY_CHAR)
           .then((res) => {
             const batteryLvl = parseBatteryData(res);
             document.getElementById('val-ble-battery').textContent = `${batteryLvl}%`;
-            log(`BLE: Заряд батареи = ${batteryLvl}%`, 'sys');
+            log(`BLE: Заряд батареи успешно прочитан = ${batteryLvl}%`, 'sys');
           })
-          .catch(e => {
-            log(`BLE Battery (Standard) Error: ${e.message}. Пробуем Huami Service...`, 'warning');
-            
-            // 2. Если ошибка (блокировка), пробуем проприетарный метод Huami
-            sdk.bluetooth.readRaw(targetMac, UUID_HUAMI_SERVICE, UUID_HUAMI_BATTERY_CHAR)
-              .then((res) => {
-                const batteryLvl = parseBatteryData(res);
-                document.getElementById('val-ble-battery').textContent = `${batteryLvl}%`;
-                log(`BLE: Заряд батареи (Huami) = ${batteryLvl}%`, 'sys');
-              })
-              .catch(e2 => log(`BLE Battery (Huami) Error: ${e2.message}. Вероятно нужна AES авторизация (Auth Key).`, 'error'));
-          });
+          .catch(e => log(`BLE Battery Read Error: ${e.message}`, 'error'));
       });
 
       document.getElementById('btn-ble-vibrate').addEventListener('click', () => {
         const targetMac = getTargetMac();
-        log(`BLE: Отправка команды на вибрацию...`);
+        log(`BLE: Отправка команды на вибрацию (Alert 0x02)...`);
         
-        // Нативные мосты принимают данные по-разному. 
-        // Передадим в объект все 3 популярные структуры для гарантии:
-        // Массив байт, Hex строку и Base64-строку
+        // В nmasdk.js функция sendRaw принимает payload целиком. 
+        // Мы отправляем все варианты данных (массив байт, base64, hex),
+        // чтобы нативный мост хоста сам выбрал подходящий формат.
         const payload = {
           serviceUuid: UUID_ALERT_SERVICE,
           characteristicUuid: UUID_ALERT_CHAR,
-          value: [2],         // Byte array
-          valueHex: "02",     // Hex 
-          valueBase64: "Ag==" // Base64 кодировка массива [0x02]
+          data: [2],         // Массив для Flutter
+          value: [2],        // Массив (альтернативный ключ)
+          payload: "Ag==",   // Base64 от [2] 
+          hex: "02"          // На всякий случай
         };
         
         sdk.bluetooth.sendRaw(targetMac, payload)
-          .then(() => log('BLE: 📳 Команда вибрации успешно отправлена хосту!', 'sys'))
-          .catch(e => log(`BLE Vibrate Error: ${e.message}. Ограничение прошивки (Auth).`, 'error'));
+          .then((res) => log(`BLE: 📳 Вибрация отправлена! Ответ хоста: ${JSON.stringify(res)}`, 'sys'))
+          .catch(e => log(`BLE Vibrate Error: ${e.message}`, 'error'));
+      });
+
+      // =========================================================
+      // Гироскоп и Акселерометр
+      // =========================================================
+      sdk.gyroscope.onChange((data) => {
+        if (!data) return;
+        const x = Number(data.x || 0), y = Number(data.y || 0), z = Number(data.z || 0);
+        const gyroX = document.getElementById('val-gyro-x');
+        if(gyroX) {
+          gyroX.textContent = x.toFixed(2);
+          document.getElementById('val-gyro-y').textContent = y.toFixed(2);
+          document.getElementById('val-gyro-z').textContent = z.toFixed(2);
+          updateCubeTransform(x, y, z);
+        }
+      });
+
+      sdk.accelerometer.onChange((data) => {
+        if (!data) return;
+        const accX = document.getElementById('val-acc-x');
+        if(accX) {
+          accX.textContent = Number(data.x || 0).toFixed(2);
+          document.getElementById('val-acc-y').textContent = Number(data.y || 0).toFixed(2);
+          document.getElementById('val-acc-z').textContent = Number(data.z || 0).toFixed(2);
+        }
+      });
+
+      document.getElementById('btn-gyro-start').addEventListener('click', () => sdk.gyroscope.start());
+      document.getElementById('btn-gyro-stop').addEventListener('click', () => sdk.gyroscope.stop());
+      document.getElementById('btn-acc-start').addEventListener('click', () => sdk.accelerometer.start());
+      document.getElementById('btn-acc-stop').addEventListener('click', () => sdk.accelerometer.stop());
+      
+      let mockInterval = null;
+      document.getElementById('btn-mock-sensors').addEventListener('click', () => {
+        if (mockInterval) {
+          clearInterval(mockInterval); mockInterval = null;
+          log('Эмуляция датчиков остановлена.', 'sys');
+        } else {
+          log('Запущено непрерывное движение...', 'sys');
+          mockInterval = setInterval(() => {
+            window.postMessage({ type: "NAJI_EVENT", eventName: "gyroscopeChanged", payload: { x: Math.sin(Date.now() / 400), y: Math.cos(Date.now() / 500), z: Math.sin(Date.now() / 600) } }, "*");
+            window.postMessage({ type: "NAJI_EVENT", eventName: "accelerometerChanged", payload: { x: Math.random(), y: -9.8 + Math.random(), z: Math.random() } }, "*");
+          }, 100);
+        }
       });
       
       document.getElementById('btn-clear-logs').addEventListener('click', () => logContainer.innerHTML = '');
