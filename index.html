@@ -7,8 +7,8 @@
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-  <!-- Подключение SDK по указанному адресу -->
-  <script src="https://cdn.jsdelivr.net/gh/najicreator/NMASDK@refs/heads/main/nmasdk.js"></script>
+  <!-- Подключение SDK (локальная версия) -->
+  <script src="./nmasdk.js"></script>
   <style>
     .scrollable-console {
       max-height: 220px;
@@ -661,7 +661,14 @@
 
         if (sdk.multiplayer.state) {
           document.getElementById('val-mp-room').textContent = sdk.multiplayer.currentRoom?.id || '-';
-          document.getElementById('val-mp-queue').textContent = sdk.multiplayer.queue ? 'В поиске' : 'Нет';
+          document.getElementById('val-mp-queue').textContent = (sdk.multiplayer.queue || sdk.multiplayer.state?.status === 'waiting' || sdk.multiplayer.state?.status === 'matched') ? 'В поиске' : 'Нет';
+        }
+
+        if (sdk.voice.state) {
+          const vs = sdk.voice.state;
+          document.getElementById('val-voice-status').textContent = vs.connected ? 'Активен' : 'Отключен';
+          document.getElementById('val-voice-muted').textContent = vs.muted ? 'Выкл' : 'Вкл';
+          document.getElementById('val-voice-count').textContent = vs.participants?.length ?? 0;
         }
       }
 
@@ -734,7 +741,7 @@
       sdk.on('multiplayerStateChanged', (state) => {
         log(`Событие 'multiplayerStateChanged': ${JSON.stringify(state)}`);
         document.getElementById('val-mp-room').textContent = state?.room?.id || '-';
-        document.getElementById('val-mp-queue').textContent = state?.queue ? 'В поиске' : 'Нет';
+        document.getElementById('val-mp-queue').textContent = (state?.queue || state?.status === 'waiting' || state?.status === 'matched') ? 'В поиске' : 'Нет';
       });
 
       sdk.on('multiplayerMatchFound', (payload) => {
@@ -747,7 +754,7 @@
 
       sdk.on('voiceStateChanged', (state) => {
         log(`Событие 'voiceStateChanged': ${JSON.stringify(state)}`);
-        document.getElementById('val-voice-status').textContent = state?.active ? 'Активен' : 'Отключен';
+        document.getElementById('val-voice-status').textContent = state?.connected ? 'Активен' : 'Отключен';
         document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
       });
 
@@ -1806,7 +1813,7 @@
       document.getElementById('btn-mp-join').addEventListener('click', () => {
         const roomId = prompt("Введите ID комнаты:");
         if (!roomId) return;
-        sdk.multiplayer.joinRoom({ roomId })
+        sdk.multiplayer.joinRoom({ room_id: roomId })
           .then(state => log(`Мультиплеер: Подключение к комнате ${roomId}`))
           .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
       });
