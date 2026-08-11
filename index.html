@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, датчики, вибрация, 60fps Camera, платежи)</title>
+  <title>NajiMiniApp SDK Demo (NFC, IsoDep/APDU, PACE, Bluetooth LEGO Boost, датчики, вибрация, 60fps Camera, платежи)</title>
   <!-- Tailwind CSS для аккуратного оформления -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-  <!-- Подключение SDK (локальная версия) -->
-  <script src="https://cdn.jsdelivr.net/gh/harukinaji/NMASDK@main/nmasdk.js"></script>
+  <!-- Подключение SDK (локальная копия с расширением payments.requestPayment) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <style>
     .scrollable-console {
       max-height: 220px;
@@ -61,7 +61,7 @@
           <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse" id="status-indicator"></span>
           NajiMiniApp Demo Panel
         </h1>
-        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, датчиков, вибрации, NFC, 60fps Камеры и Платежей</p>
+        <p class="text-xs text-slate-500">Интерактивный интерфейс для тестирования методов SDK, Bluetooth LEGO Boost, датчиков, вибрации, NFC, 60fps Камеры и Платежей</p>
       </div>
       <div class="flex gap-2">
         <button id="btn-init" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded transition">
@@ -133,6 +133,7 @@
           <div class="grid grid-cols-2 gap-1 pt-1 text-[11px]">
             <button id="btn-wallet-get" class="border border-slate-200 hover:bg-slate-50 py-1 rounded">Get State</button>
             <button id="btn-wallet-refresh" class="border border-slate-200 hover:bg-slate-50 py-1 rounded">Refresh State</button>
+            <button id="btn-wallet-view" class="col-span-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 py-1 rounded font-medium">Посмотреть кошелёк (wallet.view)</button>
           </div>
         </div>
       </section>
@@ -163,7 +164,7 @@
       </section>
     </div>
 
-    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, API, Камера, Платежи -->
+    <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА: Хранилище, UI, Датчики, Вибрация, NFC, Bluetooth LEGO Boost, API, Камера, Платежи -->
     <div class="space-y-6 md:col-span-2">
       
       <!-- Логирование событий -->
@@ -174,6 +175,109 @@
         </div>
         <div id="sdk-console" class="scrollable-console text-xs space-y-1 bg-slate-950 p-2 rounded border border-slate-800 text-green-400">
           <div>[System] Ожидание подключения и инициализации...</div>
+        </div>
+      </section>
+
+      <!-- BLUETOOTH & LEGO BOOST CONTROL PANEL -->
+      <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div class="flex justify-between items-center border-b pb-2">
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+              <span>Bluetooth & LEGO Boost (Move Hub 17101)</span>
+            </h2>
+            <p class="text-[11px] text-slate-500">Сканирование BLE, отправка LWP3 команд и управление роботом</p>
+          </div>
+          <span id="badge-ble" class="w-3 h-3 rounded-full bg-slate-400" title="Bluetooth Статус"></span>
+        </div>
+
+        <!-- Подключение Bluetooth -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border">
+          <div class="space-y-2">
+            <label class="font-bold text-slate-700 block">1. Сканирование BLE устройств</label>
+            <div class="flex gap-1">
+              <button id="btn-ble-scan" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1.5 rounded flex-1 transition">
+                Искать LEGO Boost
+              </button>
+              <button id="btn-ble-stop" class="border border-slate-200 hover:bg-slate-100 px-2 py-1.5 rounded">
+                Стоп
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="font-bold text-slate-700 block">2. Выбор и Подключение</label>
+            <div class="flex gap-1">
+              <select id="ble-device-select" class="flex-1 border rounded p-1 text-xs focus:outline-indigo-500">
+                <option value="">-- Выберите устройство --</option>
+              </select>
+              <button id="btn-ble-connect" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded transition">
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Интерфейс управления LEGO Boost (Move Hub) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          
+          <!-- Движение / Пульт управления -->
+          <div class="space-y-3 bg-slate-50 p-3 rounded-lg border">
+            <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Движение Робота (Порт AB)</span>
+            
+            <div class="flex flex-col items-center gap-1.5 py-1">
+              <button id="btn-lego-forward" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
+                ▲ Вперед
+              </button>
+              <div class="flex gap-2">
+                <button id="btn-lego-left" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
+                  ◄ Влево
+                </button>
+                <button id="btn-lego-stop" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold w-16 py-2 rounded shadow">
+                  СТОП
+                </button>
+                <button id="btn-lego-right" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
+                  Вправо ►
+                </button>
+              </div>
+              <button id="btn-lego-backward" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold w-20 py-2 rounded shadow">
+                ▼ Назад
+              </button>
+            </div>
+
+            <!-- Раздельные моторы -->
+            <div class="pt-2 border-t space-y-1.5 text-[11px]">
+              <span class="text-slate-500 font-medium block">Раздельные моторы A / B:</span>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button id="btn-lego-motor-a" class="border border-slate-300 hover:bg-slate-200 py-1 rounded">Мотор A (Вращать)</button>
+                <button id="btn-lego-motor-b" class="border border-slate-300 hover:bg-slate-200 py-1 rounded">Мотор B (Вращать)</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Управление Светодиодом (LED) и Raw Hex -->
+          <div class="space-y-3 bg-slate-50 p-3 rounded-lg border flex flex-col justify-between">
+            <div class="space-y-2">
+              <span class="text-xs font-bold text-slate-700 uppercase block border-b pb-1">Цвет Светодиода (LED Port 0x32)</span>
+              <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+                <button data-color="09" class="btn-lego-led bg-rose-500 text-white py-1.5 rounded font-bold">Красный</button>
+                <button data-color="05" class="btn-lego-led bg-emerald-500 text-white py-1.5 rounded font-bold">Зеленый</button>
+                <button data-color="03" class="btn-lego-led bg-blue-500 text-white py-1.5 rounded font-bold">Синий</button>
+                <button data-color="07" class="btn-lego-led bg-amber-400 text-slate-900 py-1.5 rounded font-bold">Желтый</button>
+                <button data-color="0a" class="btn-lego-led bg-white text-slate-800 border py-1.5 rounded font-bold">Белый</button>
+                <button data-color="00" class="btn-lego-led bg-slate-800 text-white py-1.5 rounded font-bold">Выключить</button>
+              </div>
+            </div>
+
+            <!-- Произвольная LWP3 HEX Команда -->
+            <div class="space-y-1 pt-2 border-t">
+              <label class="text-[10px] text-slate-500 block">Отправка RAW LWP3 Hex Команды</label>
+              <div class="flex gap-1">
+                <input type="text" id="lego-raw-hex" class="flex-1 border rounded p-1 text-xs font-mono focus:outline-indigo-500" value="0800813211510005" placeholder="HEX bytes">
+                <button id="btn-lego-send-raw" class="bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded text-xs font-medium">Send</button>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -210,25 +314,87 @@
           </div>
         </section>
 
-        <!-- Платежная система -->
-        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
-          <div class="space-y-3">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Платежи (Payments)</h2>
-            <p class="text-xs text-slate-500">Создание инвойсов и проведения крипто-транзакций через интерфейсы хоста.</p>
-            <div class="grid grid-cols-1 gap-2 text-xs">
-              <button id="btn-pay-sparks" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
-                <span>Sparks Invoice</span>
-                <span class="text-[10px] bg-amber-200/50 px-1.5 py-0.5 rounded">100 Sparks</span>
-              </button>
-              <button id="btn-pay-crypto" class="bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
-                <span>Crypto Request</span>
-                <span class="text-[10px] bg-blue-200/50 px-1.5 py-0.5 rounded">10 USDT</span>
-              </button>
-              <button id="btn-pay-solana" class="bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 py-2 rounded font-medium text-left px-3 flex justify-between items-center">
-                <span>Solana Payment</span>
-                <span class="text-[10px] bg-purple-200/50 px-1.5 py-0.5 rounded">0.1 SOL</span>
-              </button>
+        <!-- Платежная система: быстрый платёж 0.005 SOL + чат инвойсов -->
+        <section class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 flex flex-col">
+          <div class="flex justify-between items-center">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Платежи и Инвойсы</h2>
+            <span id="pay-wallet-badge" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-medium">Кошелёк не подключён</span>
+          </div>
+
+          <!-- Быстрый платёж по умолчанию: 0.005 SOL -->
+          <div class="bg-purple-50 border border-purple-200 rounded-lg p-2.5 space-y-1.5">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-purple-800">Платёж по умолчанию</span>
+              <span class="text-[10px] bg-purple-200/60 px-1.5 py-0.5 rounded text-purple-900 font-mono">0.005 SOL</span>
             </div>
+            <div class="text-[10px] text-purple-700 font-mono break-all">9mMfqEY4GKNG2GW9Wca3Mcp1fRrJEFWD2bn1dF68CfwB</div>
+            <button id="btn-pay-fixed" class="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium py-1.5 rounded transition">
+              Оплатить 0.005 SOL
+            </button>
+          </div>
+
+          <!-- Компоновщик инвойсов -->
+          <div class="bg-slate-50 border rounded-lg p-2.5 space-y-2 text-xs">
+            <div class="font-semibold text-slate-700">Выставить инвойс</div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] text-slate-500 mb-0.5">Сумма</label>
+                <input id="inv-amount" type="number" step="0.0001" min="0" value="0.005"
+                       class="w-full border rounded p-1 focus:outline-indigo-500">
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-500 mb-0.5">Монета</label>
+                <select id="inv-coin" class="w-full border rounded p-1 bg-white focus:outline-indigo-500">
+                  <option value="SOL">SOL</option>
+                  <option value="USDC">USDC</option>
+                  <option value="USDT">USDT</option>
+                  <option value="PYUSD">PYUSD</option>
+                  <option value="JUP">JUP</option>
+                  <option value="BONK">BONK</option>
+                  <option value="__custom__">Своя…</option>
+                </select>
+              </div>
+            </div>
+            <input id="inv-coin-custom" type="text"
+                   class="w-full border rounded p-1 hidden"
+                   placeholder="Символ монеты (например WIF)">
+            <div class="space-y-1">
+              <label class="block text-[10px] text-slate-500">Получатель</label>
+              <div class="flex gap-3 flex-wrap text-[11px]">
+                <label class="flex items-center gap-1"><input type="radio" name="inv-rcpt-mode" value="self" checked> Мой кошелёк</label>
+                <label class="flex items-center gap-1"><input type="radio" name="inv-rcpt-mode" value="fixed"> По умолчанию</label>
+                <label class="flex items-center gap-1"><input type="radio" name="inv-rcpt-mode" value="custom"> Своё значение</label>
+              </div>
+              <input id="inv-recipient" type="text"
+                     class="w-full border rounded p-1 font-mono text-[11px] bg-white"
+                     placeholder="Адрес получателя (base58)">
+            </div>
+            <button id="btn-create-invoice"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium py-1.5 rounded transition">
+              Выставить инвойс
+            </button>
+            <div id="inv-error" class="text-[10px] text-rose-600 hidden"></div>
+          </div>
+
+          <!-- Чат инвойсов -->
+          <div class="space-y-2">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 flex justify-between items-center">
+              <span>Чат инвойсов</span>
+              <button id="btn-clear-invoices" class="text-slate-400 hover:text-slate-700 normal-case">очистить</button>
+            </div>
+            <div id="invoice-chat" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+              <div id="invoice-empty" class="text-center text-slate-400 italic text-xs py-4">Здесь появятся выставленные инвойсы…</div>
+            </div>
+          </div>
+
+          <!-- Sparks + Crypto shortcuts -->
+          <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t">
+            <button id="btn-pay-sparks" class="bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 py-1.5 rounded font-medium">
+              Sparks ×100
+            </button>
+            <button id="btn-pay-crypto" class="bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 py-1.5 rounded font-medium">
+              Crypto ×10 USDT
+            </button>
           </div>
         </section>
 
@@ -661,14 +827,7 @@
 
         if (sdk.multiplayer.state) {
           document.getElementById('val-mp-room').textContent = sdk.multiplayer.currentRoom?.id || '-';
-          document.getElementById('val-mp-queue').textContent = (sdk.multiplayer.queue || sdk.multiplayer.state?.status === 'waiting' || sdk.multiplayer.state?.status === 'matched') ? 'В поиске' : 'Нет';
-        }
-
-        if (sdk.voice.state) {
-          const vs = sdk.voice.state;
-          document.getElementById('val-voice-status').textContent = vs.connected ? 'Активен' : 'Отключен';
-          document.getElementById('val-voice-muted').textContent = vs.muted ? 'Выкл' : 'Вкл';
-          document.getElementById('val-voice-count').textContent = vs.participants?.length ?? 0;
+          document.getElementById('val-mp-queue').textContent = sdk.multiplayer.queue ? 'В поиске' : 'Нет';
         }
       }
 
@@ -741,7 +900,7 @@
       sdk.on('multiplayerStateChanged', (state) => {
         log(`Событие 'multiplayerStateChanged': ${JSON.stringify(state)}`);
         document.getElementById('val-mp-room').textContent = state?.room?.id || '-';
-        document.getElementById('val-mp-queue').textContent = (state?.queue || state?.status === 'waiting' || state?.status === 'matched') ? 'В поиске' : 'Нет';
+        document.getElementById('val-mp-queue').textContent = state?.queue ? 'В поиске' : 'Нет';
       });
 
       sdk.on('multiplayerMatchFound', (payload) => {
@@ -754,7 +913,7 @@
 
       sdk.on('voiceStateChanged', (state) => {
         log(`Событие 'voiceStateChanged': ${JSON.stringify(state)}`);
-        document.getElementById('val-voice-status').textContent = state?.connected ? 'Активен' : 'Отключен';
+        document.getElementById('val-voice-status').textContent = state?.active ? 'Активен' : 'Отключен';
         document.getElementById('val-voice-muted').textContent = state?.muted ? 'Выкл' : 'Вкл';
       });
 
@@ -771,6 +930,152 @@
         log(`Голос: Участник вышел: ${JSON.stringify(p)}`, 'warning');
       });
 
+      // ================= ИНТЕГРАЦИЯ BLUETOOTH & LEGO BOOST =================
+
+      let connectedDeviceId = null;
+      const deviceSelect = document.getElementById('ble-device-select');
+      const bleBadge = document.getElementById('badge-ble');
+
+      // Подписка на обнаружение BLE устройств от нативного слоя
+      sdk.on('bluetoothDeviceFound', (device) => {
+        if (!device) return;
+        const id = device.id || device.deviceId;
+        const name = device.name || device.localName || 'LEGO Move Hub / BLE Device';
+        
+        let exists = false;
+        for (let i = 0; i < deviceSelect.options.length; i++) {
+          if (deviceSelect.options[i].value === id) {
+            exists = true;
+            break;
+          }
+        }
+
+        if (!exists) {
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = `${name} (${id.slice(0, 8)}...)`;
+          deviceSelect.appendChild(opt);
+          log(`BLE Устройство найдено: ${name}`, 'sys');
+        }
+      });
+
+      // Сканирование BLE
+      document.getElementById('btn-ble-scan').addEventListener('click', () => {
+        log('Запуск поиска Bluetooth / LEGO Boost...', 'sys');
+        deviceSelect.innerHTML = '<option value="">-- Выберите устройство --</option>';
+        
+        // Поиск устройств по сервису LWP3
+        sdk.bluetooth.startScan({
+          filters: [
+            { namePrefix: 'Move Hub' },
+            { namePrefix: 'LEGO' },
+            { services: ['00001623-1212-efde-1623-785feabcd123'] }
+          ],
+          optionalServices: ['00001623-1212-efde-1623-785feabcd123']
+        })
+        .then((res) => {
+          log('Сканирование BLE запущено');
+          if (Array.isArray(res)) {
+            res.forEach(dev => sdk.emit('bluetoothDeviceFound', dev));
+          }
+        })
+        .catch((e) => {
+          log(`Ошибка сканирования BLE: ${e.message}`, 'error');
+          log('Добавление эмулированного LEGO Move Hub для тестов...', 'sys');
+          
+          const opt = document.createElement('option');
+          opt.value = "LEGO_BOOST_MOCK_ID";
+          opt.textContent = "LEGO Move Hub (Mock 17101)";
+          deviceSelect.appendChild(opt);
+        });
+      });
+
+      document.getElementById('btn-ble-stop').addEventListener('click', () => {
+        sdk.bluetooth.stopScan();
+        log('Сканирование BLE остановлено');
+      });
+
+      // Подключение к устройству
+      document.getElementById('btn-ble-connect').addEventListener('click', () => {
+        const deviceId = deviceSelect.value;
+        if (!deviceId) {
+          log('Выберите устройство из списка!', 'warning');
+          return;
+        }
+
+        log(`Подключение к Bluetooth устройству [${deviceId}]...`, 'sys');
+        sdk.bluetooth.connect(deviceId, { serviceUuid: '00001623-1212-efde-1623-785feabcd123' })
+          .then((res) => {
+            connectedDeviceId = deviceId;
+            bleBadge.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-pulse';
+            log(`Успешно подключено к LEGO Boost (${deviceId})!`, 'sys');
+          })
+          .catch((e) => {
+            log(`Ошибка подключения BLE: ${e.message}`, 'error');
+            connectedDeviceId = deviceId;
+            bleBadge.className = 'w-3 h-3 rounded-full bg-emerald-500';
+            log(`[Demo] Эмуляция подключения активирована для ${deviceId}`, 'sys');
+          });
+      });
+
+      // Функция отправки байт / HEX в LEGO Boost (LWP3 Protocol)
+      async function sendLegoHex(hexString) {
+        if (!connectedDeviceId) {
+          log('LEGO Boost не подключен! Сначала подключите устройство.', 'warning');
+          return;
+        }
+
+        const cleanHex = hexString.replace(/\s+/g, '');
+        log(`LEGO Tx: ${cleanHex}`, 'sys');
+
+        try {
+          await sdk.bluetooth.sendRaw(connectedDeviceId, cleanHex);
+        } catch (e) {
+          log(`Ошибка передачи по BLE: ${e.message}`, 'error');
+        }
+      }
+
+      function speedToHexByte(speed) {
+        const clamp = Math.max(-100, Math.min(100, speed));
+        const val = clamp < 0 ? (256 + clamp) : clamp;
+        return val.toString(16).padStart(2, '0');
+      }
+
+      // Движение моторов (Порт AB = 0x39): 08 00 81 39 11 02 <SpeedA> <SpeedB>
+      function driveLego(speedA, speedB) {
+        const hexA = speedToHexByte(speedA);
+        const hexB = speedToHexByte(speedB);
+        sendLegoHex(`080081391102${hexA}${hexB}`);
+      }
+
+      document.getElementById('btn-lego-forward').addEventListener('click', () => driveLego(60, 60));
+      document.getElementById('btn-lego-backward').addEventListener('click', () => driveLego(-60, -60));
+      document.getElementById('btn-lego-left').addEventListener('click', () => driveLego(-50, 50));
+      document.getElementById('btn-lego-right').addEventListener('click', () => driveLego(50, -50));
+      document.getElementById('btn-lego-stop').addEventListener('click', () => driveLego(0, 0));
+
+      // Раздельные моторы A / B
+      document.getElementById('btn-lego-motor-a').addEventListener('click', () => {
+        sendLegoHex(`08008100115100${speedToHexByte(50)}`);
+      });
+      document.getElementById('btn-lego-motor-b').addEventListener('click', () => {
+        sendLegoHex(`08008101115100${speedToHexByte(50)}`);
+      });
+
+      // Светодиод (LED Port 0x32): 08 00 81 32 11 51 00 <ColorIndex>
+      document.querySelectorAll('.btn-lego-led').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const colorCode = e.target.getAttribute('data-color');
+          sendLegoHex(`08008132115100${colorCode}`);
+        });
+      });
+
+      // Отправка произвольного HEX
+      document.getElementById('btn-lego-send-raw').addEventListener('click', () => {
+        const rawHex = document.getElementById('lego-raw-hex').value;
+        sendLegoHex(rawHex);
+      });
+
       // ================= УПРАВЛЕНИЕ КАМЕРОЙ (sdk.camera.getUserMedia 60 FPS) =================
 
       let currentLocalStream = null;
@@ -779,7 +1084,6 @@
       const previewPlaceholder = document.getElementById('camera-preview-placeholder');
       const lensBadge = document.getElementById('badge-camera-lens');
 
-      // Прямой запуск 60 FPS стрима с использованием sdk.camera.getUserMedia
       async function startCameraStream(lens = 'back') {
         stopCameraStream();
 
@@ -788,7 +1092,6 @@
         try {
           log(`Запрос видеопотока через sdk.camera.getUserMedia (${lens}, 60 FPS)...`, 'sys');
           
-          // Захват видео через актуальный метод SDK с частотой 60 кадров/сек
           currentLocalStream = await sdk.camera.getUserMedia({
             video: {
               facingMode: facingMode,
@@ -833,12 +1136,10 @@
         log('Видеопоток камеры остановлен.');
       }
 
-      // Кнопки управления видеопотоком
       document.getElementById('btn-cam-back').addEventListener('click', () => startCameraStream('back'));
       document.getElementById('btn-cam-front').addEventListener('click', () => startCameraStream('front'));
       document.getElementById('btn-cam-stop').addEventListener('click', () => stopCameraStream());
 
-      // Снимок фото через SDK
       document.getElementById('btn-camera-photo').addEventListener('click', () => {
         log('Запрос снимка с камеры (takePhoto)...', 'sys');
         sdk.camera.takePhoto()
@@ -846,8 +1147,208 @@
           .catch((e) => log(`Ошибка снимка камеры: ${e.message}`, 'error'));
       });
 
-      // ================= УПРАВЛЕНИЕ ПЛАТЕЖАМИ =================
+      // ================= УПРАВЛЕНИЕ ПЛАТЕЖАМИ / ЧАТ ИНВОЙСОВ =================
 
+      const FIXED_RECIPIENT = "9mMfqEY4GKNG2GW9Wca3Mcp1fRrJEFWD2bn1dF68CfwB";
+      const FIXED_AMOUNT = 0.005;
+      const FIXED_COIN = "SOL";
+      let connectedWalletAddr = null;
+
+      function refreshPayWalletBadge() {
+        const badge = document.getElementById('pay-wallet-badge');
+        if (!badge) return;
+        if (connectedWalletAddr) {
+          badge.textContent = connectedWalletAddr.slice(0, 4) + '…' + connectedWalletAddr.slice(-4);
+          badge.className = 'text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-medium';
+        } else {
+          badge.textContent = 'Кошелёк не подключён';
+          badge.className = 'text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-medium';
+        }
+      }
+
+      async function ensureWalletAddr() {
+        if (connectedWalletAddr) return connectedWalletAddr;
+        try {
+          const addr = await sdk.wallet.getAddress();
+          if (addr) {
+            connectedWalletAddr = addr;
+            refreshPayWalletBadge();
+            const wEl = document.getElementById('val-wallet');
+            if (wEl) wEl.textContent = addr;
+          }
+        } catch (_) { /* ignore — пользователь может ввести адрес руками */ }
+        return connectedWalletAddr;
+      }
+
+      sdk.on('walletChanged', (wallet) => {
+        connectedWalletAddr = wallet?.address || null;
+        refreshPayWalletBadge();
+        if (wallet?.address) {
+          const wEl = document.getElementById('val-wallet');
+          if (wEl) wEl.textContent = wallet.address;
+        }
+        // Если выбран режим "мой кошелёк" — обновим поле получателя.
+        syncRecipientInput();
+      });
+
+      // == Быстрый платёж 0.005 SOL на зафиксированный кошелёк ==
+      document.getElementById('btn-pay-fixed').addEventListener('click', async () => {
+        await ensureWalletAddr();
+        log(`Отправка ${FIXED_AMOUNT} ${FIXED_COIN} → ${FIXED_RECIPIENT}`, 'sys');
+        try {
+          const res = await sdk.payments.requestPayment({
+            amount: FIXED_AMOUNT,
+            currency: FIXED_COIN,
+            recipient: FIXED_RECIPIENT,
+            label: 'Демо-платёж по умолчанию 0.005 SOL'
+          });
+          log(`Платёж выполнен: ${JSON.stringify(res)}`, 'sys');
+        } catch (e) {
+          log(`Ошибка быстрого платежа: ${e.message}`, 'error');
+        }
+      });
+
+      // == Компоновщик инвойсов ==
+      const coinSelect = document.getElementById('inv-coin');
+      const coinCustom = document.getElementById('inv-coin-custom');
+      coinSelect.addEventListener('change', () => {
+        if (coinSelect.value === '__custom__') coinCustom.classList.remove('hidden');
+        else coinCustom.classList.add('hidden');
+      });
+
+      function getCurrentCoin() {
+        if (coinSelect.value === '__custom__') {
+          return coinCustom.value.trim().toUpperCase();
+        }
+        return coinSelect.value;
+      }
+
+      function getRecipientMode() {
+        const checked = document.querySelector('input[name="inv-rcpt-mode"]:checked');
+        return checked ? checked.value : 'self';
+      }
+
+      function resolveRecipient() {
+        const mode = getRecipientMode();
+        if (mode === 'self') return connectedWalletAddr || '';
+        if (mode === 'fixed') return FIXED_RECIPIENT;
+        return document.getElementById('inv-recipient').value.trim();
+      }
+
+      function syncRecipientInput() {
+        const input = document.getElementById('inv-recipient');
+        const mode = getRecipientMode();
+        if (mode === 'custom') {
+          input.readOnly = false;
+          input.placeholder = 'Адрес получателя (base58)';
+          if (!input.dataset.userValue) input.value = '';
+        } else {
+          input.readOnly = true;
+          if (mode === 'self') {
+            input.value = connectedWalletAddr || '(кошелёк не подключён)';
+          } else if (mode === 'fixed') {
+            input.value = FIXED_RECIPIENT;
+          }
+        }
+      }
+      document.querySelectorAll('input[name="inv-rcpt-mode"]').forEach((r) => {
+        r.addEventListener('change', syncRecipientInput);
+      });
+      // Запоминаем что пользователь ввёл руками, чтобы не затирать при переключении.
+      document.getElementById('inv-recipient').addEventListener('input', (e) => {
+        e.target.dataset.userValue = e.target.value;
+      });
+      syncRecipientInput();
+
+      function setInvoiceError(msg) {
+        const el = document.getElementById('inv-error');
+        if (!el) return;
+        if (msg) { el.textContent = msg; el.classList.remove('hidden'); }
+        else { el.classList.add('hidden'); el.textContent = ''; }
+      }
+
+      document.getElementById('btn-create-invoice').addEventListener('click', async () => {
+        setInvoiceError('');
+        await ensureWalletAddr();
+
+        const amount = parseFloat(document.getElementById('inv-amount').value);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          setInvoiceError('Введите корректную сумму больше нуля'); return;
+        }
+        const coin = getCurrentCoin();
+        if (!coin) { setInvoiceError('Выберите или введите символ монеты'); return; }
+        const recipient = resolveRecipient();
+        if (!recipient || recipient.length < 16) {
+          setInvoiceError('Укажите корректный адрес получателя (или подключите кошелёк и выберите «Мой кошелёк»)'); return;
+        }
+
+        appendInvoiceMessage({ amount, coin, recipient });
+        log(`Инвойс выставлен: ${amount} ${coin} → ${recipient}`, 'sys');
+      });
+
+      function appendInvoiceMessage({ amount, coin, recipient }) {
+        const chat = document.getElementById('invoice-chat');
+        const empty = document.getElementById('invoice-empty');
+        if (empty) empty.remove();
+
+        const isMine = recipient === connectedWalletAddr;
+        const row = document.createElement('div');
+        row.className = 'flex flex-col rounded-lg p-2 border ' +
+          (isMine ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200');
+        row.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span class="text-xs font-semibold text-slate-700">${amount} ${coin}</span>
+            <span class="text-[10px] ${isMine ? 'text-indigo-600' : 'text-slate-500'}">${isMine ? '← мне' : '→ получателю'}</span>
+          </div>
+          <div class="text-[10px] font-mono break-all text-slate-500 mt-0.5">${recipient}</div>
+          <div class="flex gap-1 mt-1.5">
+            <button class="inv-pay bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] py-1 rounded flex-1">Оплатить</button>
+            <button class="inv-copy border border-slate-300 hover:bg-slate-100 text-slate-700 text-[11px] py-1 rounded flex-1">Копировать</button>
+          </div>
+          <div class="inv-status text-[10px] text-slate-400 mt-1">Ожидает оплаты…</div>
+        `;
+        chat.appendChild(row);
+
+        row.querySelector('.inv-pay').addEventListener('click', () =>
+          payInvoiceMessage({ amount, coin, recipient, row })
+        );
+        row.querySelector('.inv-copy').addEventListener('click', () => {
+          sdk.ui.copy(`${amount} ${coin} → ${recipient}`)
+            .then(() => log('Инвойс скопирован в буфер'))
+            .catch(() => {});
+        });
+
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      async function payInvoiceMessage({ amount, coin, recipient, row }) {
+        const status = row.querySelector('.inv-status');
+        status.textContent = 'Отправка запроса на хост…';
+        status.className = 'inv-status text-[10px] text-amber-600 mt-1';
+        try {
+          const res = await sdk.payments.requestPayment({
+            amount,
+            currency: coin,
+            recipient,
+            label: `Оплата инвойса ${amount} ${coin}`
+          });
+          status.textContent = '✅ Оплачено: ' + JSON.stringify(res);
+          status.className = 'inv-status text-[10px] text-emerald-600 mt-1';
+          log(`Оплата инвойса успешна: ${JSON.stringify(res)}`, 'sys');
+        } catch (e) {
+          status.textContent = '❌ ' + e.message;
+          status.className = 'inv-status text-[10px] text-rose-600 mt-1';
+          log(`Ошибка оплаты инвойса: ${e.message}`, 'error');
+        }
+      }
+
+      document.getElementById('btn-clear-invoices').addEventListener('click', () => {
+        const chat = document.getElementById('invoice-chat');
+        chat.innerHTML = '<div id="invoice-empty" class="text-center text-slate-400 italic text-xs py-4">Здесь появятся выставленные инвойсы…</div>';
+        log('Чат инвойсов очищен.');
+      });
+
+      // == Sparks (Fiat) и Crypto demo-кнопки ==
       document.getElementById('btn-pay-sparks').addEventListener('click', () => {
         sdk.payments.invoice({ amount: 100, title: "Демо покупка" })
           .then((res) => log(`Sparks Инвойс создан: ${JSON.stringify(res)}`))
@@ -860,11 +1361,8 @@
           .catch((e) => log(`Ошибка Crypto Request: ${e.message}`, 'error'));
       });
 
-      document.getElementById('btn-pay-solana').addEventListener('click', () => {
-        sdk.payments.solana({ amount: 0.1, recipient: "DemoSolanaAddressHere" })
-          .then((res) => log(`Solana платеж выполнен: ${JSON.stringify(res)}`))
-          .catch((e) => log(`Ошибка Solana Payment: ${e.message}`, 'error'));
-      });
+      // При первой инициализации пытаемся получить адрес подключённого кошелька.
+      sdk.on('init', () => { ensureWalletAddr(); });
 
       // ================= УПРАВЛЕНИЕ КОШЕЛЬКОМ И КОНТЕКСТОМ =================
 
@@ -886,6 +1384,20 @@
       document.getElementById('btn-wallet-refresh').addEventListener('click', () => {
         sdk.wallet.refresh();
         log('Запрос обновления состояния кошелька отправлен.');
+      });
+
+      document.getElementById('btn-wallet-view').addEventListener('click', () => {
+        sdk.wallet.view()
+          .then((w) => {
+            if (w) {
+              log(`Кошелёк открыт: ${JSON.stringify(w)}`, 'sys');
+              document.getElementById('val-wallet').textContent = w.address || 'Подключен';
+            } else {
+              log('Кошелёк не подключен (wallet.view вернул null).', 'warning');
+              document.getElementById('val-wallet').textContent = 'Отсутствует';
+            }
+          })
+          .catch((e) => log(`Ошибка просмотра кошелька: ${e.message}`, 'error'));
       });
 
       // ================= API REQUEST =================
@@ -922,7 +1434,6 @@
 
       // ================= УПРАВЛЕНИЕ ДАТЧИКАМИ =================
 
-      // Гироскоп кнопки
       document.getElementById('btn-gyro-start').addEventListener('click', () => {
         sdk.gyroscope.start();
         document.getElementById('badge-gyro').classList.replace('bg-slate-400', 'bg-emerald-500');
@@ -952,7 +1463,6 @@
           .catch((e) => log(`Ошибка запроса гироскопа: ${e.message}`, 'error'));
       });
 
-      // Акселерометр кнопки
       document.getElementById('btn-acc-start').addEventListener('click', () => {
         sdk.accelerometer.start();
         document.getElementById('badge-acc').classList.replace('bg-slate-400', 'bg-emerald-500');
@@ -1813,7 +2323,7 @@
       document.getElementById('btn-mp-join').addEventListener('click', () => {
         const roomId = prompt("Введите ID комнаты:");
         if (!roomId) return;
-        sdk.multiplayer.joinRoom({ room_id: roomId })
+        sdk.multiplayer.joinRoom({ roomId })
           .then(state => log(`Мультиплеер: Подключение к комнате ${roomId}`))
           .catch(e => log(`Мультиплеер Error: ${e.message}`, 'error'));
       });
